@@ -95,5 +95,5 @@ Significant contributions from
   * Aaron Gyes <floam@aaron.gy>
 
 
-<sup><sub>powered by [q3e](https://github.com/briancullinan/void-zero)</sub></sup>
+<sup><sub>powered by [void-zero](https://github.com/briancullinan/void-zero)</sub></sup>
 
