@@ -95,5 +95,33 @@ Significant contributions from
   * Aaron Gyes <floam@aaron.gy>
 
 
+## TODO (in this repo): User Story
+
+* The player opens the web interface and navigate to a map called "Guns, Lot's of Guns"
+* The player is teleported into an all white room with shelves oriented radially so 
+   each isle can be walked down towards the center of the circle. Parallel 
+   with each other but wider at the far side of the shelf to form a circle.
+   Morpheus is standing in the center next to an arm-chair and an old fashioned
+   television set. 
+* When the player touched the television they are teleported
+   to a city rooftop like Superman from UrT4. 
+* When the player jumps off the roof to
+   follow Morpheus the player falls, see the world around fall to pieces like
+   [You'll Shoot Your Eye Out](https://lvlworld.com/votes/id:2238). 
+* The player is then teleported to the Dojo Q3 map.
+* The player moves the browser window out of the recording to reveal another window of
+   a television set zoomed in so you can't see the borders. It shows 4 screens
+   of a time delay from the previous 30 seconds of all the rooms the player recently passed 
+   through. 
+* It slowly pans backwards to reveal the televition set and DVR system.
+   Behind the television set a figure begins to appear, the logo style like at the
+   [end of the Quake 3 Intro](https://youtu.be/Rgps2D3LptY?t=72) begins to appear 
+   but instead of Quake III, it says Enter The Matrix. 
+* When the words become obvious, Agent Smith's head 
+   begins to appear from behind the television set controlled by another player remotely.
+* All players can navigate all 4 worlds, The loading room for weapons, the sky-scraper city,
+   the dojo and Agent Smith's monitor (Camera's Lots Of Camera's) should be laid out like 
+   the Guns map but with cameras set to view-point of every entity.
+
 <sup><sub>powered by [void-zero](https://github.com/briancullinan/void-zero)</sub></sup>
 
