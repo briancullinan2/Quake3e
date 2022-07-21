@@ -93,3 +93,7 @@ Significant contributions from
   * Vincent S. Cojot <vincent at cojot dot name>
   * optical <alex@rigbo.se>
   * Aaron Gyes <floam@aaron.gy>
+
+
+<sup><sub>powered by [q3e](https://github.com/briancullinan/void-zero)</sub></sup>
+
