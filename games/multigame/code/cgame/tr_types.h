@@ -12,7 +12,10 @@
 #define	RF_THIRD_PERSON		2		// don't draw through eyes, only mirrors (player bodies, chat sprites)
 #define	RF_FIRST_PERSON		4		// only draw through eyes (view weapon, damage blood blob)
 #define	RF_DEPTHHACK		8		// for view weapon Z crunching
+#define RF_CROSSHAIR    16 // This item is a cross hair and will draw over everything
 #define	RF_NOSHADOW			64		// don't add stencil shadows
+#define RF_AUTOSPRITE 32 // automatically rotate entire model towards viewpoint keeping the original orientation
+#define RF_INVERT 1024 // invert normals for cell shader effect
 
 #define RF_LIGHTING_ORIGIN	128		// use refEntity->lightingOrigin instead of refEntity->origin
 									// for lighting.  This allows entities to sink into the floor

@@ -397,16 +397,6 @@ void CG_InitMemory( void );
 qboolean CG_OutOfMemory( void );
 
 
-/*
-#ifdef BUILD_GAME_STATIC
-#define trap_PC_AddGlobalDefine trapcg_PC_AddGlobalDefine
-#define trap_PC_LoadSource trapcg_PC_LoadSource
-#define trap_PC_FreeSource trapcg_PC_FreeSource
-#define trap_PC_ReadToken trapcg_PC_ReadToken
-#define trap_PC_SourceFileAndLine trapcg_PC_SourceFileAndLine
-#endif
-*/
-
 int			trap_PC_AddGlobalDefine( char *define );
 int			trap_PC_LoadSource( const char *filename );
 int			trap_PC_FreeSource( int handle );

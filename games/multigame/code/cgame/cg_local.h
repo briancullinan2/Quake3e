@@ -1812,25 +1812,6 @@ void CG_PB_RenderPolyBuffers( void );
 #define dll_com_trapGetValue cg_trapGetValue
 #endif
 
-/*
-#ifndef BUILD_GAME_STATIC
-#define CG_Display_CaptureItem Display_CaptureItem 
-#define CG_Display_CursorType Display_CursorType
-#define CG_Display_HandleKey Display_HandleKey
-#define CG_Display_MouseMove Display_MouseMove
-#define CG_Menu_New Menu_New
-#define CG_Menu_Paint Menu_Paint
-#define CG_Menu_PaintAll Menu_PaintAll
-#define CG_Menu_Reset Menu_Reset
-#define CG_Menu_ScrollFeeder Menu_ScrollFeeder
-#define CG_Menu_SetFeederSelection Menu_SetFeederSelection
-#define CG_Menus_CloseByName Menus_CloseByName
-#define CG_Menus_FindByName Menus_FindByName
-#define CG_Menus_OpenByName Menus_OpenByName
-#define CG_String_Init String_Init
-#endif
-*/
-
 // print message on the local console
 void		trap_Print( const char *text );
 

@@ -2347,11 +2347,6 @@ static image_t *R_CreateImage3( const char *name, GLenum picFormat, int numMips,
 
 	if(image->width > 1 && image->height > 1) {
 		R_FinishImage3( image, picFormat, 0 );
-	} else {
-		//image->palette = R_FindPalette(name);
-		//if(!image->palette) {
-		//	ri.Error(ERR_FATAL, "goddamnit %s", name);
-		//}
 	}
 
 	hash = generateHashValue(name);

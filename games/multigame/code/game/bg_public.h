@@ -5,6 +5,8 @@
 // because games can change separately from the main system version, we need a
 // second version that must match between game and cgame
 
+#ifndef _BG_PUBLIC_H
+#define _BG_PUBLIC_H
 #define	GAME_VERSION		"baseq3-1"
 
 #define	DEFAULT_GRAVITY		800
@@ -1001,3 +1003,4 @@ float BG_GetSkyGroundHeightAtPoint( vec3_t pos );
 float BG_GetGroundHeightAtPoint( vec3_t pos );
 int BG_GetTracemapGroundFloor( void );
 int BG_GetTracemapGroundCeil( void );
+#endif // __BG_PUBLIC_H

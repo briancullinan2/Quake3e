@@ -241,19 +241,19 @@ if(!noProgress) {
 }
 
 // load these modules down here to the console is overridden
-var {mapGameAssets} = require('../lib/asset.qvm.js')
-var {
-  deDuplicate, graphGame, loadDefaultDirectories, TEMP_NAME
-} = require('../lib/asset.game.js')
-var {compressDirectory, unpackPk3s} = require('../bin/compress.js')
+//var {mapGameAssets} = require('../lib/asset.qvm.js')
+//var {
+//  deDuplicate, graphGame, loadDefaultDirectories, TEMP_NAME
+//} = require('../lib/asset.game.js')
+var {compressDirectory, unpackPk3s} = require('./compress.js')
 var {
   findTypes, fileTypes, sourceTypes,
   audioTypes, imageTypes, findTypes,
   allTypes, whitelist
 } = require('../bin/repack-whitelist.js')
-var {convertGameFiles} = require('../bin/convert.js')
-var {getLeaves} = require('../lib/asset.graph.js')
-var {makeIndexJson, makeMapIndex} = require('../bin/content.js')
+var {convertGameFiles} = require('./convert.js')
+//var {getLeaves} = require('../lib/asset.graph.js')
+var {makeIndexJson, makeMapIndex} = require('./content.js')
 
 var globalBars = []
 
@@ -826,7 +826,7 @@ async function repackGames() {
         stepCounter++
       }
       
-      await loadDefaultDirectories()
+      //await loadDefaultDirectories()
       
       if(!noGraph) {
         if(!usePrevious) {

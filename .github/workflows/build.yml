@@ -44,25 +44,27 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: [wasm]
+        architecture: []
+        platform: [wasm, darwin, mingw, linux]
         runtime: [client, client-mw, client-slim]
-        arch: [js]
+        arch: [js, x86, x86_64]
         include:
-        - arch: js
         - platform: wasm
+          arch: js
           name: WebAssembly
           cc: libs/linux/wasi-sdk-14.0/bin/clang
           flags: USE_ASYNCHRONOUS=1 USE_LAZY_LOAD=1
           os: ubuntu-latest
+
         - runtime: client
           proper: Client
           cflags: ~
-        - runtime: client-mw
-          proper: Client (Multiworld)
-          cflags: USE_MULTIVM_CLIENT=1 USE_MULTIVM_SERVER=1
-        - runtime: client-slim
-          proper: Client (Slim)
-          cflags: BUILD_SLIM_CLIENT=1
+#        - runtime: client-mw
+#          proper: Client (Multiworld)
+#          cflags: USE_MULTIVM_CLIENT=1 USE_MULTIVM_SERVER=1
+#        - runtime: client-slim
+#          proper: Client (Slim)
+#          cflags: BUILD_SLIM_CLIENT=1
 #        - runtime: client-experimental
 #          proper: Client (Experimental)
 #          cflags: BUILD_EXPERIMENTAL=1
@@ -92,7 +94,7 @@ jobs:
         CC=${{ matrix.cc }} V=1 ${{ inputs.targets }} 
     - uses: actions/upload-artifact@v2
       with:
-        name: ${{ matrix.platform }}-js
+        name: ${{ matrix.platform }}-${{ matrix.arch }}
         path: bin/*
         if-no-files-found: error
         retention-days: 10

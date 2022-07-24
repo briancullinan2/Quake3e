@@ -22,9 +22,9 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 // sv_client.c -- server code for dealing with clients
 
 #include "server.h"
-#if 0 //defined(USE_PERSIST_CLIENT) || defined(USE_MULTIVM_SERVER) || defined(USE_REFEREE_CMDS)
-#include "../game/g_local.h" // get both the definitions of gentity_t (to get gentity_t->health field) AND sharedEntity_t, so that we can convert a sharedEntity_t into a gentity_t (see more details in SV_GentityUpdateHealthField() notes)
-#endif
+//#if defined(USE_PERSIST_CLIENT) || defined(USE_MULTIVM_SERVER) || defined(USE_REFEREE_CMDS)
+//#include "../game/g_local.h" // get both the definitions of gentity_t (to get gentity_t->health field) AND sharedEntity_t, so that we can convert a sharedEntity_t into a gentity_t (see more details in SV_GentityUpdateHealthField() notes)
+//#endif
 
 #ifdef USE_CURL
 download_t			svDownload;
@@ -145,7 +145,7 @@ void SV_GetChallenge( const netadr_t *from ) {
 #ifndef DEDICATED
 #ifdef USE_LOCAL_DED
 	// allow people to connect to your single player server
-	if(qfalse && !com_dedicated->integer)
+	if(!com_dedicated->integer)
 #endif
 	if (Cvar_VariableIntegerValue( "g_gametype" ) == GT_SINGLE_PLAYER || Cvar_VariableIntegerValue("ui_singlePlayerActive")) {
 		return;

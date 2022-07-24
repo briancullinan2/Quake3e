@@ -28,11 +28,12 @@
 #define SVF_NOTSINGLECLIENT		0x00000800	// send entity to everyone but one client
 											// (entityShared_t->singleClient)
 
+#define SVF_SELF_PORTAL2		0x00020000  // merge a second pvs at entity->r.s.origin2 into snapshots
 //===============================================================
 
 
 typedef struct {
-	entityState_t	unused;				// communicated by server to clients
+	entityState_t	s;				// communicated by server to clients
 
 	qboolean	linked;				// qfalse if not in any good cluster
 	int			linkcount;
@@ -206,6 +207,13 @@ typedef enum {
 	
 	// 1.32
 	G_FS_SEEK,
+	G_MATRIXMULTIPLY = 107,
+	G_ANGLEVECTORS,
+	G_PERPENDICULARVECTOR,
+	G_FLOOR,
+	G_CEIL,
+	G_TESTPRINTINT,
+	G_TESTPRINTFLOAT,
 
 	BOTLIB_SETUP = 200,				// ( void );
 	BOTLIB_SHUTDOWN,				// ( void );
@@ -364,7 +372,8 @@ typedef enum {
 	BOTLIB_PC_LOAD_SOURCE,
 	BOTLIB_PC_FREE_SOURCE,
 	BOTLIB_PC_READ_TOKEN,
-	BOTLIB_PC_SOURCE_FILE_AND_LINE
+	BOTLIB_PC_SOURCE_FILE_AND_LINE,
+	G_TRAP_GETVALUE = COM_TRAP_GETVALUE
 
 } gameImport_t;
 
@@ -402,6 +411,7 @@ typedef enum {
 	// The game can issue trap_argc() / trap_argv() commands to get the command
 	// and parameters.  Return qfalse if the game doesn't recognize it as a command.
 
-	BOTAI_START_FRAME				// ( int time );
+	BOTAI_START_FRAME,				// ( int time );
+	GAME_EXPORT_LAST
 } gameExport_t;
 

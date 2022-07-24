@@ -5562,7 +5562,7 @@ int getAltChecksum(const char *pakName, int *altChecksum) {
 	// add alternate checksums
 	for(c = 0; c < ARRAY_LEN(hardcoded_checksums); c++) {
 		alt = &hardcoded_checksums[c];
-		if(Q_stristr(pakName, alt->pakFilename)) {
+		//if(Q_stristr(pakName, alt->pakFilename)) {
 			for(i = 0; i < fs_numServerReferencedPaks; i++) {
 				if(alt->altChecksum == (unsigned int)fs_serverReferencedPaks[i]) {
 					found = qtrue;
@@ -5574,10 +5574,10 @@ int getAltChecksum(const char *pakName, int *altChecksum) {
 					break;
 				}
 			}
-		}
+		//}
 	}
 	
-	memcpy(altChecksum, &LittleLong(useChecksum), 4);
+	memcpy(altChecksum, &LittleLong(useChecksum2), 4);
 	return found;
 }
 
@@ -5611,6 +5611,7 @@ const char *FS_ReferencedPakPureChecksums( int maxlen ) {
 				break;
 		}
 #ifdef USE_ALTCHECKSUM
+		int altChecksum = 0;
 		qboolean found = qfalse;
 #endif
 		for ( search = fs_searchpaths ; search ; search = search->next ) {
@@ -5618,14 +5619,10 @@ const char *FS_ReferencedPakPureChecksums( int maxlen ) {
 			if ( search->pack && (search->pack->referenced & nFlags)) {
 				int useChecksum = search->pack->pure_checksum;
 #ifdef USE_ALTCHECKSUM
-				int altChecksum = 0;
-				// send the pure checksum instead of real pak checksum
-				found = getAltChecksum(search->pack->pakFilename, &altChecksum);
-				if(found) useChecksum = altChecksum;
-				if(!found && Q_stristr(search->pack->pakFilename, "pak8a.pk3")) {
-					found = getAltChecksum("pak8.pk3", &altChecksum);
-					if(found) useChecksum = altChecksum;
+				if(getAltChecksum(search->pack->pakFilename, &altChecksum)) {
+					continue;
 				}
+				found = qtrue;
 #endif
 
 				s = Q_stradd( s, va( "%i ", useChecksum ) );
@@ -5642,19 +5639,20 @@ const char *FS_ReferencedPakPureChecksums( int maxlen ) {
 		if(!found) {
 			// must find at least 1 pak in  every  category
 			//   if this doesn't happen, forge a pak out of the mod directory
-			int altChecksum = 0;
-			for(int c = 0; c < ARRAY_LEN(hardcoded_checksums); c++) {
-				const altChecksumFiles_t *alt = &hardcoded_checksums[c];
+			//for(int c = 0; c < ARRAY_LEN(hardcoded_checksums); c++) {
+				//const altChecksumFiles_t *alt = &hardcoded_checksums[c];
 				// check if any alternate checksum is available
-				if(getAltChecksum(alt->pakFilename, &altChecksum)) {
+				//if(getAltChecksum(alt->pakFilename, &altChecksum)) {
 					s = Q_stradd( s, va( "%i ", altChecksum ) );
-					checksum ^= altChecksum;
 					if ( nFlags & (FS_CGAME_REF | FS_UI_REF) )
-						break;
-					numPaks++;
-					break;
-				}
-			}
+					else {
+						checksum ^= altChecksum;
+						numPaks++;
+					}
+					//	break;
+					//break;
+				//}
+			//}
 		}
 #endif
 	}

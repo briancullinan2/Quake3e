@@ -125,7 +125,7 @@ static void add_triggers(void) {
 			break;
 
 		if (token[0] != '{')
-			Com_Error(ERR_DROP, "mape is borked\n");
+			Com_Error(ERR_DROP, "map is borked\n");
 
 		for (;; ) {
 			token = COM_Parse(&entities);

@@ -2339,11 +2339,9 @@ int VM_Resume(vm_t *vm) {
 
 #else // BUILD_GAME_STATIC
 
-#ifdef BUILD_GAME_STATIC
 intptr_t CG_Call( int command, int arg0, int arg1, int arg2 );
 intptr_t G_Call( int command, int arg0, int arg1, int arg2 );
 intptr_t UI_Call( int command, int arg0, int arg1, int arg2 );
-#endif
 
 /*
 ================

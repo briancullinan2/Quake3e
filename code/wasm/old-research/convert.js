@@ -1,6 +1,6 @@
 var {ufs} = require('unionfs')
 var path = require('path')
-var {mkdirpSync} = require('../bin/compress.js')
+var {mkdirpSync} = require('./compress.js')
 var {execSync} = require('child_process');
 var {
   findTypes, fileTypes, sourceTypes,
@@ -61,7 +61,7 @@ async function convertNonAlpha(inFile, project, output, noOverwrite, palette) {
   // convert, baseq3 already includes jpg
   try {
     // TODO: allAlpha? execSync(`convert "${inFile}" -alpha set -background none -channel A -evaluate multiply 0.5 +channel -auto-orient "${outFile}"`, {stdio : 'pipe'})
-    execSync(`convert -strip -interlace Plane -sampling-factor 4:2:0 -quality 20% -auto-orient "${inFile}" "${outFile}"`, {stdio : 'pipe'})
+    execSync(`convert -strip -interlace Plane -sampling-factor 4:2:0 -quality 10% -auto-orient "${inFile}" "${outFile}"`, {stdio : 'pipe'})
   } catch (e) {
     console.error(e.message, (e.output || '').toString('utf-8').substr(0, 1000))
   }
@@ -73,7 +73,7 @@ async function convertAudio(inFile, project, output, noOverwrite) {
   mkdirpSync(path.dirname(outFile))
   if(noOverwrite && ufs.existsSync(outFile)) return outFile
   try {
-    execSync(`oggenc --downmix --resample 22050 --quiet "${inFile}" -n "${outFile}"`, {stdio : 'pipe'})
+    execSync(`oggenc  -q 7 --downmix --resample 11025 --quiet "${inFile}" -n "${outFile}"`, {stdio : 'pipe'})
   } catch (e) {
     console.error(e.message, (e.output || '').toString('utf-8').substr(0, 1000))
   }

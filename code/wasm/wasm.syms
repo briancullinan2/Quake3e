@@ -31,6 +31,8 @@ popen
 pclose
 Sys_clock_gettime
 
+emscripten_get_heap_size
+emscripten_resize_heap
 updateGlobalBufferAndViews
 Com_RealTime
 Sys_RandomBytes

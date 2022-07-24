@@ -25,6 +25,7 @@ function addressToString(addr, length) {
 
 function stringToAddress(str, addr) {
   if(!STD.sharedMemory 
+    || !addr
     || typeof STD.sharedCounter != 'number'
     || isNaN(STD.sharedCounter)) {
     throw new Error('Memory not setup!')
@@ -132,9 +133,6 @@ function Com_RealTime(tm) {
 
 var _emscripten_get_now_is_monotonic = true;
 
-function _emscripten_get_now() {
-	return performance.now()
-}
 
 function clock_gettime(clk_id, tp) {
 	let now;
@@ -142,7 +140,7 @@ function clock_gettime(clk_id, tp) {
 	if (clk_id === 0) {
 			now = Date.now()
 	} else if ((clk_id === 1 || clk_id === 4) && _emscripten_get_now_is_monotonic) {
-			now = _emscripten_get_now()
+			now = performance.now()
 	} else {
 			HEAPU32[errno >> 2] = 28
 			return -1
@@ -259,6 +257,43 @@ function updateGlobalBufferAndViews() {
 	}
 }
 
+function alignUp(x, multiple) {
+  if (x % multiple > 0) {
+      x += multiple - x % multiple
+  }
+  return x
+}
+
+function _emscripten_get_heap_size(){return HEAPU8.length}
+
+function emscripten_realloc_buffer(size) {
+  try {
+      wasmMemory.grow(size - buffer.byteLength + 65535 >>> 16);
+      updateGlobalBufferAndViews(wasmMemory.buffer);
+      return 1
+  } catch (e) {}
+}
+
+function _emscripten_resize_heap(requestedSize) {
+  var oldSize = _emscripten_get_heap_size();
+  var PAGE_MULTIPLE = 65536;
+  var maxHeapSize = 2147483648;
+  if (requestedSize > maxHeapSize) {
+      return false
+  }
+  var minHeapSize = 16777216;
+  for (var cutDown = 1; cutDown <= 4; cutDown *= 2) {
+      var overGrownHeapSize = oldSize * (1 + .2 / cutDown);
+      overGrownHeapSize = Math.min(overGrownHeapSize, requestedSize + 100663296);
+      var newSize = Math.min(maxHeapSize, alignUp(Math.max(minHeapSize, requestedSize, overGrownHeapSize), PAGE_MULTIPLE));
+      var replacement = emscripten_realloc_buffer(newSize);
+      if (replacement) {
+          return true
+      }
+  }
+  return false
+}
+
 var STD = {
   threadCount: 0,
   waitListeners: {},
@@ -266,6 +301,8 @@ var STD = {
   stringToAddress,
   addressToString,
   stringsToMemory,
+  _emscripten_get_heap_size: _emscripten_get_heap_size,
+  _emscripten_resize_heap: _emscripten_resize_heap,
   updateGlobalBufferAndViews: updateGlobalBufferAndViews,
   __assert_fail: console.assert, // TODO: convert to variadic fmt for help messages
   Sys_longjmp: function (id, code) { throw new Error('longjmp', id, code) },

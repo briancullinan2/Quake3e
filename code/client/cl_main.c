@@ -3161,8 +3161,8 @@ static void CL_ServersResponsePacket( const netadr_t* from, msg_t *msg, qboolean
 	qboolean websocket = qfalse;
 
 
-	// check if server response is from a specific list
 #ifdef USE_MASTER_LAN
+	// check if server response is from a specific list
 	netadr_t addr;
 	if(cls.pingUpdateSource == AS_LOCAL) {
 		for (i = 0; i < MAX_MASTER_SERVERS; i++) {

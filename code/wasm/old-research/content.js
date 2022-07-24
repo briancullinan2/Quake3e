@@ -8,7 +8,7 @@ var { Readable } = require('stream')
 var glob = require('glob')
 var {compressFile, compressDirectory, readPak} = require('./compress.js')
 var checksumZip = require('./checksum.js')
-var {graphGame, loadDefaultDirectories, TEMP_NAME, BASEMOD, BASEMOD_LOWER, BASEMOD_DIRS} = require('../lib/asset.game.js')
+//var {graphGame, loadDefaultDirectories, TEMP_NAME, BASEMOD, BASEMOD_LOWER, BASEMOD_DIRS} = require('../lib/asset.game.js')
 
 var help = `
 npm run start [options] [virtual path] [filesystem path]

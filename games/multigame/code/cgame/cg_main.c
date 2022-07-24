@@ -16,6 +16,8 @@ static int teamModelModificationCount  = -1;
 static int teamColorsModificationCount = -1;
 static int breadcrumbModificationCount = -1;
 static int lazyloadModificationCount = -1;
+static int customheightModificationCount = -1;
+static int customwidthModificationCount = -1;
 
 void CG_Init( int serverMessageNum, int serverCommandSequence, int clientNum );
 void CG_Shutdown( void );
@@ -68,9 +70,6 @@ DLLEXPORT intptr_t vmMain( int command, int arg0, int arg1, int arg2 )
 	case CG_CONSOLE_COMMAND:
 		return CG_ConsoleCommand();
 	case CG_DRAW_ACTIVE_FRAME:
-#ifdef BUILD_GAME_STATIC
-    //Init_Display(&cgDC);
-#endif
 		CG_DrawActiveFrame( arg0, arg1, arg2 );
 		return 0;
 	case CG_CROSSHAIR_PLAYER:
@@ -279,6 +278,8 @@ int cg_weaponsCount = -1; //WarZone
 vmCvar_t  cg_developer;
 vmCvar_t  cg_breadCrumb;
 vmCvar_t  cg_lazyLoad;
+vmCvar_t  cg_customHeight;
+vmCvar_t  cg_customWidth;
 vmCvar_t  cg_atmosphere;
 vmCvar_t  cg_atmosphericEffects;
 int atmosphereModificationCount = -1;
@@ -469,7 +470,10 @@ static const cvarTable_t cvarTable[] = {
 	{ &cg_teamColors, "cg_teamColors", "", CVAR_ARCHIVE },
 	{ &cg_deadBodyDarken, "cg_deadBodyDarken", "1", CVAR_ARCHIVE },
 	{ &cg_fovAdjust, "cg_fovAdjust", "0", CVAR_ARCHIVE },
-	{ &cg_followKiller, "cg_followKiller", "0", CVAR_ARCHIVE }
+	{ &cg_followKiller, "cg_followKiller", "0", CVAR_ARCHIVE },
+	{ &cg_customHeight, "r_customHeight", "480", CVAR_ARCHIVE },
+	{ &cg_customWidth, "r_customWidth", "640", CVAR_ARCHIVE },
+
 };
 
 
@@ -500,6 +504,8 @@ void CG_RegisterCvars( void ) {
 	atmosphereModificationCount = cg_atmosphere.modificationCount;
 	breadcrumbModificationCount = cg_breadCrumb.modificationCount;
 	lazyloadModificationCount = cg_lazyLoad.modificationCount;
+	customheightModificationCount = cg_customHeight.modificationCount;
+	customwidthModificationCount = cg_customWidth.modificationCount;
 
 }
 
@@ -619,6 +625,7 @@ static void CG_WeapMisc( const char * );
 static void CG_WeaphitsCache( void );
 static void CG_PlayerCache( const char * );
 static void CG_PowerupCache( const char * );
+static void CG_InitGLConfig( void );
 
 
 
@@ -697,6 +704,13 @@ void CG_UpdateCvars( void ) {
 			//CG_PlayerCache(s);
 		}
 */
+	}
+
+	if(customheightModificationCount != cg_customHeight.modificationCount
+		|| customwidthModificationCount != cg_customWidth.modificationCount) {
+		customwidthModificationCount = cg_customWidth.modificationCount;
+		customheightModificationCount = cg_customHeight.modificationCount;
+		CG_InitGLConfig();
 	}
 
 	if(breadcrumbModificationCount != cg_breadCrumb.modificationCount) {
@@ -2033,9 +2047,7 @@ void CG_LoadMenus(const char *menuFile) {
 	
 	COM_Compress(buf);
 
-//#ifndef BUILD_GAME_STATIC
 	CG_Menu_Reset();
-//#endif
 
 	p = buf;
 
@@ -2411,6 +2423,40 @@ void CG_AssetCache( void ) {
 	cgDC.Assets.sliderThumb = trap_R_RegisterShaderNoMip( ASSET_SLIDER_THUMB );
 }
 #endif
+
+static void CG_InitGLConfig( void ) {
+
+	// get the rendering configuration from the client system
+	trap_GetGlconfig( &cgs.glconfig );
+
+	cgs.screenXBias = 0.0;
+	cgs.screenYBias = 0.0;
+	
+	if ( cgs.glconfig.vidWidth * 480 > cgs.glconfig.vidHeight * 640 ) {
+		// wide screen, scale by height
+		cgs.screenXScale = cgs.screenYScale = cgs.glconfig.vidHeight * (1.0/480.0);
+		cgs.screenXBias = 0.5 * ( cgs.glconfig.vidWidth - ( cgs.glconfig.vidHeight * (640.0/480.0) ) );
+	}
+	else {
+		// no wide screen, scale by width
+		cgs.screenXScale = cgs.screenYScale = cgs.glconfig.vidWidth * (1.0/640.0);
+		cgs.screenYBias = 0.5 * ( cgs.glconfig.vidHeight - ( cgs.glconfig.vidWidth * (480.0/640.0) ) );
+	}
+
+	cgs.screenXmin = 0.0 - (cgs.screenXBias / cgs.screenXScale);
+	cgs.screenXmax = 640.0 + (cgs.screenXBias / cgs.screenXScale);
+
+	cgs.screenYmin = 0.0 - (cgs.screenYBias / cgs.screenYScale);
+	cgs.screenYmax = 480.0 + (cgs.screenYBias / cgs.screenYScale);
+
+	cgs.cursorScaleR = 1.0 / cgs.screenXScale;
+	if ( cgs.cursorScaleR < 0.5 ) {
+		cgs.cursorScaleR = 0.5;
+	}
+
+}
+
+
 /*
 =================
 CG_Init
@@ -2477,33 +2523,7 @@ void CG_Init( int serverMessageNum, int serverCommandSequence, int clientNum ) {
 	cgs.flagStatus = -1;
 	// old servers
 
-	// get the rendering configuration from the client system
-	trap_GetGlconfig( &cgs.glconfig );
-
-	cgs.screenXBias = 0.0;
-	cgs.screenYBias = 0.0;
-	
-	if ( cgs.glconfig.vidWidth * 480 > cgs.glconfig.vidHeight * 640 ) {
-		// wide screen, scale by height
-		cgs.screenXScale = cgs.screenYScale = cgs.glconfig.vidHeight * (1.0/480.0);
-		cgs.screenXBias = 0.5 * ( cgs.glconfig.vidWidth - ( cgs.glconfig.vidHeight * (640.0/480.0) ) );
-	}
-	else {
-		// no wide screen, scale by width
-		cgs.screenXScale = cgs.screenYScale = cgs.glconfig.vidWidth * (1.0/640.0);
-		cgs.screenYBias = 0.5 * ( cgs.glconfig.vidHeight - ( cgs.glconfig.vidWidth * (480.0/640.0) ) );
-	}
-
-	cgs.screenXmin = 0.0 - (cgs.screenXBias / cgs.screenXScale);
-	cgs.screenXmax = 640.0 + (cgs.screenXBias / cgs.screenXScale);
-
-	cgs.screenYmin = 0.0 - (cgs.screenYBias / cgs.screenYScale);
-	cgs.screenYmax = 480.0 + (cgs.screenYBias / cgs.screenYScale);
-
-	cgs.cursorScaleR = 1.0 / cgs.screenXScale;
-	if ( cgs.cursorScaleR < 0.5 ) {
-		cgs.cursorScaleR = 0.5;
-	}
+	CG_InitGLConfig();
 
 #ifdef USE_NEW_FONT_RENDERER
 	CG_LoadFonts();
@@ -2533,11 +2553,9 @@ void CG_Init( int serverMessageNum, int serverCommandSequence, int clientNum ) {
 
 	trap_CM_LoadMap( cgs.mapname );
 
-//#ifndef BUILD_GAME_STATIC
 #ifdef MISSIONPACK
 	CG_String_Init();
 #endif
-//#endif
 
 	cg.loading = qtrue;		// force players to load instead of defer
 

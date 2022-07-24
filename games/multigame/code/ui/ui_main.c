@@ -625,9 +625,6 @@ void _UI_Refresh( int realtime )
 	}
 #endif
 
-#ifdef BUILD_GAME_STATIC
-  //Init_Display(&uiInfo.uiDC);
-#endif
 
 	UI_UpdateCvars();
 

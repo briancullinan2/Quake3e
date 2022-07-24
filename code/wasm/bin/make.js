@@ -37,7 +37,7 @@ function normalReplace(indexFile, cssFile, scriptFile, skinFile, wasmFile
     [/<script[^>]*>/, '<script>'+rfs(scriptFile)+'</script>'],
     [/<img[^>]*>/, '<img title="gfx/2d/bigchars.png" src="data:image/png;base64,'
       + rfs(skinFile, 'base64')+ '" />'],
-    [/<\/html>/, '<script async type="application/javascript">' 
+    [/<\/html>/, '<script async defer type="application/javascript">' 
       + formatForVFS(wasmFile, path.basename(wasmFile)) + '</script></html>'],
     [/quake3e\.wasm/ig, path.basename(wasmFile)],
   ]
@@ -72,7 +72,7 @@ function normalEmbed(indexFile, directory, pathMatch, pathReplace) {
   //   MAYBE ONCE AGAIN IF IT THINKS A BUILD SCRIPT WAS RUNNING? WONDER IF GITKRAKEN DOES THIS,
   //   I ALREADY HAVE PROBLEMS WITH GITKRAKEN SHOWING THE CORRECT CODE. NO ONE CARES.
   for(let i = 0; i < scripts.length; i++) {
-    let replacements = [/<\/html>/, '<script async type="application/javascript">' 
+    let replacements = [/<\/html>/, '<script async defer type="application/javascript">' 
       + formatForVFS(scripts[i], scripts[i].replace(pathMatch, pathReplace)) + '</script></html>']
     let matchString = index.match(replacements[0])
     index = index.substring(0, matchString.index)

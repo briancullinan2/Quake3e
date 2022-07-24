@@ -242,12 +242,6 @@ function Sys_notify(ifile, path, fp) {
 
 /*
 
-function alignUp(x, multiple) {
-	if (x % multiple > 0) {
-	x += multiple - x % multiple;
-	}
-	return x;
-}
 
 var _emscripten_get_now_is_monotonic = true;
 
