@@ -123,5 +123,30 @@ Significant contributions from
    the dojo and Agent Smith's monitor (Camera's Lots Of Camera's) should be laid out like 
    the Guns map but with cameras set to view-point of every entity.
 
+## TODO (just thought of another): User Story
+
+* The point of the game-play is to Stick Together (tm). The engine periodically forms bridges between
+all players occupying the same universe. 
+* If there are 12 "maps", every player starts by choosing another player to spawn from, the first player
+in a world only chooses from a single point.
+* The player might cross a field and battle bots through a forest and navigate a boat down stream without
+crashing against the sides, or fighting enemy projectiles. But at the end of the day, the person you
+spawn from is only a few steps away. 
+* Nights and Winters must be navigated with another person, so a player can play for 30 minutes until the
+game turns to night, and then they must send an invite link to their friend to spawn with them.
+* Some puzzles require many players to solve, so more opportunity for community growth.
+* The game is won, "generally", by solving a puzzle that allows the player to cross dimensions to one
+of the other 10 universes. Becoming a multi-dimensional being eventually allows the player to travel
+between all dimensions.
+* On a celestial scale, an RPG game is played by recruiting players to control the bodies of other players
+generated through their life-death cycle, naturally beating the game. The souls can be collected by 
+navigators viewing the universe from a birds-eye view and using them in a multi-versal battle.
+I.e. Civilizations X-style with an automatic human resource.
+* In the inter-dimensional being RPG mode, there is not "winning" only quotas to meet. Money to be made,
+add-ons to be sold, player's time to be collected on your behalf. "Soul" resources can be delegated and 
+traded with other players.
+
+
+
 <sup><sub>powered by [void-zero](https://github.com/briancullinan/void-zero)</sub></sup>
 
