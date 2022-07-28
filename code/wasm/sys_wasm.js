@@ -188,7 +188,7 @@ async function initBrowser() {
 
 	// no delay on remote loads
 	function initStreaming() {
-		return fetch('/quake3e.wasm?time=' + NET.cacheBuster)
+		return fetch('quake3e.wasm?time=' + NET.cacheBuster)
 			.catch(function (e) { console.error(e) })
 			.then(function (response) {
 				if(response && response.status == 200) {
