@@ -177,7 +177,7 @@ static void SV_Map_f( void ) {
 		if(Q_stricmp(alreadyTried, map) != 0
 			&& CL_Download( "dlmap", map, qtrue )) {
 			Q_strncpyz(alreadyTried, map, sizeof(alreadyTried));
-			Cbuf_AddText(va("wait 300 ; fs_restart ; %s %s ; ", Cmd_Argv(0), map));
+			Cbuf_AddText(va(" ; wait 300 ; fs_restart ; %s %s ; ", Cmd_Argv(0), map));
 		} else
 #endif
 		Com_Printf( "Can't find map %s\n", expanded );

@@ -615,9 +615,9 @@ function CL_Download(cmd, name, auto) {
   if(!FS.database) {
     openDatabase()
   }
-  if(NET.downloadCount > 5) {
-    return false // delay like cl_curl does
-  }
+  //if(NET.downloadCount > 5) {
+  //  return 0 // delay like cl_curl does
+  //}
 
   // TODO: make a utility for Cvar stuff?
   let dlURL = addressToString(Cvar_VariableString(stringToAddress('cl_dlURL')))
@@ -689,7 +689,7 @@ function CL_Download(cmd, name, auto) {
       
     }
   })())
-  return true
+  return 1
 }
 
 var NET = {

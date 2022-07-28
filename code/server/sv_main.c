@@ -724,6 +724,7 @@ static void SVC_Status( const netadr_t *from ) {
 	status[0] = '\0';
 	statusLength = strlen( infostring ) + 16; // strlen( "statusResponse\n\n" )
 
+	if(com_sv_running->integer)
 	for ( i = 0 ; i < sv_maxclients->integer ; i++ ) {
 		cl = &svs.clients[i];
 		if ( cl->state >= CS_CONNECTED ) {
@@ -967,16 +968,21 @@ static void SV_ConnectionlessPacket( const netadr_t *from, msg_t *msg ) {
 		return;
 	}
 
-//ifndef __WASM__
+//#ifdef __WASM__
+
+	if (!Q_stricmp(c, "getstatus")) {
+		SVC_Status( from );
+		return;
+	}
 	// process is running but it's not queryable?
 	//   why wouldn't master servers us this as an indication of
 	//   server availability for elective moderation?
 	// Didn't have the technology in 1999 I guess...
+//#endif
 
 	if ( !com_sv_running->integer ) {
 		return;
 	}
-//#endif
 
 	if (!Q_stricmp(c, "getstatus")) {
 		SVC_Status( from );
