@@ -683,6 +683,9 @@ function CL_Download(cmd, name, auto) {
           localName = localName.replace(/\/.*?$/, '/' + newFilename[1])
           nameStr = nameStr.replace(/\/.*?$/, '/' + newFilename[1])
         }
+        if(nameStr.match(/\.pk3/i)) {
+          Cbuf_AddText(stringToAddress(` ; wait 300 ; fs_restart ; ${cmd} ${nameStr} ; `))
+        }
       }
       Com_DL_Perform(gamedir + nameStr, gamedir + localName, responseData)
     } catch (e) {

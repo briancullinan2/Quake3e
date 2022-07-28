@@ -43,7 +43,6 @@ function initEnvironment(ENGINE) {
 }
 
 
-// BECAUSE IT'S FUCKING PRETTIER, OKAY?
 function updateGlobalFunctions(GLOBAL) {
 	// assign everything to env because this __attribute(import) BS don't work
 	let startKeys = Object.keys(GLOBAL)

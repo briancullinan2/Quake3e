@@ -1209,7 +1209,7 @@ $(B)/$(TARGET_CLIENT): $(Q3OBJ) $(wildcard code/wasm/*.js) code/wasm/index.html 
 	$(echo_cmd) "LD $@"
 	$(CC) -o $@ $(Q3OBJ) $(CLIENT_LDFLAGS) \
 		$(LDFLAGS)
-#	$(WASM-OPT) -Oz -Os --zero-filled-memory --no-validation -o $@ $@
+	$(WASM-OPT) -Oz -Os --zero-filled-memory --no-validation -o $@ $@
 	cp code/wasm/*.js docs/
 	cp code/wasm/*.html docs/
 	cp code/wasm/*.css docs/

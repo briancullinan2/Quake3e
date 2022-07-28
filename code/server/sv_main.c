@@ -614,9 +614,12 @@ Rate limit for a particular address
 */
 qboolean SVC_RateLimitAddress( const netadr_t *from, int burst, int period ) {
 	leakyBucket_t *bucket = SVC_BucketForAddress( from, burst, period );
-	if((from->type == NA_LOOPBACK 
-		|| (from->ipv._4[0] == 127 && from->ipv._4[1] == 0 && from->ipv._4[2] == 0
-		&& from->ipv._4[3] == 1)) && Cvar_VariableIntegerValue("r_headless")) {
+	if(from->type == NA_LOOPBACK) {
+		return qfalse;
+	}
+	if(Cvar_VariableIntegerValue("r_headless")
+		&& from->ipv._4[0] == 127 && from->ipv._4[1] == 0 
+		&& from->ipv._4[2] == 0 && from->ipv._4[3] == 1) {
 		return qfalse;
 	}
 	return bucket ? SVC_RateLimit( &bucket->rate, burst, period ) : qtrue;
@@ -1352,6 +1355,10 @@ void SV_Frame( int msec ) {
 			Sys_Sleep( -1 );
 #endif
 		}
+//#ifdef __WASM__
+		SV_MasterHeartbeat(HEARTBEAT_FOR_MASTER);
+//#endif
+
 		return;
 	}
 
