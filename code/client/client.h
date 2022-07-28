@@ -375,6 +375,12 @@ qboolean	CL_Download( const char *cmd, const char *pakname, qboolean autoDownloa
 
 #endif
 
+#ifdef __WASM__
+void		Com_DL_Cleanup( void * );
+qboolean	CL_Download( const char *cmd, const char *pakname, qboolean autoDownload );
+void CL_BeginDownload( const char *localName, const char *remoteName );
+#endif
+
 //=============================================================================
 
 extern	vm_t			*cgvm;	// interface to cgame dll or vm
@@ -433,6 +439,12 @@ extern	cvar_t	*r_colorbits;
 extern	cvar_t	*cl_stencilbits;
 extern	cvar_t	*cl_depthbits;
 extern	cvar_t	*cl_drawBuffer;
+
+
+
+extern  cvar_t  *cl_birdsEye;
+extern  cvar_t  *sv_birdsEye;
+
 
 //=================================================
 

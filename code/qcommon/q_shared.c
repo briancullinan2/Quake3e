@@ -937,7 +937,7 @@ __reswitch:
 COM_MatchToken
 ==================
 */
-static void COM_MatchToken( const char **buf_p, const char *match ) {
+void COM_MatchToken( const char **buf_p, const char *match ) {
 	const char *token;
 
 	token = COM_Parse( buf_p );

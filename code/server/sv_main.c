@@ -215,6 +215,7 @@ void QDECL SV_SendServerCommand( client_t *cl, const char *fmt, ... ) {
 }
 
 
+
 /*
 ==============================================================================
 
@@ -242,11 +243,26 @@ static void SV_MasterHeartbeat( const char *message )
 	int			i;
 	int			res;
 	int			netenabled;
+#ifndef DEDICATED
+#if defined(USE_LOCAL_DED) || defined(__WASM__)
+	extern cvar_t *cl_master[MAX_MASTER_SERVERS];
+	cvar_t **masterList = sv_master;
+	if(com_dedicated->integer != 2)
+		masterList = cl_master;
+#define sv_master masterList
+#endif
+#endif
 
 	netenabled = Cvar_VariableIntegerValue("net_enabled");
 
 	// "dedicated 1" is for lan play, "dedicated 2" is for inet public play
-	if (!com_dedicated || com_dedicated->integer != 2 || !(netenabled & (NET_ENABLEV4 | NET_ENABLEV6)))
+	if(!(/*Cvar_VariableIntegerValue("r_headless") &&*/ svs.forceHeartbeat))
+	if (!com_dedicated 
+//#ifndef __WASM__
+		|| com_dedicated->integer == 0 
+//		|| com_dedicated->integer != 2 
+//#endif
+		|| !(netenabled & (NET_ENABLEV4 | NET_ENABLEV6)))
 		return;		// only dedicated servers send heartbeats
 
 	// if not time yet, don't send anything
@@ -320,6 +336,10 @@ static void SV_MasterHeartbeat( const char *message )
 		if(adr[i][1].type != NA_BAD)
 			NET_OutOfBandPrint( NS_SERVER, &adr[i][1], "heartbeat %s\n", message);
 	}
+
+#ifdef USE_LOCAL_DED
+#undef sv_master
+#endif
 }
 
 
@@ -594,7 +614,11 @@ Rate limit for a particular address
 */
 qboolean SVC_RateLimitAddress( const netadr_t *from, int burst, int period ) {
 	leakyBucket_t *bucket = SVC_BucketForAddress( from, burst, period );
-
+	if((from->type == NA_LOOPBACK 
+		|| (from->ipv._4[0] == 127 && from->ipv._4[1] == 0 && from->ipv._4[2] == 0
+		&& from->ipv._4[3] == 1)) && Cvar_VariableIntegerValue("r_headless")) {
+		return qfalse;
+	}
 	return bucket ? SVC_RateLimit( &bucket->rate, burst, period ) : qtrue;
 }
 
@@ -661,9 +685,13 @@ static void SVC_Status( const netadr_t *from ) {
 
 	// ignore if we are in single player
 #ifndef DEDICATED
+#ifndef USE_LOCAL_DED
+#ifndef __WASM__
 	if ( Cvar_VariableIntegerValue( "g_gametype" ) == GT_SINGLE_PLAYER || Cvar_VariableIntegerValue("ui_singlePlayerActive")) {
 		return;
 	}
+#endif
+#endif
 #endif
 
 	// Prevent using getstatus as an amplifier
@@ -731,9 +759,13 @@ static void SVC_Info( const netadr_t *from ) {
 
 	// ignore if we are in single player
 #ifndef DEDICATED
+#ifndef USE_LOCAL_DED
+#ifndef __WASM__
 	if ( Cvar_VariableIntegerValue( "g_gametype" ) == GT_SINGLE_PLAYER || Cvar_VariableIntegerValue("ui_singlePlayerActive")) {
 		return;
 	}
+#endif
+#endif
 #endif
 
 	// Prevent using getinfo as an amplifier
@@ -935,9 +967,16 @@ static void SV_ConnectionlessPacket( const netadr_t *from, msg_t *msg ) {
 		return;
 	}
 
+//ifndef __WASM__
+	// process is running but it's not queryable?
+	//   why wouldn't master servers us this as an indication of
+	//   server availability for elective moderation?
+	// Didn't have the technology in 1999 I guess...
+
 	if ( !com_sv_running->integer ) {
 		return;
 	}
+//#endif
 
 	if (!Q_stricmp(c, "getstatus")) {
 		SVC_Status( from );
@@ -1303,7 +1342,9 @@ void SV_Frame( int msec ) {
 		{
 			// Block indefinitely until something interesting happens
 			// on STDIN.
+#ifndef __WASM__
 			Sys_Sleep( -1 );
+#endif
 		}
 		return;
 	}

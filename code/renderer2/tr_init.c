@@ -213,6 +213,9 @@ static cvar_t* r_maxpolyverts;
 int		max_polys;
 int		max_polyverts;
 
+#ifdef __WASM__
+cvar_t  *r_paletteMode;
+#endif
 
 // for modular renderer
 #ifdef USE_RENDERER_DLOPEN
@@ -1407,6 +1410,9 @@ void R_Init( void ) {
 
 	R_InitVaos();
 
+#ifdef __WASM__
+	tr.numShaders = 0;
+#endif
 	R_InitShaders();
 
 	R_InitSkins();
@@ -1463,6 +1469,7 @@ static void RE_Shutdown( refShutdownCode_t code ) {
 	R_DoneFreeType();
 
 	// shut down platform specific OpenGL stuff
+#ifndef __WASM__
 	if ( code != REF_KEEP_CONTEXT ) {
 		ri.GLimp_Shutdown( code == REF_UNLOAD_DLL ? qtrue: qfalse );
 
@@ -1474,6 +1481,7 @@ static void RE_Shutdown( refShutdownCode_t code ) {
 
 		Com_Memset( &glState, 0, sizeof( glState ) );
 	}
+#endif
 
 	ri.FreeAll();
 
@@ -1566,6 +1574,10 @@ refexport_t *GetRefAPI ( int apiVersion, refimport_t *rimp ) {
 	re.GetConfig = RE_GetConfig;
 	re.VertexLighting = RE_VertexLighting;
 	re.SyncRender = RE_SyncRender;
+
+#ifdef __WASM__
+	re.InitShaders = R_InitShaders;
+#endif
 
 	return &re;
 }

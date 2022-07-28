@@ -35,7 +35,7 @@ USE_OPENGL2      = 0
 USE_SYSTEM_JPEG  = 0
 USE_VULKAN_API   = 1
 
-USE_RENDERER_DLOPEN = 1
+USE_RENDERER_DLOPEN ?= 1
 
 CNAME            = quake3e
 DNAME            = quake3e.ded
@@ -52,6 +52,22 @@ Q=
 else
 echo_cmd=@echo
 Q=@
+endif
+
+#########################  WASM     ###################################
+ifeq ($(PLATFORM),wasm)
+ARCH=js
+RENDERER_DEFAULT=opengl2
+WASM=1
+CROSS_COMPILING=1
+BUILD_SERVER=0
+USE_SYSTEM_JPEG=1
+USE_IPV6=0
+USE_SDL=0
+USE_CURL=0
+HAVE_VM_COMPILED=false
+USE_VULKAN_API=0
+USE_VULKAN=0
 endif
 
 #############################################################################
@@ -189,6 +205,7 @@ SDLDIR=$(MOUNT_DIR)/sdl
 CMDIR=$(MOUNT_DIR)/qcommon
 UDIR=$(MOUNT_DIR)/unix
 W32DIR=$(MOUNT_DIR)/win32
+WASMDIR=$(MOUNT_DIR)/wasm
 BLIBDIR=$(MOUNT_DIR)/botlib
 UIDIR=$(MOUNT_DIR)/ui
 JPDIR=$(MOUNT_DIR)/libjpeg
@@ -288,6 +305,102 @@ ARCHEXT=
 
 CLIENT_EXTRA_FILES=
 
+#############################################################################
+# SETUP AND BUILD -- Web Assembly (WASI-SDK)
+#############################################################################
+
+ifdef WASM
+ARCHEXT = .wasm
+
+ifeq ($(COMPILE_PLATFORM),mingw)
+HAS_WASI=1
+endif
+ifeq ($(COMPILE_PLATFORM),linux)
+HAS_WASI=1
+endif
+ifeq ($(COMPILE_PLATFORM),darwin)
+HAS_WASI=1
+endif
+ifndef HAS_WASI
+error platform support (one of linux, mingw, darwin)
+endif 
+
+WASISDK        := $(lastword $(wildcard code/wasm/$(COMPILE_PLATFORM)/wasi-sdk-*))
+WASM-OPT       ?= $(lastword $(wildcard code/wasm/$(COMPILE_PLATFORM)/binaryen-version_*/bin/wasm-opt))
+#LD             := $(WASISDK)/bin/wasm-ld
+CC             := $(WASISDK)/bin/clang 
+LD             := $(CC)
+
+WASI_INCLUDES  := \
+	--target=wasm32 \
+  -Icode/wasm \
+	-I$(WASISDK)/share/wasi-sysroot/include \
+  -Icode/wasm/SDL2-2.0.14/include
+
+BASE_CFLAGS    += -fno-rtti -Wall \
+	-Wimplicit -fstrict-aliasing  -fno-inline \
+	-ftree-vectorize -fsigned-char -MMD \
+	-fno-short-enums  -fPIC \
+  -DNO_VM_COMPILED=1 -fno-common  \
+	-D_XOPEN_SOURCE=700 -D__EMSCRIPTEN__=1 \
+	-D__WASM__=1 -D__wasi__=1 -D__wasm32__=1 \
+	-D_WASI_EMULATED_SIGNAL -D_WASI_EMULATED_MMAN=1 \
+  -std=gnu11 $(WASI_INCLUDES)
+
+LDFLAGS        += -D__WASM__=1 --no-standard-libraries \
+  -Wl,--export-dynamic -Wl,--error-limit=200 \
+  -Wl,--import-memory,--import-table \
+	$(WASISDK)/lib/clang/14.0.3/lib/wasi/libclang_rt.builtins-wasm32.a \
+	$(WASISDK)/share/wasi-sysroot/lib/wasm32-wasi/libc.a 
+
+
+#  -Wl,--initial-memory=52428800 \
+  -Wl,--max-memory=1048576000 \
+  -Wl,--export-table,--growable-table 
+
+OPTIMIZE        = -O3 -ffast-math 
+
+SHLIBEXT = wasm
+SHLIBCFLAGS = -fvisibility=hidden $(OPTIMIZE)
+SHLIBLDFLAGS = -Wl,--no-entry $(LDFLAGS) \
+  -Wl,--export=malloc  \
+	-Wl,--export=stderr -Wl,--export=stdout \
+  -Wl,--allow-undefined-file=code/wasm/wasm.syms
+
+#  -fno-builtin -nostdlib 
+# -shared not supported
+
+CLIENT_LDFLAGS  = $(LDFLAGS) code/wasm/stack_ops.S \
+	-Wl,--export=sprintf       -Wl,--export=malloc  \
+	-Wl,--export=stderr        -Wl,--export=stdout  \
+  -Wl,--export=FS_CreatePath -Wl,--export=free \
+	-Wl,--export=errno,--export=R_FindPalette \
+  -Wl,--export=Key_ClearStates,--export=Key_GetCatcher \
+  -Wl,--export=Key_SetCatcher,--export=CL_PacketEvent \
+  -Wl,--export=s_soundStarted,--export=s_soundMuted \
+  -Wl,--export=stackRestore,--export=stackSave,--export=stackAlloc \
+  -Wl,--export=dma,--export=S_SoundInfo,--export=Cbuf_ExecuteText \
+  -Wl,--export=Cbuf_AddText,--export=gw_minimized \
+  -Wl,--export=gw_active,--export=Z_Free \
+  -Wl,--export=CL_NextDownload,--export=com_fullyInitialized \
+  -Wl,--export=Z_Malloc,--export=Sys_QueEvent,--export=MSG_Init \
+  -Wl,--export=Com_RunAndTimeServerPacket,--export=Com_Frame \
+  -Wl,--export=Cvar_VariableValue,--export=Cvar_VariableIntegerValue \
+  -Wl,--export=Cvar_VariableString,--export=Cvar_Get \
+  -Wl,--export=Cvar_Set,--export=Cvar_SetValue \
+  -Wl,--export=Cvar_SetIntegerValue,--export=Cvar_CheckRange \
+  -Wl,--export=FS_ReadFile,--export=VM_Call \
+  -Wl,--export=FS_FreeFile,--export=FS_CopyString \
+  -Wl,--export=FS_GetCurrentGameDir,--export=Key_KeynumToString \
+  -Wl,--allow-undefined-file=code/wasm/wasm.syms
+
+
+
+DEBUG_CFLAGS    = $(BASE_CFLAGS) -DDEBUG -D_DEBUG -g -g4 -O0
+RELEASE_CFLAGS  = $(BASE_CFLAGS) -DNDEBUG $(OPTIMIZE)
+
+else
+LD =: $(CC)
 
 #############################################################################
 # SETUP AND BUILD -- MINGW32
@@ -504,6 +617,8 @@ endif # *NIX platforms
 
 endif # !MINGW
 
+endif # !__WASM__
+
 
 TARGET_CLIENT = $(CNAME)$(ARCHEXT)$(BINEXT)
 
@@ -640,6 +755,7 @@ ifdef MINGW
 	@echo "  WINDRES: $(WINDRES)"
 endif
 	@echo "  CC: $(CC)"
+	@echo "  LD: $(LD)"
 	@echo ""
 	@echo "  CFLAGS:"
 	@for i in $(CFLAGS); \
@@ -908,6 +1024,7 @@ Q3OBJ = \
   $(B)/client/net_ip.o \
   $(B)/client/huffman.o \
   $(B)/client/huffman_static.o \
+  $(B)/client/splines.o \
   \
   $(B)/client/snd_adpcm.o \
   $(B)/client/snd_dma.o \
@@ -920,6 +1037,7 @@ Q3OBJ = \
   $(B)/client/snd_codec_wav.o \
   \
   $(B)/client/sv_bot.o \
+  $(B)/client/sv_bsp_mini.o \
   $(B)/client/sv_ccmds.o \
   $(B)/client/sv_client.o \
   $(B)/client/sv_filter.o \
@@ -1011,6 +1129,14 @@ ifeq ($(USE_CURL),1)
   Q3OBJ += $(B)/client/cl_curl.o
 endif
 
+ifdef WASM
+
+Q3OBJ += \
+    $(B)/client/sys_main.o $(B)/client/dlmalloc.o \
+    $(B)/client/sbrk.o
+
+else
+
 ifdef MINGW
 
   Q3OBJ += \
@@ -1054,6 +1180,9 @@ ifeq ($(USE_SDL),1)
         $(B)/client/sdl_input.o \
         $(B)/client/sdl_snd.o
 else # !USE_SDL
+ifdef WASM
+$(error not wasm!)
+endif
     Q3OBJ += \
         $(B)/client/linux_glimp.o \
         $(B)/client/linux_qgl.o \
@@ -1069,12 +1198,32 @@ endif # !USE_SDL
 
 endif # !MINGW
 
+endif # !WASM
+
 # client binary
+
+ifeq ($(PLATFORM),wasm)
+
+
+$(B)/$(TARGET_CLIENT): $(Q3OBJ) $(wildcard code/wasm/*.js) code/wasm/index.html code/wasm/index.css
+	$(echo_cmd) "LD $@"
+	$(CC) -o $@ $(Q3OBJ) $(CLIENT_LDFLAGS) \
+		$(LDFLAGS)
+#	$(WASM-OPT) -Oz -Os --zero-filled-memory --no-validation -o $@ $@
+	cp code/wasm/*.js docs/
+	cp code/wasm/*.html docs/
+	cp code/wasm/*.css docs/
+	cp $(B)/$(TARGET_CLIENT) docs/
+
+
+else
 
 $(B)/$(TARGET_CLIENT): $(Q3OBJ)
 	$(echo_cmd) "LD $@"
 	$(Q)$(CC) -o $@ $(Q3OBJ) $(CLIENT_LDFLAGS) \
 		$(LDFLAGS)
+
+endif
 
 # modular renderers
 
@@ -1082,13 +1231,23 @@ $(B)/$(TARGET_REND1): $(Q3REND1OBJ)
 	$(echo_cmd) "LD $@"
 	$(Q)$(CC) -o $@ $(Q3REND1OBJ) $(SHLIBCFLAGS) $(SHLIBLDFLAGS)
 
+ifneq ($(PLATFORM),wasm)
 $(STRINGIFY): $(MOUNT_DIR)/renderer2/stringify.c
 	$(echo_cmd) "LD $@"
 	$(Q)$(CC) -o $@ $(MOUNT_DIR)/renderer2/stringify.c $(LDFLAGS)
+endif
 
+ifeq ($(PLATFORM),wasm)
 $(B)/$(TARGET_REND2): $(Q3REND2OBJ) $(Q3REND2STROBJ)
 	$(echo_cmd) "LD $@"
 	$(Q)$(CC) -o $@ $(Q3REND2OBJ) $(Q3REND2STROBJ) $(SHLIBCFLAGS) $(SHLIBLDFLAGS)
+	$(WASM-OPT) -Os --zero-filled-memory --no-validation -o $@ $@
+
+else
+$(B)/$(TARGET_REND2): $(Q3REND2OBJ) $(Q3REND2STROBJ)
+	$(echo_cmd) "LD $@"
+	$(Q)$(CC) -o $@ $(Q3REND2OBJ) $(Q3REND2STROBJ) $(SHLIBCFLAGS) $(SHLIBLDFLAGS)
+endif
 
 $(B)/$(TARGET_RENDV): $(Q3RENDVOBJ)
 	$(echo_cmd) "LD $@"
@@ -1100,6 +1259,7 @@ $(B)/$(TARGET_RENDV): $(Q3RENDVOBJ)
 
 Q3DOBJ = \
   $(B)/ded/sv_bot.o \
+  $(B)/ded/sv_bsp_mini.o \
   $(B)/ded/sv_client.o \
   $(B)/ded/sv_ccmds.o \
   $(B)/ded/sv_filter.o \
@@ -1231,8 +1391,18 @@ $(B)/rend1/%.o: $(RCDIR)/%.c
 $(B)/rend1/%.o: $(CMDIR)/%.c
 	$(DO_REND_CC)
 
+ifneq ($(PLATFORM),wasm)
 $(B)/rend2/glsl/%.c: $(R2DIR)/glsl/%.glsl $(STRINGIFY)
 	$(DO_REF_STR)
+
+else
+
+$(B)/rend2/glsl/%.c: $(R2DIR)/glsl/%.glsl
+	$(echo_cmd) "REF_STR $@"
+	$(Q)echo "const char *fallbackShader_$(notdir $(basename $<)) =" >> $@
+	$(Q)cat $< | sed -e 's/^/\"/;s/$$/\\n\"/' | tr -d '\r' >> $@
+	$(Q)echo ";" >> $@
+endif
 
 $(B)/rend2/glsl/%.o: $(B)/renderer2/glsl/%.c
 	$(DO_REND_CC)
@@ -1254,6 +1424,9 @@ $(B)/rendv/%.o: $(RCDIR)/%.c
 
 $(B)/rendv/%.o: $(CMDIR)/%.c
 	$(DO_REND_CC)
+
+$(B)/client/%.o: $(WASMDIR)/%.c
+	$(DO_CC)
 
 $(B)/client/%.o: $(UDIR)/%.c
 	$(DO_CC)

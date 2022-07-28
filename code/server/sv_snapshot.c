@@ -137,7 +137,9 @@ static void SV_WriteSnapshotToClient( const client_t *client, msg_t *msg ) {
 		// client hasn't gotten a good message through in a long time
 		if ( com_developer->integer ) {
 			if ( client->deltaMessage != client->netchan.outgoingSequence - ( PACKET_BACKUP + 1 ) ) {
-				Com_Printf( "%s: Delta request from out of date packet.\n", client->name );
+//#ifdef __WASM__
+				//Com_Printf( "%s: Delta request from out of date packet.\n", client->name );
+//#endif
 			}
 		}
 		oldframe = NULL;
@@ -618,6 +620,7 @@ static void SV_BuildClientSnapshot( client_t *client ) {
 	clientNum = frame->ps.clientNum;
 	if ( clientNum < 0 || clientNum >= MAX_GENTITIES ) {
 		Com_Error( ERR_DROP, "SV_SvEntityForGentity: bad gEnt" );
+		return;
 	}
 
 	// we set client->gentity only after sending gamestate

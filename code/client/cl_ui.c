@@ -26,6 +26,9 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 extern	botlib_export_t	*botlib_export;
 
+#ifdef __WASM__
+Q_EXPORT
+#endif
 vm_t *uivm = NULL;
 
 /*
@@ -257,20 +260,21 @@ static void LAN_GetServerAddressString( int source, int n, char *buf, int buflen
 	switch (source) {
 		case AS_LOCAL :
 			if (n >= 0 && n < MAX_OTHER_SERVERS) {
-				Q_strncpyz(buf, NET_AdrToStringwPort( &cls.localServers[n].adr) , buflen );
+				Q_strncpyz(buf, NET_AdrToStringwPortandProtocol( &cls.localServers[n].adr) , buflen );
+
 				return;
 			}
 			break;
 		case AS_MPLAYER:
 		case AS_GLOBAL :
 			if (n >= 0 && n < MAX_GLOBAL_SERVERS) {
-				Q_strncpyz(buf, NET_AdrToStringwPort( &cls.globalServers[n].adr) , buflen );
+				Q_strncpyz(buf, NET_AdrToStringwPortandProtocol( &cls.globalServers[n].adr) , buflen );
 				return;
 			}
 			break;
 		case AS_FAVORITES :
 			if (n >= 0 && n < MAX_OTHER_SERVERS) {
-				Q_strncpyz(buf, NET_AdrToStringwPort( &cls.favoriteServers[n].adr) , buflen );
+				Q_strncpyz(buf, NET_AdrToStringwPortandProtocol( &cls.favoriteServers[n].adr) , buflen );
 				return;
 			}
 			break;
@@ -617,7 +621,11 @@ CL_GetClipboardData
 static void CL_GetClipboardData( char *buf, int buflen ) {
 	char	*cbd;
 
+#ifdef __WASM__
+	cbd = NULL;
+#else
 	cbd = Sys_GetClipboardData();
+#endif
 
 	if ( !cbd ) {
 		*buf = '\0';
@@ -1256,13 +1264,21 @@ void CL_InitUI( void ) {
 			fs_reordered = qfalse;
 			FS_PureServerSetLoadedPaks( "", "" );
 			uivm = VM_Create( VM_UI, CL_UISystemCalls, UI_DllSyscall, interpret );
+#ifndef __WASM__
 			if ( !uivm ) {
 				Com_Error( ERR_DROP, "VM_Create on UI failed" );
 			}
 		} else {
 			Com_Error( ERR_DROP, "VM_Create on UI failed" );
+#endif
 		}
 	}
+#ifdef __WASM__
+	if(!uivm) {
+		cls.uiStarted = qfalse;
+		return;
+	}
+#endif
 
 	// sanity check
 	v = VM_Call( uivm, 0, UI_GETAPIVERSION );

@@ -120,7 +120,9 @@ typedef struct {
 
 	void	(*VertexLighting)( qboolean allowed );
 	void	(*SyncRender)( void );
-
+#ifdef __WASM__
+	void	(*InitShaders)( void );
+#endif
 
 } refexport_t;
 

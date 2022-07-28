@@ -111,6 +111,9 @@ int			com_frameTime;
 static int	com_frameNumber;
 
 qboolean	com_errorEntered = qfalse;
+#ifdef __WASM__
+Q_EXPORT
+#endif
 qboolean	com_fullyInitialized = qfalse;
 
 // renderer window states
@@ -378,7 +381,9 @@ void QDECL Com_Error( errorParm_t code, const char *fmt, ... ) {
 			VM_Forced_Unload_Start();
 			CL_FlushMemory();
 			VM_Forced_Unload_Done();
+#ifndef __WASM__
 			CL_CDDialog();
+#endif
 		} else {
 			Com_Printf( "Server didn't have CD\n" );
 		}
@@ -450,7 +455,12 @@ quake3 set test blah + map test
 ============================================================================
 */
 
+#ifdef __WASM__
+// we have a lot of startup args
+#define	MAX_CONSOLE_LINES	1024
+#else
 #define	MAX_CONSOLE_LINES	32
+#endif
 static int	com_numConsoleLines;
 static char	*com_consoleLines[MAX_CONSOLE_LINES];
 
@@ -872,6 +882,7 @@ int Com_FilterPath( const char *filter, const char *name )
 }
 
 
+#ifndef __WASM__
 /*
 ================
 Com_RealTime
@@ -935,6 +946,7 @@ int64_t Sys_Microseconds( void )
 	return (int64_t)curr.tv_sec * 1000000LL + (int64_t)curr.tv_usec;
 #endif
 }
+#endif
 
 
 /*
@@ -1553,10 +1565,14 @@ Z_Malloc
 ========================
 */
 #ifdef ZONE_DEBUG
-void *Z_MallocDebug( int size, char *label, char *file, int line ) {
-#else
-void *Z_Malloc( int size ) {
+#ifdef __WASM__
+void *Z_Malloc(size_t) __attribute__((weak, alias("Z_MallocDebug")));
 #endif
+void *Z_MallocDebug( int size, char *label, char *file, int line )
+#else
+void *Z_Malloc( int size )
+#endif
+{
 	void	*buf;
 
   //Z_CheckHeap ();	// DEBUG
@@ -1571,6 +1587,56 @@ void *Z_Malloc( int size ) {
 	return buf;
 }
 
+#ifdef __WASM__
+qboolean FS_CreatePath( const char *OSPath );
+byte *R_FindPalette(const char *name);
+int Key_GetCatcher( void );
+void Key_SetCatcher( int catcher );
+void stackRestore( void * );
+void *stackSave( void );
+void *stackAlloc(int);
+void S_SoundInfo( void );
+void CL_NextDownload( void );
+
+
+Q_EXPORT intptr_t sprintfLocation = (intptr_t)sprintf;
+Q_EXPORT intptr_t mallocLocation = (intptr_t)malloc;
+Q_EXPORT intptr_t FS_CreatePathLocation = (intptr_t)FS_CreatePath;
+Q_EXPORT intptr_t freeLocation = (intptr_t)free;
+Q_EXPORT intptr_t R_FindPaletteLocation = (intptr_t)R_FindPalette;
+Q_EXPORT intptr_t Key_ClearStatesLocation = (intptr_t)Key_ClearStates;
+Q_EXPORT intptr_t Key_GetCatcherLocation = (intptr_t)Key_GetCatcher;
+Q_EXPORT intptr_t Key_SetCatcherLocation = (intptr_t)Key_SetCatcher;
+Q_EXPORT intptr_t CL_PacketEventLocation = (intptr_t)CL_PacketEvent;
+Q_EXPORT intptr_t stackRestoreLocation = (intptr_t)stackRestore;
+Q_EXPORT intptr_t stackSaveLocation = (intptr_t)stackSave;
+Q_EXPORT intptr_t stackAllocLocation = (intptr_t)stackAlloc;
+Q_EXPORT intptr_t S_SoundInfoLocation = (intptr_t)S_SoundInfo;
+Q_EXPORT intptr_t Cbuf_ExecuteTextLocation = (intptr_t)Cbuf_ExecuteText;
+Q_EXPORT intptr_t Cbuf_AddTextLocation = (intptr_t)Cbuf_AddText;
+Q_EXPORT intptr_t Z_FreeLocation = (intptr_t)Z_Free;
+Q_EXPORT intptr_t CL_NextDownloadLocation = (intptr_t)CL_NextDownload;
+Q_EXPORT intptr_t Z_MallocLocation = (intptr_t)Z_Malloc;
+Q_EXPORT intptr_t Sys_QueEventLocation = (intptr_t)Sys_QueEvent;
+Q_EXPORT intptr_t MSG_InitLocation = (intptr_t)MSG_Init;
+Q_EXPORT intptr_t Com_RunAndTimeServerPacketLocation = (intptr_t)Com_RunAndTimeServerPacket;
+Q_EXPORT intptr_t Com_FrameLocation = (intptr_t)Com_Frame;
+Q_EXPORT intptr_t Cvar_VariableValueLocation = (intptr_t)Cvar_VariableValue;
+Q_EXPORT intptr_t Cvar_VariableIntegerValueLocation = (intptr_t)Cvar_VariableIntegerValue;
+Q_EXPORT intptr_t Cvar_VariableStringLocation = (intptr_t)Cvar_VariableString;
+Q_EXPORT intptr_t Cvar_GetLocation = (intptr_t)Cvar_Get;
+Q_EXPORT intptr_t Cvar_SetLocation = (intptr_t)Cvar_Set;
+Q_EXPORT intptr_t Cvar_SetValueLocation = (intptr_t)Cvar_SetValue;
+Q_EXPORT intptr_t Cvar_SetIntegerValueLocation = (intptr_t)Cvar_SetIntegerValue;
+Q_EXPORT intptr_t Cvar_CheckRangeLocation = (intptr_t)Cvar_CheckRange;
+Q_EXPORT intptr_t FS_ReadFileLocation = (intptr_t)FS_ReadFile;
+Q_EXPORT intptr_t FS_FreeFileLocation = (intptr_t)FS_FreeFile;
+Q_EXPORT intptr_t FS_CopyStringLocation = (intptr_t)FS_CopyString;
+Q_EXPORT intptr_t FS_GetCurrentGameDirLocation = (intptr_t)FS_GetCurrentGameDir;
+Q_EXPORT intptr_t Key_KeynumToStringLocation = (intptr_t)Key_KeynumToString;
+Q_EXPORT intptr_t VM_CallLocation = (intptr_t)VM_Call;
+
+#endif
 
 /*
 ========================
@@ -2069,6 +2135,7 @@ static void Com_InitZoneMemory( void ) {
 		Com_Error( ERR_FATAL, "Zone data failed to allocate %i megs", mainZoneSize / (1024*1024) );
 	}
 	Z_ClearZone( mainzone, mainzone, mainZoneSize, 1 );
+
 }
 
 
@@ -2194,6 +2261,7 @@ static void Com_InitHunkMemory( void ) {
 	Cmd_AddCommand( "hunklog", Hunk_Log );
 	Cmd_AddCommand( "hunksmalllog", Hunk_SmallLog );
 #endif
+
 }
 
 
@@ -2622,6 +2690,7 @@ void Sys_QueEvent( int evTime, sysEventType_t evType, int value, int value2, int
 		// we are discarding an event, but don't leak memory
 		if ( ev->evPtr ) {
 			Z_Free( ev->evPtr );
+      ev->evPtr = NULL;
 		}
 		eventTail++;
 	}
@@ -2658,6 +2727,7 @@ static sysEvent_t Com_GetSystemEvent( void )
 
 	evTime = Sys_Milliseconds();
 
+#ifndef __WASM__
 	// check for console commands
 	s = Sys_ConsoleInput();
 	if ( s )
@@ -2670,6 +2740,7 @@ static sysEvent_t Com_GetSystemEvent( void )
 		strcpy( b, s );
 		Sys_QueEvent( evTime, SE_CONSOLE, 0, 0, len, b );
 	}
+#endif
 
 	// return if we have data
 	if ( eventHead - eventTail > 0 )
@@ -2860,18 +2931,43 @@ int Com_EventLoop( void ) {
 		switch ( ev.evType ) {
 #ifndef DEDICATED
 		case SE_KEY:
-			CL_KeyEvent( ev.evValue, ev.evValue2, ev.evTime );
+			CL_KeyEvent( ev.evValue, ev.evValue2, ev.evTime, 0 );
 			break;
 		case SE_CHAR:
 			CL_CharEvent( ev.evValue );
 			break;
 		case SE_MOUSE:
-			CL_MouseEvent( ev.evValue, ev.evValue2 /*, ev.evTime*/ );
+			CL_MouseEvent( ev.evValue, ev.evValue2 /*, ev.evTime*/, qfalse );
 			break;
+#ifdef __WASM__
+		case SE_MOUSE_ABS:
+			CL_MouseEvent( ev.evValue, ev.evValue2, qtrue );
+			break;
+#endif
 		case SE_JOYSTICK_AXIS:
 			CL_JoystickEvent( ev.evValue, ev.evValue2, ev.evTime );
 			break;
+#ifdef __WASM__
+		case SE_FINGER_DOWN:
+			CL_KeyEvent( ev.evValue, qtrue, ev.evTime, ev.evValue2 );
+			break;
+		case SE_FINGER_UP:
+			CL_KeyEvent( ev.evValue, qfalse, ev.evTime, ev.evValue2 );
+			break;
 #endif
+/*
+    case SE_DROPBEGIN:
+      CL_DropStart();
+      break;
+    case SE_DROPCOMPLETE:
+      CL_DropComplete();
+      break;
+    case SE_DROPFILE:
+      CL_DropFile(ev.evPtr, ev.evPtrLength);
+      break;
+*/
+#endif
+
 		case SE_CONSOLE:
 			Cbuf_AddText( (char *)ev.evPtr );
 			Cbuf_AddText( "\n" );
@@ -3085,6 +3181,9 @@ bool CL_CDKeyValidate
 =================
 */
 qboolean Com_CDKeyValidate( const char *key, const char *checksum ) {
+#ifdef __WASM__
+	return qtrue;
+#endif
 #ifdef STANDALONE
 	return qtrue;
 #else
@@ -3265,6 +3364,14 @@ out:
 **
 ** --------------------------------------------------------------------------------
 */
+#ifdef __WASM__
+
+static void Sys_GetProcessorId( char *vendor )
+{
+  Com_sprintf( vendor, 3, "v8" );
+}
+
+#else
 
 #if (idx64 || id386)
 
@@ -3430,6 +3537,8 @@ static void Sys_GetProcessorId( char *vendor )
 #endif // !_WIN32
 
 #endif // non-x86
+
+#endif // !__WASM__
 
 /*
 ================
@@ -3704,8 +3813,13 @@ void Com_Init( char *commandLine ) {
 	Cvar_Get( "com_errorMessage", "", CVAR_ROM | CVAR_NORESTART );
 
 #ifndef DEDICATED
+#ifdef __WASM__
+	com_introPlayed = Cvar_Get( "com_introplayed", "1", CVAR_ARCHIVE );
+	com_skipIdLogo  = Cvar_Get( "com_skipIdLogo", "1", CVAR_ARCHIVE );
+#else
 	com_introPlayed = Cvar_Get( "com_introplayed", "0", CVAR_ARCHIVE );
 	com_skipIdLogo  = Cvar_Get( "com_skipIdLogo", "0", CVAR_ARCHIVE );
+#endif
 #endif
 
 	if ( com_dedicated->integer ) {
@@ -3717,11 +3831,11 @@ void Com_Init( char *commandLine ) {
 		gw_minimized = qfalse;
 	}
 
-	if ( com_developer->integer ) {
+	//if ( com_developer->integer ) {
 		Cmd_AddCommand( "error", Com_Error_f );
 		Cmd_AddCommand( "crash", Com_Crash_f );
 		Cmd_AddCommand( "freeze", Com_Freeze_f );
-	}
+	//}
 
 	Cmd_AddCommand( "quit", Com_Quit_f );
 	Cmd_AddCommand( "changeVectors", MSG_ReportChangeVectors_f );
@@ -4042,9 +4156,11 @@ void Com_Frame( qboolean noDelay ) {
 			minMsec = 0;
 			bias = 0;
 		} else {
+#ifndef __WASM__
 			if ( !gw_active && com_maxfpsUnfocused->integer > 0 )
 				minMsec = 1000 / com_maxfpsUnfocused->integer;
 			else
+#endif
 			if ( com_maxfps->integer > 0 )
 				minMsec = 1000 / com_maxfps->integer;
 			else
@@ -4076,13 +4192,20 @@ void Com_Frame( qboolean noDelay ) {
 		}
 		sleepMsec = timeVal;
 #ifndef DEDICATED
+#ifndef __WASM__
 		if ( !gw_minimized && timeVal > com_yieldCPU->integer )
 			sleepMsec = com_yieldCPU->integer;
 		if ( timeVal > sleepMsec )
+#endif
 			Com_EventLoop();
 #endif
 		NET_Sleep( sleepMsec * 1000 - 500 );
-	} while( Com_TimeVal( minMsec ) );
+	} 
+#ifdef __WASM__
+	while( qfalse );
+#else
+	while( Com_TimeVal( minMsec ) );
+#endif
 
 	lastTime = com_frameTime;
 	com_frameTime = Com_EventLoop();

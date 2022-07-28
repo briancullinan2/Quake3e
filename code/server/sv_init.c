@@ -370,6 +370,7 @@ static void SV_ClearServer( void ) {
 	for ( i = 0 ; i < MAX_CONFIGSTRINGS ; i++ ) {
 		if ( sv.configstrings[i] ) {
 			Z_Free( sv.configstrings[i] );
+			sv.configstrings[i] = 0;
 		}
 	}
 
@@ -412,11 +413,15 @@ void SV_SpawnServer( const char *mapname, qboolean killBots ) {
 	CL_MapLoading();
 
 	// make sure all the client stuff is unloaded
+#ifndef __WASM__
 	CL_ShutdownAll();
+#endif
 #endif
 
 	// clear the whole hunk because we're (re)loading the server
+#ifndef __WASM__
 	Hunk_Clear();
+#endif
 
 	// clear collision map data
 	CM_ClearMap();
@@ -497,7 +502,7 @@ void SV_SpawnServer( const char *mapname, qboolean killBots ) {
 	Cvar_Get( "sv_pure", "1", CVAR_SYSTEMINFO | CVAR_LATCH );
 
 	// get a new checksum feed and restart the file system
-	srand( Com_Milliseconds() );
+	srand( Sys_Milliseconds() );
 	Com_RandomBytes( (byte*)&sv.checksumFeed, sizeof( sv.checksumFeed ) );
 	FS_Restart( sv.checksumFeed );
 

@@ -174,12 +174,18 @@ float FloatSwap( const float *f );
 	#endif
 #endif
 
+#ifdef __WASM__
+#include "../wasm/sys_overrides.h"
+#else
+
 #if defined (_WIN32) && !defined(_MSC_VER)
 #define Q_setjmp __builtin_setjmp
 #define Q_longjmp __builtin_longjmp
 #else
 #define Q_setjmp setjmp
 #define Q_longjmp longjmp
+#endif
+
 #endif
 
 typedef unsigned char byte;
@@ -753,6 +759,7 @@ typedef struct pc_token_s
 } pc_token_t;
 
 // data is an in/out parm, returns a parsed out token
+void COM_MatchToken( const char**buf_p, const char *match );
 
 qboolean SkipBracedSection( const char **program, int depth );
 void SkipRestOfLine( const char **data );

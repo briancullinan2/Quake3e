@@ -239,6 +239,8 @@ static const keyname_t keynames[] =
 	{"PAD0_LEFTTRIGGER", K_PAD0_LEFTTRIGGER },
 	{"PAD0_RIGHTTRIGGER", K_PAD0_RIGHTTRIGGER },
 
+	{"CONSOLE", K_CONSOLE },
+
 	{NULL,0}
 };
 
