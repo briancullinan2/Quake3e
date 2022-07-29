@@ -353,7 +353,7 @@ function InputPushWheelEvent(evt) {
 function InputPushMouseEvent(evt) {
   let down = evt.type == 'mousedown'
 
-  if(!HEAPU32[(INPUT.in_mouse>>2) + 9]) {
+  if(!HEAPU32[(INPUT.in_mouse>>2) + 8]) {
     return
   }
 
@@ -403,7 +403,8 @@ function InputPushMouseEvent(evt) {
     HEAP32[gw_active >> 2] = 1
     createTemporaryText()
     TEMPORARY_TEXT.focus()
-    GL.canvas.requestPointerLock();
+    GL.canvas.requestPointerLock()
+    InitNippleJoysticks()
     document.body.classList.add('captured')
     document.body.classList.remove('released')
 
@@ -445,12 +446,12 @@ function IN_Init() {
 
   console.log('\n------- Input Initialization -------\n')
 
-  InitNippleJoysticks()
 
   INPUT.in_keyboardDebug = Cvar_Get(stringToAddress('in_keyboardDebug'), 
       stringToAddress('0'), CVAR_ARCHIVE)
   INPUT.in_mouse = Cvar_Get(stringToAddress('in_mouse'), 
       stringToAddress('1'), CVAR_ARCHIVE)
+  HEAPU32[(INPUT.in_mouse>>2) + 8] = 1
   Cvar_CheckRange(INPUT.in_mouse, stringToAddress('-1'), 
       stringToAddress('1'), CV_INTEGER)
 
@@ -499,6 +500,7 @@ function IN_Init() {
 
   document.addEventListener('pointerlockchange', InputPushFocusEvent, false)
 
+  //InitNippleJoysticks()
   /*
   let nipple handle touch events
   GL.canvas.addEventListener('touchstart', InputPushTouchEvent, false)
@@ -518,7 +520,12 @@ function IN_Init() {
   console.log('------------------------------------\n')
 }
 
-function InputPushTouchEvent(joystick, id, evt, data) {
+function InputPushTouchEvent(id, evt, data) {
+  if(!HEAPU32[(INPUT.in_mouse>>2) + 8]) {
+    return
+  }
+
+
   INPUT.cancelBackspace = false
   if (id == 1) {
     if (data.vector && data.vector.y > .4) {
@@ -675,9 +682,9 @@ function InitNippleJoysticks() {
     catchDistance: 2,
     maxNumberOfNipples: 1,
   })
-  INPUT.joysticks[0].on('start end move', InputPushTouchEvent.bind(null, INPUT.joysticks[0], 1))
-  INPUT.joysticks[1].on('start end move', InputPushTouchEvent.bind(null, INPUT.joysticks[1], 2))
-  INPUT.joysticks[2].on('start end move', InputPushTouchEvent.bind(null, INPUT.joysticks[2], 3))
+  INPUT.joysticks[0].on('start end move', InputPushTouchEvent.bind(INPUT.joysticks[0], 1))
+  INPUT.joysticks[1].on('start end move', InputPushTouchEvent.bind(INPUT.joysticks[0], 2))
+  INPUT.joysticks[2].on('start end move', InputPushTouchEvent.bind(INPUT.joysticks[0], 3))
 }
 
 
@@ -705,6 +712,11 @@ function SDL_ShowCursor() {
     document.webkitExitPointerLock()
   else if (document.mozExitPointerLock)
     document.mozExitPointerLock()
+  if(INPUT.joysticks.length) {
+    INPUT.joysticks[0].destroy()
+    INPUT.joysticks[1].destroy()
+    INPUT.joysticks[2].destroy()
+  }
 }
 
 function GLimp_Shutdown(destroy) {
