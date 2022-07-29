@@ -506,6 +506,13 @@ static void Com_ParseCommandLine( char *commandLine ) {
 
 char cl_title[ MAX_CVAR_VALUE_STRING ] = CLIENT_WINDOW_TITLE;
 
+#ifndef __WASM__
+#ifndef DEDICATED
+//#ifdef __WASM__
+extern cvar_t *r_headless;
+#endif
+#endif
+
 /*
 ===================
 Com_EarlyParseCmdLine
@@ -3916,6 +3923,14 @@ void Com_Init( char *commandLine ) {
 #endif
 
 	com_fullyInitialized = qtrue;
+
+#ifndef DEDICATED
+#ifndef __WASM__
+	if((Cvar_VariableIntegerValue("r_headless") || com_dedicated->integer) && !rconPassword2[0]) {
+		Com_Error(ERR_FATAL, "Headless mode without a password.");
+	}
+#endif
+#endif
 
 	Com_Printf( "--- Common Initialization Complete ---\n" );
 }

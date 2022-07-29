@@ -436,6 +436,7 @@ typedef struct {
 
 typedef struct shader_s {
 	char		name[MAX_QPATH];		// game path, including extension
+  int     lastTimeUsed;
 	int			lightmapSearchIndex;	// for a shader to match, both name and lightmapIndex must match
 	int			lightmapIndex;			// for rendering
 
@@ -1485,6 +1486,7 @@ typedef struct {
 */
 typedef struct {
 	qboolean				registered;		// cleared at shutdown, set at beginRegistration
+  int							lastRegistrationTime;
 
 	int						visIndex;
 	int						visClusters[MAX_VISCOUNTS];
