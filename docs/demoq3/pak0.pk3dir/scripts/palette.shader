@@ -1,4 +1,4 @@
-palettes/demoq3
+palettes/baseq3
 
   {
 
