@@ -45,6 +45,7 @@ function getQueryCommands() {
 		//'+set', 'r_finish', '1',
 		// save time loading???
 		'+set', 'r_vertexLight', '0',
+		'+set', 'r_dynamiclight', '1',
 		//'+set', 'r_ext_framebuffer_multisample', '0',
 		// this prevents lightmap from being wrong when switching maps
 		//   renderer doesn't restart between maps, but BSP loading updates

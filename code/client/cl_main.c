@@ -1897,7 +1897,7 @@ static void CL_Vid_Restart_f( void ) {
 		if ( abs( cls.lastVidRestart - Sys_Milliseconds() ) < 500 )
 			return;
 
-	if ( Q_stricmp( Cmd_Argv(1), "keep_window" ) == 0 )
+	if ( Cmd_Argc() == 1 || Q_stricmp( Cmd_Argv(1), "keep_window" ) == 0 )
 		CL_Vid_Restart( qtrue );
 	else
 		CL_Vid_Restart( qfalse );

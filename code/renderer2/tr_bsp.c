@@ -209,6 +209,10 @@ static	void R_LoadLightmaps( const lump_t *l, const lump_t *surfs ) {
 	float maxIntensity = 0;
 	double sumIntensity = 0;
 
+#ifdef __WASM__
+	return;
+#endif
+
 	// if we are in r_vertexLight mode, we don't need the lightmaps at all
 	if ( ( r_vertexLight->integer && tr.vertexLightingAllowed ) || glConfig.hardwareType == GLHW_PERMEDIA2 ) {
 		return;
@@ -2327,9 +2331,11 @@ static void R_LoadEntities( const lump_t *l ) {
 				break;
 			}
 			*vs++ = 0;
+#ifndef __WASM__
 			if ( r_vertexLight->integer && tr.vertexLightingAllowed ) {
 				R_RemapShader(value, s, "0");
 			}
+#endif
 			continue;
 		}
 		// check for remapping of shaders
