@@ -657,57 +657,57 @@ function _glGenRenderbuffers(n, renderbuffers) {
   __glGenObject(n, renderbuffers, "createRenderbuffer", GL.renderbuffers);
 }
 
-function BmpEncoder(imgData){
-	this.buffer = imgData.data;
-	this.width = imgData.width;
-	this.height = imgData.height;
-	this.extraBytes = this.width%4;
-	this.rgbSize = this.height*(4*this.width+this.extraBytes);
-	this.headerInfoSize = 108;
+function BmpEncoder(imgData) {
+  this.buffer = imgData.data;
+  this.width = imgData.width;
+  this.height = imgData.height;
+  this.extraBytes = this.width % 4;
+  this.rgbSize = this.height * (4 * this.width + this.extraBytes);
+  this.headerInfoSize = 108;
 
-	this.data = [];
-	/******************header***********************/
-	this.flag = "BM";
-	this.reserved = 0;
-	this.offset = 14 + this.headerInfoSize;
-	this.fileSize = this.rgbSize+this.offset;
-	this.planes = 1;
-	this.bitPP = 32;
-	this.compress = 3;
-	this.hr = 0;
-	this.vr = 0;
-	this.colors = 0;
-	this.importantColors = 0;
+  this.data = [];
+  /******************header***********************/
+  this.flag = "BM";
+  this.reserved = 0;
+  this.offset = 14 + this.headerInfoSize;
+  this.fileSize = this.rgbSize + this.offset;
+  this.planes = 1;
+  this.bitPP = 32;
+  this.compress = 3;
+  this.hr = 0;
+  this.vr = 0;
+  this.colors = 0;
+  this.importantColors = 0;
 }
 
 function writeLE(pos, buffer, int) {
   buffer.set([
-    (int & 0xFF) >> 0, (int & 0xFF00) >> 8, 
-    (int & 0xFF0000) >> 16, (int & 0xFF000000) >> 24, 
-    ], pos)
+    (int & 0xFF) >> 0, (int & 0xFF00) >> 8,
+    (int & 0xFF0000) >> 16, (int & 0xFF000000) >> 24,
+  ], pos)
 }
 
 
-BmpEncoder.prototype.encode = function() {
-	let tempBuffer = new Uint8Array(this.offset+this.rgbSize);
-	this.pos = 0;
-	tempBuffer.set(this.flag.split('').map(c => c.charCodeAt(0)));
-  this.pos+=2;
-	writeLE(this.pos, tempBuffer, this.fileSize);this.pos+=4;
-	writeLE(this.pos, tempBuffer, this.reserved);this.pos+=4;
-	writeLE(this.pos, tempBuffer, this.offset);this.pos+=4;
+BmpEncoder.prototype.encode = function () {
+  let tempBuffer = new Uint8Array(this.offset + this.rgbSize);
+  this.pos = 0;
+  tempBuffer.set(this.flag.split('').map(c => c.charCodeAt(0)));
+  this.pos += 2;
+  writeLE(this.pos, tempBuffer, this.fileSize); this.pos += 4;
+  writeLE(this.pos, tempBuffer, this.reserved); this.pos += 4;
+  writeLE(this.pos, tempBuffer, this.offset); this.pos += 4;
 
-	writeLE(this.pos, tempBuffer, this.headerInfoSize);this.pos+=4;
-	writeLE(this.pos, tempBuffer, this.width);this.pos+=4;
-	writeLE(this.pos, tempBuffer, this.height);this.pos+=4;
-	tempBuffer.set([(this.planes & 0xFF), (this.planes & 0xFF00) >> 8],this.pos);this.pos+=2;
-	tempBuffer.set([ (this.bitPP & 0xFF), (this.bitPP & 0xFF00) >> 8],this.pos);this.pos+=2;
-	writeLE(this.pos, tempBuffer, this.compress);this.pos+=4;
-	writeLE(this.pos, tempBuffer, this.rgbSize);this.pos+=4;
-	writeLE(this.pos, tempBuffer, this.hr);this.pos+=4;
-	writeLE(this.pos, tempBuffer, this.vr);this.pos+=4;
-	writeLE(this.pos, tempBuffer, this.colors);this.pos+=4;
-	writeLE(this.pos, tempBuffer, this.importantColors);this.pos+=4;
+  writeLE(this.pos, tempBuffer, this.headerInfoSize); this.pos += 4;
+  writeLE(this.pos, tempBuffer, this.width); this.pos += 4;
+  writeLE(this.pos, tempBuffer, this.height); this.pos += 4;
+  tempBuffer.set([(this.planes & 0xFF), (this.planes & 0xFF00) >> 8], this.pos); this.pos += 2;
+  tempBuffer.set([(this.bitPP & 0xFF), (this.bitPP & 0xFF00) >> 8], this.pos); this.pos += 2;
+  writeLE(this.pos, tempBuffer, this.compress); this.pos += 4;
+  writeLE(this.pos, tempBuffer, this.rgbSize); this.pos += 4;
+  writeLE(this.pos, tempBuffer, this.hr); this.pos += 4;
+  writeLE(this.pos, tempBuffer, this.vr); this.pos += 4;
+  writeLE(this.pos, tempBuffer, this.colors); this.pos += 4;
+  writeLE(this.pos, tempBuffer, this.importantColors); this.pos += 4;
 
   writeLE(this.pos, tempBuffer, 0x00FF0000, this.pos); this.pos += 4;
   writeLE(this.pos, tempBuffer, 0x0000FF00, this.pos); this.pos += 4;
@@ -723,30 +723,30 @@ BmpEncoder.prototype.encode = function() {
     tempBuffer.set(0, this.pos); this.pos++;
   }
 
-	let i=0;
-	let rowBytes = 4*this.width+this.extraBytes;
+  let i = 0;
+  let rowBytes = 4 * this.width + this.extraBytes;
 
-	for (let y = 0; y <this.height; y++){
-		for (let x = 0; x < this.width; x++){
-			let p = this.pos+y*rowBytes+x*4;
-			tempBuffer[p+2]= this.buffer[i++];//b
-			tempBuffer[p+1] = this.buffer[i++];//g
-			tempBuffer[p+0]  = this.buffer[i++];//r
-			tempBuffer[p+3]  = this.buffer[i++];//a
-		}
-		if(this.extraBytes>0){
-			let setOffset = this.pos+y*rowBytes+this.width*4;
-			tempBuffer.set(0,setOffset,setOffset+this.extraBytes);
-		}
-	}
+  for (let y = 0; y < this.height; y++) {
+    for (let x = 0; x < this.width; x++) {
+      let p = this.pos + y * rowBytes + x * 4;
+      tempBuffer[p + 2] = this.buffer[i++];//b
+      tempBuffer[p + 1] = this.buffer[i++];//g
+      tempBuffer[p + 0] = this.buffer[i++];//r
+      tempBuffer[p + 3] = this.buffer[i++];//a
+    }
+    if (this.extraBytes > 0) {
+      let setOffset = this.pos + y * rowBytes + this.width * 4;
+      tempBuffer.set(0, setOffset, setOffset + this.extraBytes);
+    }
+  }
 
-	return tempBuffer;
+  return tempBuffer;
 };
 
 function convertBMP(imgData, quality) {
   if (typeof quality === 'undefined') quality = 100;
- 	let encoder = new BmpEncoder(imgData);
-	let data = encoder.encode();
+  let encoder = new BmpEncoder(imgData);
+  let data = encoder.encode();
   return {
     data: data,
     width: imgData.width,
@@ -759,10 +759,11 @@ const RENDER_IMAGES = []
 
 function createImageFromBuffer(filenameStr, imageView) {
   let thisImage = document.createElement('IMG')
-  let utfEncoded = imageView.map(function (c) { 
-    return String.fromCharCode(c) }).join('')
-  thisImage.src = 'data:image/' + (/\.(.+)$/gi).exec(filenameStr)[1] 
-      + ';base64,' + btoa(utfEncoded)
+  let utfEncoded = imageView.map(function (c) {
+    return String.fromCharCode(c)
+  }).join('')
+  thisImage.src = 'data:image/' + (/\.(.+)$/gi).exec(filenameStr)[1]
+    + ';base64,' + btoa(utfEncoded)
   thisImage.name = filenameStr
   thisImage.setAttribute('title', filenameStr)
   RENDER_IMAGES.push(thisImage)
@@ -774,16 +775,16 @@ function createImageFromBuffer(filenameStr, imageView) {
 function loadImage(filename, pic, ext) {
   let gamedir = addressToString(FS_GetCurrentGameDir())
   let filenameStr = addressToString(filename)
-  if(!filenameStr.match(/\.jpeg$|\.jpg$|\.png$|/gi)) {
+  if (!filenameStr.match(/\.jpeg$|\.jpg$|\.png$|/gi)) {
     filenameStr += ext
   }
 
   let localName = filenameStr
-  if(localName[0] == '/')
+  if (localName[0] == '/')
     localName = localName.substring(1)
-  if(localName.startsWith(gamedir))
+  if (localName.startsWith(gamedir))
     localName = localName.substring(gamedir.length)
-  if(localName[0] == '/')
+  if (localName[0] == '/')
     localName = localName.substring(1)
 
   let buf = Z_Malloc(8) // pointer to pointer
@@ -806,42 +807,42 @@ function loadImage(filename, pic, ext) {
   */
 
   let palette = R_FindPalette(filename)
-  if(palette) {
-    if(filenameStr.match(/\.jpg$/gi) && HEAPU8[palette + 3] == 255) {
+  if (palette) {
+    if (filenameStr.match(/\.jpg$/gi) && HEAPU8[palette + 3] == 255) {
     } else
-    if(filenameStr.match(/\.png$/gi) && HEAPU8[palette + 3] < 255) {
-    } else {
-      palette = null
-    }
+      if (filenameStr.match(/\.png$/gi) && HEAPU8[palette + 3] < 255) {
+      } else {
+        palette = null
+      }
   }
 
   let length = FS_ReadFile(filename, buf)
   let thisImage
-  for(let i = 0; i < RENDER_IMAGES.length; i++) {
-    if(RENDER_IMAGES[i].name == filenameStr) {
+  for (let i = 0; i < RENDER_IMAGES.length; i++) {
+    if (RENDER_IMAGES[i].name == filenameStr) {
       thisImage = RENDER_IMAGES[i]
       break
     }
   }
 
-  if(!thisImage && HEAPU32[buf >> 2]) {
-    imageView = Array.from(HEAPU8.slice(HEAPU32[buf >> 2], 
-        HEAPU32[buf >> 2] + length))
+  if (!thisImage && HEAPU32[buf >> 2]) {
+    imageView = Array.from(HEAPU8.slice(HEAPU32[buf >> 2],
+      HEAPU32[buf >> 2] + length))
     thisImage = createImageFromBuffer(filenameStr, imageView)
   } else
-  if(!thisImage && palette) {
-    imageView = Array.from(Uint8Array.from(convertBMP({
-      data: HEAPU8.slice(palette, palette + 16*16*4),
-      height: 16,
-      width: 16,
-    }).data))
-    // create palette image now and TODO: replace with real shader later
-    thisImage = createImageFromBuffer('*pal' 
-      + HEAPU8[palette] + '-' + HEAPU8[palette+1] + '-'
-      + HEAPU8[palette+2] + '-' + HEAPU8[palette+3] + '.bmp', imageView)
-  }
-  
-  if(!thisImage) {
+    if (!thisImage && palette) {
+      imageView = Array.from(Uint8Array.from(convertBMP({
+        data: HEAPU8.slice(palette, palette + 16 * 16 * 4),
+        height: 16,
+        width: 16,
+      }).data))
+      // create palette image now and TODO: replace with real shader later
+      thisImage = createImageFromBuffer('*pal'
+        + HEAPU8[palette] + '-' + HEAPU8[palette + 1] + '-'
+        + HEAPU8[palette + 2] + '-' + HEAPU8[palette + 3] + '.bmp', imageView)
+    }
+
+  if (!thisImage) {
     return
   }
 
@@ -857,13 +858,13 @@ function loadImage(filename, pic, ext) {
     R_FinishImage3(thisImage.address - 7 * 4, 0x1908 /* GL_RGBA */, 0)
   }, false)
 
-  if(palette) {
+  if (palette) {
     HEAPU32[pic >> 2] = palette // TO BE COPIED OUT
   } else {
     HEAPU32[pic >> 2] = 1
   }
 
-  if(HEAPU32[buf >> 2]) {
+  if (HEAPU32[buf >> 2]) {
     FS_FreeFile(HEAPU32[buf >> 2])
     Z_Free(buf)
   } else {
@@ -874,12 +875,34 @@ function loadImage(filename, pic, ext) {
     // TODO: save both images and switch them using the shader->remappedShader interface?
     Promise.resolve((async function () {
       let remoteFile = gamedir + '/pak0.pk3dir/' + filenameStr
-      if(!remoteFile.includes('.')) {
+      if (!remoteFile.includes('.')) {
         remoteFile += '.tga'
       }
-      responseData = await Com_DL_Begin(remoteFile, '/' + remoteFile + '?alt')
-      Com_DL_Perform(remoteFile, remoteFile, responseData)
-      let replaceImage = createImageFromBuffer(filenameStr, Array.from(new Uint8Array(responseData)))
+
+      let responseData = (await Promise.all([
+        Com_DL_Begin(remoteFile, '/' + remoteFile
+          .replace(/\.[^\/]*?$/, '.jpg') + '?alt')
+          .then(responseData => {
+            if(!responseData) {
+              return
+            }
+            Com_DL_Perform(remoteFile
+              .replace(/\.[^\/]*?$/, '.jpg'), remoteFile, responseData)
+            return responseData
+          }),
+        Com_DL_Begin(remoteFile, '/' + remoteFile
+          .replace(/\.[^\/]*?$/, '.png') + '?alt')
+          .then(responseData => {
+            if(!responseData) {
+              return
+            }
+            Com_DL_Perform(remoteFile
+              .replace(/\.[^\/]*?$/, '.png'), remoteFile, responseData)
+            return responseData
+          })])).filter(f => f)[0]
+
+      let replaceImage = createImageFromBuffer(filenameStr, 
+            Array.from(new Uint8Array(responseData)))
       // same thing as above but synchronously after the images loads async
       replaceImage.addEventListener('load', function () {
         // TODO: not working, need to try remapShader
@@ -913,18 +936,18 @@ function _glGenTextures(n, textures) {
   // engine is giving us address of where it will store texture name, also
   let texture = HEAP32[textures >> 2]
   EMGL.texFiles[texture] = [textures, null]
-  let newName = addressToString(HEAPU32[(EMGL.texFiles[texture][0] - 7*4) >> 2])
-  if(newName.length == 0) {
+  let newName = addressToString(HEAPU32[(EMGL.texFiles[texture][0] - 7 * 4) >> 2])
+  if (newName.length == 0) {
     // using CreateImage2() not 3
     return;
   }
-  if(EMGL.previousImage 
+  if (EMGL.previousImage
     && EMGL.previousName.replace(/\..*?$/, '') == newName.replace(/\..*?$/, '')) {
     EMGL.previousImage.address = EMGL.texFiles[texture][0]
     EMGL.previousImage.setAttribute('aria-gl-texnum', texture)
     EMGL.texFiles[texture][1] = EMGL.previousImage
     // copy width, height to C struct
-    if(EMGL.previousImage.width > 0 && EMGL.previousImage.height > 0) {
+    if (EMGL.previousImage.width > 0 && EMGL.previousImage.height > 0) {
       HEAP32[(textures - 4 * 4) >> 2] = EMGL.previousImage.width
       HEAP32[(textures - 3 * 4) >> 2] = EMGL.previousImage.height
     }
@@ -1687,8 +1710,8 @@ function GL_GetDrawableSize(width, height) {
   // THIS IS THE NEW VID_RESTART FAST HACK
   INPUT.updateWidth = width
   INPUT.updateHeight = height
-  HEAP32[width>>2] = GL.canvas.width
-  HEAP32[height>>2] = GL.canvas.height
+  HEAP32[width >> 2] = GL.canvas.width
+  HEAP32[height >> 2] = GL.canvas.height
 }
 
 let GLctx;
@@ -1827,33 +1850,33 @@ let EMGL = window.EMGL = {
   "glVertexAttribPointer": _glVertexAttribPointer,
   "glVertexPointer": _glVertexPointer,
   "glViewport": _glViewport,
-  glGenQueries: function () {},
-  glDeleteQueries: function () {},
-  glBeginQuery: function () {},
-  glEndQuery: function () {},
-  glGetQueryObjectiv: function () {},
-  glGetQueryObjectuiv: function () {},
-  glTextureParameterfEXT: function () {},
-  glBindMultiTextureEXT: function () {},
-  glTextureParameteriEXT: function () {},
-  glTextureImage2DEXT: function () {},
-  glTextureSubImage2DEXT: function () {},
-  glCopyTextureSubImage2DEXT: function () {},
-  glCompressedTextureImage2DEXT: function () {},
-  glCompressedTextureSubImage2DEXT: function () {},
-  glGenerateTextureMipmapEXT: function () {},
-  glProgramUniform1iEXT: function () {},
-  glProgramUniform1fEXT: function () {},
-  glProgramUniform2fEXT: function () {},
-  glProgramUniform3fEXT: function () {},
-  glProgramUniform4fEXT: function () {},
-  glProgramUniform1fvEXT: function () {},
-  glProgramUniformMatrix4fvEXT: function () {},
-  glNamedRenderbufferStorageEXT: function () {},
-  glNamedRenderbufferStorageMultisampleEXT: function () {},
-  glCheckNamedFramebufferStatusEXT: function () {},
-  glNamedFramebufferRenderbufferEXT: function () {},
-  glNamedFramebufferTexture2DEXT: function () {},
+  glGenQueries: function () { },
+  glDeleteQueries: function () { },
+  glBeginQuery: function () { },
+  glEndQuery: function () { },
+  glGetQueryObjectiv: function () { },
+  glGetQueryObjectuiv: function () { },
+  glTextureParameterfEXT: function () { },
+  glBindMultiTextureEXT: function () { },
+  glTextureParameteriEXT: function () { },
+  glTextureImage2DEXT: function () { },
+  glTextureSubImage2DEXT: function () { },
+  glCopyTextureSubImage2DEXT: function () { },
+  glCompressedTextureImage2DEXT: function () { },
+  glCompressedTextureSubImage2DEXT: function () { },
+  glGenerateTextureMipmapEXT: function () { },
+  glProgramUniform1iEXT: function () { },
+  glProgramUniform1fEXT: function () { },
+  glProgramUniform2fEXT: function () { },
+  glProgramUniform3fEXT: function () { },
+  glProgramUniform4fEXT: function () { },
+  glProgramUniform1fvEXT: function () { },
+  glProgramUniformMatrix4fvEXT: function () { },
+  glNamedRenderbufferStorageEXT: function () { },
+  glNamedRenderbufferStorageMultisampleEXT: function () { },
+  glCheckNamedFramebufferStatusEXT: function () { },
+  glNamedFramebufferRenderbufferEXT: function () { },
+  glNamedFramebufferTexture2DEXT: function () { },
 
 }
 
