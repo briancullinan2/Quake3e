@@ -383,6 +383,10 @@ function InputPushMouseEvent(evt) {
     }
   }
 
+  if(down) {
+    TEMPORARY_TEXT.focus()
+  }
+
   // always unlock on menus because it's position absolute now
   if (Key_GetCatcher() !== 0) {
     if (document.pointerLockElement) {

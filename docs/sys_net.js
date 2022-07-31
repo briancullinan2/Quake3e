@@ -665,13 +665,17 @@ function CL_Download(cmd, name, auto) {
         result = await readStore(nameStr)
       }
       let responseData
-      if(!result || (result.mode >> 12) == ST_DIR) {
-        responseData = await Com_DL_Begin(localName, remoteURL)
-      // bust the caches!
-      } else if(result.timestamp.getTime() < NET.cacheBuster) {
-        responseData = await Com_DL_Begin(localName, remoteURL)
-      // valid from disk
+      if(!result || (result.mode >> 12) == ST_DIR
+        // bust the caches!
+        || result.timestamp.getTime() < NET.cacheBuster) {
+        responseData = (await Promise.all([await Com_DL_Begin(localName, remoteURL),
+          await Com_DL_Begin(localName + '.pk3', remoteURL + '.pk3')
+          .then(responseData => {
+            localName += '.pk3'
+            return responseData
+          })])).filter(f => f)[0]
       } else {
+        // valid from disk
         responseData = result.contents
       }
       let rename = responseData.response.headers.get('content-disposition')
