@@ -880,7 +880,7 @@ function loadImage(filename, pic, ext) {
       }
 
       let responseData = (await Promise.all([
-        Com_DL_Begin(remoteFile, '/' + remoteFile
+        Com_DL_Begin(remoteFile, '/' + remoteFile.toLocaleLowerCase()
           .replace(/\.[^\/]*?$/, '.jpg') + '?alt')
           .then(responseData => {
             if(!responseData) {
@@ -890,7 +890,7 @@ function loadImage(filename, pic, ext) {
               .replace(/\.[^\/]*?$/, '.jpg'), remoteFile, responseData)
             return responseData
           }),
-        Com_DL_Begin(remoteFile, '/' + remoteFile
+        Com_DL_Begin(remoteFile, '/' + remoteFile.toLocaleLowerCase()
           .replace(/\.[^\/]*?$/, '.png') + '?alt')
           .then(responseData => {
             if(!responseData) {

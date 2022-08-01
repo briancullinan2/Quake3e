@@ -116,7 +116,8 @@ function InputPushMovedEvent(evt) {
     if (SYS.frameInterval) {
       clearInterval(SYS.frameInterval)
     }
-    SYS.frameInterval = setInterval(Sys_Frame, Math.ceil(1000.0 / INPUT.fpsUnfocused))
+    let fps = Math.ceil(1000.0 / HEAPU32[(INPUT.fpsUnfocused>>2)+8])
+    SYS.frameInterval = setInterval(Sys_Frame, fps)
     return
   }
 
@@ -384,6 +385,7 @@ function InputPushMouseEvent(evt) {
   }
 
   if(down) {
+    createTemporaryText()
     TEMPORARY_TEXT.focus()
   }
 
@@ -415,18 +417,20 @@ function InputPushMouseEvent(evt) {
     if (SYS.frameInterval) {
       clearInterval(SYS.frameInterval)
     }
-    SYS.frameInterval = setInterval(Sys_Frame, Math.ceil(1000.0 / INPUT.fps));
+    let fps = Math.ceil(1000.0 / HEAPU32[(INPUT.fps>>2)+8])
+    SYS.frameInterval = setInterval(Sys_Frame, fps);
   }
 }
 
 function Com_MaxFPSChanged() {
-  INPUT.fpsUnfocused = Cvar_VariableIntegerValue(stringToAddress('com_maxfpsUnfocused'));
-  INPUT.fps = Cvar_VariableIntegerValue(stringToAddress('com_maxfps'));
   if (SYS.frameInterval) {
     clearInterval(SYS.frameInterval)
   }
-  SYS.frameInterval = setInterval(Sys_Frame, Math.ceil(1000.0 / (HEAP32[gw_active >> 2]
-    ? INPUT.fps : INPUT.fpsUnfocused)))
+  INPUT.fpsModified = HEAPU32[(INPUT.fps >> 2) + 6]
+  INPUT.fpsUnfocusedModified = HEAPU32[(INPUT.fpsUnfocused >> 2) + 6]
+  let fps = Math.ceil(1000.0 / HEAPU32[((HEAP32[gw_active >> 2]
+    ? INPUT.fps : INPUT.fpsUnfocused)>>2)+8])
+  SYS.frameInterval = setInterval(Sys_Frame, fps)
 }
 
 function Sys_ConsoleInput() {
@@ -450,14 +454,15 @@ function IN_Init() {
 
   console.log('\n------- Input Initialization -------\n')
 
-
+  INPUT.fpsUnfocused = Cvar_Get(stringToAddress('com_maxfpsUnfocused'), stringToAddress('60'), 0);
+  INPUT.fps = Cvar_Get(stringToAddress('com_maxfps'), stringToAddress('250'), 0);
+  INPUT.fpsModified = HEAPU32[(INPUT.fps >> 2) + 6]
+  INPUT.fpsUnfocusedModified = HEAPU32[(INPUT.fpsUnfocused >> 2) + 6]
   INPUT.in_keyboardDebug = Cvar_Get(stringToAddress('in_keyboardDebug'), 
       stringToAddress('0'), CVAR_ARCHIVE)
-  INPUT.in_mouse = Cvar_Get(stringToAddress('in_mouse'), 
-      stringToAddress('1'), CVAR_ARCHIVE)
+  INPUT.in_mouse = Cvar_Get(stringToAddress('in_mouse'), stringToAddress('1'), CVAR_ARCHIVE)
   HEAPU32[(INPUT.in_mouse>>2) + 8] = 1
-  Cvar_CheckRange(INPUT.in_mouse, stringToAddress('-1'), 
-      stringToAddress('1'), CV_INTEGER)
+  Cvar_CheckRange(INPUT.in_mouse, stringToAddress('-1'), stringToAddress('1'), CV_INTEGER)
 
   // ~ and `, as keys and characters
   Cvar_Get(stringToAddress('cl_consoleKeys'), stringToAddress('~ ` \u007e \u0060'), CVAR_ARCHIVE);

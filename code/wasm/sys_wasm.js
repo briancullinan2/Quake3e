@@ -153,11 +153,8 @@ async function initEngine(program) {
 		// Startup args is expecting a char **
 		_start(startArgs.length, stringsToMemory(startArgs))
 		// should have Cvar system by now
-		INPUT.fpsUnfocused = Cvar_VariableIntegerValue(stringToAddress('com_maxfpsUnfocused'));
-		INPUT.fps = Cvar_VariableIntegerValue(stringToAddress('com_maxfps'))
 		// this might help prevent this thing that krunker.io does where it lags when it first starts up
-		SYS.frameInterval = setInterval(Sys_Frame, 
-			Math.ceil(1000.0 / (HEAP32[gw_active >> 2] ? INPUT.fps : INPUT.fpsUnfocused)));
+		Com_MaxFPSChanged()
 	} catch (e) {
 		console.log(e)
 		Sys_Exit(1)

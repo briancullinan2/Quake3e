@@ -289,6 +289,10 @@ function Sys_Frame() {
 	if(SYS.inFrame) {
 		return
 	}
+	if(INPUT.fpsModified != HEAPU32[(INPUT.fps >> 2) + 6]
+		|| INPUT.fpsUnfocusedModified != HEAPU32[(INPUT.fpsUnfocused >> 2) + 6]) {
+		Com_MaxFPSChanged()
+	}
 	function doFrame() {
 		SYS.inFrame = true
 		SYS.running = !SYS.running

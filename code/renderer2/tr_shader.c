@@ -2281,38 +2281,38 @@ static qboolean ParseShader( const char **text )
 		// parse palette colors for filename
     else if ( !Q_stricmp( token, "palette" ) ) {
       char file[MAX_OSPATH];
+      char colors[MAX_OSPATH];
       token = COM_ParseExt( text, qfalse );
       memcpy(file, token, sizeof(file));
-      const char *colors = COM_ParseExt( text, qfalse );
-      char color[4];
+      memcpy(colors, COM_ParseExt( text, qfalse ), sizeof(colors));
       int a = 0, r = 0, g = 0, b = 0;
       int ci = 0;
       int ri2 = 0;
       int gi = 0;
       int bi = 0;
-      for(int i = 0; i < 12; i++) {
-        if(colors[i] == ',') {
-          if(ri2 == 0) {
-            color[ci] = 0;
-            r = atoi(color);
-            ri2 = i + 1;
-          } else if(gi == 0) {
-            color[ci] = 0;
-            g = atoi(color);
-            gi = i + 1;
-          } else {
-            color[ci] = 0;
-            b = atoi(color);
-            bi = i + 1;
-            a = atoi(&colors[bi]);
-            break;
-          }
-          ci = 0;
-        } else if (colors[i] >= '0' && colors[i] <= '9') {
-          color[ci] = colors[i];
-          ci++;
-        }
-      }
+      for(int i = 0; i < 16; i++) {
+				if (colors[i] >= '0' && colors[i] <= '9') {
+				} else {
+					colors[i] = ' ';
+				}
+			}
+			char *color = COM_ParseExt( text, qfalse );
+			for(int i = 0; i < 4; i++) {
+				if(color[0]) {
+					if(i == 0) {
+						r = atoi(color);
+					}
+					if(i == 1) {
+						g = atoi(color);
+					}
+					if(i == 2) {
+						b = atoi(color);
+					}
+					if(i == 3) {
+						a = atoi(color);
+					}
+				}
+			}
       R_AddPalette(file, a, r, g, b);
 			continue;
 		}

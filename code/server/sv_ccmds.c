@@ -174,7 +174,7 @@ static void SV_Map_f( void ) {
 	if ( len == -1 ) {
 #ifdef __WASM__
 		static char alreadyTried[MAX_OSPATH];
-		if(Q_stricmp(alreadyTried, map) != 0 && CL_Download( "dlmap", map, qtrue )) {
+		if(Q_stricmp(alreadyTried, map) != 0 && CL_Download( Cmd_Argv(0), map, qtrue )) {
 			Q_strncpyz(alreadyTried, map, sizeof(alreadyTried));
 		} else
 #endif

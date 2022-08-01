@@ -1262,6 +1262,12 @@ static void Cvar_Rand( int *ival, float *fval )
 	}
 }
 
+#ifndef DEDICATED
+#ifndef __WASM__
+extern cvar_t *r_headless;
+#endif
+#endif
+
 
 static void Cvar_Func_f( void ) {
 
@@ -1298,8 +1304,14 @@ static void Cvar_Func_f( void ) {
 			return; // FIXME: allow cvar creation for some functions?
 		}
 	} else if ( cvar->flags & ( CVAR_INIT | CVAR_ROM | CVAR_PROTECTED ) ) {
-		Com_Printf( "Cvar '%s' is write-protected.\n", cvar_name );
-		return;
+#ifndef DEDICATED
+#ifndef __WASM__
+		if(!r_headless || !r_headless->integer) {
+			Com_Printf( "Cvar '%s' is write-protected.\n", cvar_name );
+			return;
+		}
+#endif
+#endif
 	}
 	
 	if ( cvar ) {

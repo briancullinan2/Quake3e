@@ -179,11 +179,14 @@ function NET_Sleep() {
 
 function sendHeartbeat(sock) {
   if (sock && sock.readyState == WebSocket.OPEN) {
-    sock.fresh = 5
-    sock.send(Uint8Array.from([0x05, 0x01, 0x00, 0x00]),
-      { binary: true })
+    if(sock.fresh >= 3) { // don't heartbeat too early
+      sock.fresh = 5
+      sock.send(Uint8Array.from([0x05, 0x01, 0x00, 0x00]),
+        { binary: true })
+    }
     return
-  } else if (sock && sock.readyState == WebSocket.CLOSED) {
+  } else 
+  if (sock && sock.readyState == WebSocket.CLOSED) {
     NET.port_try = 0
     NET.reconnect = true
     if (sock == NET.socket1) {
@@ -672,7 +675,9 @@ function CL_Download(cmd, name, auto) {
           await Com_DL_Begin(localName, remoteURL),
           await Com_DL_Begin(localName + '.pk3', remoteURL + '.pk3')
             .then(responseData => {
+              if(responseData && !nameStr.match(/\.pk3$/)) {
               nameStr += '.pk3'
+              }
               return responseData
             })])).filter(f => f)[0]
       } else {
@@ -682,17 +687,24 @@ function CL_Download(cmd, name, auto) {
       let rename = responseData.response.headers.get('content-disposition')
       if (rename) {
         let newFilename = (/filename=['"]*(.*?)['"]*$/i).exec(rename)
-        localName = '/' + localName
-        nameStr = '/' + nameStr
         if (newFilename) {
-          localName = localName.replace(/\/.*?$/, '/' + newFilename[1])
-          nameStr = nameStr.replace(/\/.*?$/, '/' + newFilename[1])
+          localName = localName.replace(/[\/]*$/, newFilename[1])
+          nameStr = nameStr.replace(/[\/]*$/, newFilename[1])
         }
       }
+      Com_DL_Perform(gamedir + '/' + nameStr, gamedir + '/' + localName, responseData)
+      Cvar_Set( stringToAddress('cl_downloadName'), stringToAddress('') );
+      Cvar_Set( stringToAddress('cl_downloadSize'), stringToAddress('0') );
+      Cvar_Set( stringToAddress('cl_downloadCount'), stringToAddress('0') );
+      Cvar_Set( stringToAddress('cl_downloadTime'), stringToAddress('0') );
       if (nameStr.match(/\.pk3/i)) {
-        Cbuf_AddText(stringToAddress(` ; wait 300 ; fs_restart ; ${addressToString(cmd)} ${nameStr} ; `))
+        let cmdStr = addressToString(cmd)
+        if(cmdStr == 'dlmap') {
+          Cbuf_AddText(stringToAddress(` ; fs_restart ; vid_restart ; `))
+        } else {
+          Cbuf_AddText(stringToAddress(` ; wait 300 ; fs_restart ; ${cmdStr} ${nameStr.replace('.pk3', '')} ; `))
+        }
       }
-      Com_DL_Perform(gamedir + nameStr, gamedir + localName, responseData)
     } catch (e) {
 
     }
