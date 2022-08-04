@@ -688,8 +688,8 @@ function CL_Download(cmd, name, auto) {
       if (rename) {
         let newFilename = (/filename=['"]*(.*?)['"]*$/i).exec(rename)
         if (newFilename) {
-          localName = localName.replace(/[\/]*$/, newFilename[1])
-          nameStr = nameStr.replace(/[\/]*$/, newFilename[1])
+          localName = localName.replace(/[^\/]*$/, newFilename[1])
+          nameStr = nameStr.replace(/[^\/]*$/, newFilename[1])
         }
       }
       Com_DL_Perform(gamedir + '/' + nameStr, gamedir + '/' + localName, responseData)

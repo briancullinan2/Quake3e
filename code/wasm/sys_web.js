@@ -152,7 +152,8 @@ function Sys_Print(message) {
 	}
 	if(messageStr.includes('error')
 		|| messageStr.includes('RE_Shutdown')
-		|| messageStr.includes('Hunk_Clear')) {
+		|| messageStr.includes('Hunk_Clear')
+		|| messageStr.includes('ERROR:')) {
 		console.error(messageStr)
 	} else {
 		console.log(messageStr)

@@ -621,7 +621,7 @@ void Com_StartupVariable( const char *match ) {
 
 	for ( i = 0; i < com_numConsoleLines; i++ ) {
 		Cmd_TokenizeString( com_consoleLines[i] );
-		if ( Q_stricmp( Cmd_Argv( 0 ), "set" ) ) {
+		if ( Q_stricmpn( Cmd_Argv( 0 ), "set", 3 ) ) {
 			continue;
 		}
 
@@ -3771,8 +3771,8 @@ void Com_Init( char *commandLine ) {
 	// init commands and vars
 	//
 #ifndef DEDICATED
-	com_maxfps = Cvar_Get( "com_maxfps", "125", 0 ); // try to force that in some light way
-	com_maxfpsUnfocused = Cvar_Get( "com_maxfpsUnfocused", "60", CVAR_ARCHIVE_ND );
+	com_maxfps = Cvar_Get( "com_maxfps", "125", (Cvar_VariableIntegerValue("r_headless") ? CVAR_PROTECTED : 0) ); // try to force that in some light way
+	com_maxfpsUnfocused = Cvar_Get( "com_maxfpsUnfocused", "60", CVAR_ARCHIVE_ND | (Cvar_VariableIntegerValue("r_headless") ? CVAR_PROTECTED : 0) );
 	Cvar_CheckRange( com_maxfps, "0", "1000", CV_INTEGER );
 	Cvar_CheckRange( com_maxfpsUnfocused, "0", "1000", CV_INTEGER );
 	com_yieldCPU = Cvar_Get( "com_yieldCPU", "1", CVAR_ARCHIVE_ND );

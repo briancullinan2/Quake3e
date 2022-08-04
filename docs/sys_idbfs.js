@@ -209,14 +209,21 @@ async function readPreFS() {
   How do I make the engine automatically pick a mod? #define BASEGAME in q_shared.h
   but FS_GetCurrentGameDir() is not available before the engine loads.
   */
-  responseData = await Com_DL_Begin('baseq3/pak0.pk3', '/maps/repacked/pak0.pk3')
-  Com_DL_Perform('baseq3/pak0.pk3', 'baseq3/pak0.pk3', responseData)
-  //responseData = await Com_DL_Begin('demoq3/pak0.pk3', 'maps/repacked/pak0.pk3')
-  //Com_DL_Perform('demoq3/pak0.pk3', 'demoq3/pak0.pk3', responseData)
-  responseData = await Com_DL_Begin(
-      'baseq3/pak0.pk3dir/gfx/2d/bigchars.png', 
-      '/baseq3/pak0.pk3dir/gfx/2d/bigchars.png?alt')
-  Com_DL_Perform(
-      'baseq3/pak0.pk3dir/gfx/2d/bigchars.png', 
-      'baseq3/pak0.pk3dir/gfx/2d/bigchars.png', responseData)
+  // TODO: replace with Com_StartupVariable
+  // TODO: CL_Game_f() to switch games with a command, SV_GameRestart_f?
+  // TODO: safe to get from query like Com_StartupVariable
+  let basegame = 'baseq3'
+  let argsI = SYS.startArgs.indexOf('fs_game')
+  if(argsI == -1) {
+    argsI = SYS.startArgs.indexOf('fs_basegame')
+  }
+  if(argsI > -1) {
+    basegame = SYS.startArgs[argsI + 1]
+  }
+  // TODO: check for cl_dlURL
+  // TODO: CL_Download(, 'pak0', )
+  responseData = await Com_DL_Begin(basegame + '/pak0.pk3', 
+      '/maps/' + basegame + '/pak0.pk3')
+  Com_DL_Perform(basegame + '/pak0.pk3', 
+      basegame + '/pak0.pk3', responseData)
 }

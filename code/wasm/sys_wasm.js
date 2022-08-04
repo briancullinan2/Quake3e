@@ -140,7 +140,7 @@ function updateEnvironment(program, ENV) {
 
 async function initEngine(program) {
 	// ALL THE VARIABLES WE NEED SHOULD BE ASSIGNED TO GLOBAL BY NOW
-	let startArgs = getQueryCommands()
+	SYS.startArgs = getQueryCommands()
 	await readPreFS()
 	if(!program) {
 		throw new Error("no program!")
@@ -151,7 +151,7 @@ async function initEngine(program) {
 			window.Z_Malloc = window['Z_MallocDebug']
 		}
 		// Startup args is expecting a char **
-		_start(startArgs.length, stringsToMemory(startArgs))
+		_start(SYS.startArgs.length, stringsToMemory(SYS.startArgs))
 		// should have Cvar system by now
 		// this might help prevent this thing that krunker.io does where it lags when it first starts up
 		Com_MaxFPSChanged()

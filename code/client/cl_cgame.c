@@ -347,6 +347,7 @@ rescan:
 		// close the console
 		Con_Close();
 		// take a special screenshot next frame
+		VM_Call( uivm, 1, UI_SET_ACTIVE_MENU, UIMENU_NONE );
 		Cbuf_AddText( "wait ; wait ; wait ; wait ; screenshot levelshot\n" );
 		return qtrue;
 	}
