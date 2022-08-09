@@ -623,16 +623,15 @@ function CL_Download(cmd, name, auto) {
   //}
 
   // TODO: make a utility for Cvar stuff?
+  let cmdStr = addressToString(cmd)
   let dlURL = addressToString(Cvar_VariableString(stringToAddress('cl_dlURL')))
   let gamedir = addressToString(FS_GetCurrentGameDir())
   let nameStr = addressToString(name)
   let localName = nameStr
   if (localName[0] == '/')
     localName = localName.substring(1)
-  if (localName.startsWith(gamedir))
-    localName = localName.substring(gamedir.length)
-  if (localName[0] == '/')
-    localName = localName.substring(1)
+  if (localName.startsWith(gamedir + '/'))
+    localName = localName.substring(gamedir.length  +1)
 
   let remoteURL
   if (dlURL.includes('%1')) {
@@ -698,7 +697,6 @@ function CL_Download(cmd, name, auto) {
       Cvar_Set( stringToAddress('cl_downloadCount'), stringToAddress('0') );
       Cvar_Set( stringToAddress('cl_downloadTime'), stringToAddress('0') );
       if (nameStr.match(/\.pk3/i)) {
-        let cmdStr = addressToString(cmd)
         if(cmdStr == 'dlmap') {
           Cbuf_AddText(stringToAddress(` ; fs_restart ; vid_restart ; `))
         } else {

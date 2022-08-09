@@ -782,10 +782,8 @@ function loadImage(filename, pic, ext) {
   let localName = filenameStr
   if (localName[0] == '/')
     localName = localName.substring(1)
-  if (localName.startsWith(gamedir))
-    localName = localName.substring(gamedir.length)
-  if (localName[0] == '/')
-    localName = localName.substring(1)
+  if (localName.startsWith(gamedir + '/'))
+    localName = localName.substring(gamedir.length  +1)
 
   let buf = Z_Malloc(8) // pointer to pointer
   EMGL.previousImage = null

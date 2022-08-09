@@ -121,9 +121,8 @@ function Sys_FOpen(filename, mode) {
     return createFP()
   } else {
 		let gamedir = addressToString(FS_GetCurrentGameDir())
-		if(localName.startsWith(gamedir)) {
-			localName = localName.substring(gamedir.length + 1)
-		}
+		if (localName.startsWith(gamedir + '/'))
+			localName = localName.substring(gamedir.length  +1)
 
 		// TODO: if MD3/IQM try to load remotely
 		if(typeof REMOTE_MODELS[localName] == 'undefined'
