@@ -215,7 +215,6 @@ void QDECL SV_SendServerCommand( client_t *cl, const char *fmt, ... ) {
 }
 
 
-
 /*
 ==============================================================================
 

@@ -1278,6 +1278,7 @@ static int SV_WriteDownloadToClient( client_t *cl )
 		}
 
 		cl->download = FS_INVALID_HANDLE;
+
 		// We open the file here
 		if ( !(sv_allowDownload->integer & DLF_ENABLE) ||
 			(sv_allowDownload->integer & DLF_NO_UDP) ||
@@ -1669,7 +1670,6 @@ Com_DPrintf("VerifyPaks: Number of checksums wrong: %i != %i\n", nChkSum1, nClie
 		}
 	}
 }
-
 
 
 /*

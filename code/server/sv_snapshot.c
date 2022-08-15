@@ -620,7 +620,6 @@ static void SV_BuildClientSnapshot( client_t *client ) {
 	clientNum = frame->ps.clientNum;
 	if ( clientNum < 0 || clientNum >= MAX_GENTITIES ) {
 		Com_Error( ERR_DROP, "SV_SvEntityForGentity: bad gEnt" );
-		return;
 	}
 
 	// we set client->gentity only after sending gamestate

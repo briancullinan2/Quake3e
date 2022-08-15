@@ -1073,13 +1073,13 @@ Also called by Com_Error
 =================
 */
 void CL_FlushMemory( void ) {
+
 	// shutdown all the client stuff
 	CL_ShutdownAll();
 
 	CL_ClearMemory();
 
 	CL_StartHunkUsers();
-
 }
 
 
@@ -2234,6 +2234,7 @@ void CL_NextDownload( void )
 				cl_allowDownload->integer);
 		}
 #endif /* USE_CURL */
+
 		if( !useCURL ) {
 #ifndef __WASM__
 		if( (cl_allowDownload->integer & DLF_NO_UDP) ) {
@@ -3300,7 +3301,6 @@ static void CL_ShutdownRef( refShutdownCode_t code ) {
 	Com_Memset( &re, 0, sizeof( re ) );
 
 	cls.rendererStarted = qfalse;
-
 }
 
 
@@ -3310,6 +3310,7 @@ CL_InitRenderer
 ============
 */
 static void CL_InitRenderer( void ) {
+
 	// this sets up the renderer and calls R_Init
 	re.BeginRegistration( &cls.glconfig );
 
@@ -5171,6 +5172,7 @@ qboolean CL_Download( const char *cmd, const char *pakname, qboolean autoDownloa
 	return Com_DL_Begin( &download, pakname, cl_dlURL->string, autoDownload );
 }
 #endif // USE_CURL
+
 
 #if defined(USE_CURL) || defined(__WASM__)
 /*

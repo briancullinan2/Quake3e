@@ -222,6 +222,7 @@ void		NET_LeaveMulticast6( void );
 #endif
 qboolean	NET_Sleep( int timeout );
 
+
 #define	MAX_PACKETLEN	1400	// max size of a network packet
 
 #define	MAX_MSGLEN		16384	// max length of a message, which may
@@ -1084,8 +1085,10 @@ temp file loading
 
 */
 
+#ifndef __WASM__
 #if defined(_DEBUG) && !defined(BSPC)
 	#define ZONE_DEBUG
+#endif
 #endif
 
 #ifdef ZONE_DEBUG

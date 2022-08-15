@@ -984,6 +984,7 @@ void Con_Close( void )
 		return;
 
 	if(!uivm && !cgvm && cls.state == CA_DISCONNECTED) {
+		con.finalFrac = 1.0;
 		Key_SetCatcher( Key_GetCatcher( ) | KEYCATCH_CONSOLE );
 		return; // don't try to hide console because we don't have a VM to display
 	}
