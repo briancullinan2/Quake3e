@@ -1052,6 +1052,7 @@ Q3OBJ = \
   \
   $(B)/client/sv_bot.o \
   $(B)/client/sv_ccmds.o \
+  $(B)/client/sv_demo_mv.o \
   $(B)/client/sv_client.o \
   $(B)/client/sv_filter.o \
   $(B)/client/sv_game.o \
@@ -1251,6 +1252,7 @@ Q3DOBJ = \
   $(B)/ded/sv_bot.o \
   $(B)/ded/sv_client.o \
   $(B)/ded/sv_ccmds.o \
+  $(B)/ded/sv_demo_mv.o \
   $(B)/ded/sv_filter.o \
   $(B)/ded/sv_game.o \
   $(B)/ded/sv_init.o \

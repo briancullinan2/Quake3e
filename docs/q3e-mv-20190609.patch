@@ -1,0 +1,3738 @@
+Index: client/cl_cgame.c
+===================================================================
+--- client/cl_cgame.c	(revision 1472)
++++ client/cl_cgame.c	(working copy)
+@@ -97,8 +97,28 @@
+ }
+ 
+ 
++#ifdef USE_MV
+ /*
+ ====================
++CL_GetParsedEntityIndexByID
++====================
++*/
++static int CL_GetParsedEntityIndexByID( const clSnapshot_t *clSnap, int entityID, int startIndex, int *parsedIndex ) {
++	int index, n;
++	for ( index = startIndex; index < clSnap->numEntities; ++index ) {
++		n = ( clSnap->parseEntitiesNum + index ) & (MAX_PARSE_ENTITIES-1);
++		if ( cl.parseEntities[ n ].number == entityID ) {
++			*parsedIndex = n;
++			return index;
++		}
++	}
++	return -1;
++}
++#endif // USE_MV
++
++
++/*
++====================
+ CL_GetSnapshot
+ ====================
+ */
+@@ -132,6 +152,70 @@
+ 	snapshot->serverCommandSequence = clSnap->serverCommandNum;
+ 	snapshot->ping = clSnap->ping;
+ 	snapshot->serverTime = clSnap->serverTime;
++
++#ifdef USE_MV
++	if ( clSnap->multiview ) {
++		int		entityNum;
++		int		startIndex;
++		int		parsedIndex;
++		byte	*entMask;
++
++		if ( clSnap->clps[ clc.clientView ].valid ) {
++			//clientView = clc.clientView;
++		} else {
++			// we need to select another POV
++			if ( clSnap->clps[ clc.clientNum ].valid ) {
++				Com_DPrintf( S_COLOR_CYAN "multiview: switch POV back from %d to %d\n", clc.clientView, clc.clientNum );
++				clc.clientView = clc.clientNum; // fixup to avoid glitches
++			} else { 
++				// invalid primary id? search for any valid
++				for ( i = 0; i < MAX_CLIENTS; i++ ) {
++					if ( clSnap->clps[ i ].valid ) {
++						/*clientView = */ clc.clientNum = clc.clientView = i;
++						Com_Printf( S_COLOR_CYAN "multiview: set primary client id %d\n", clc.clientNum );
++						break;
++					}
++				}
++				if ( i == MAX_CLIENTS ) {
++					if ( !( snapshot->snapFlags & SNAPFLAG_NOT_ACTIVE ) ) {
++						Com_Error( ERR_DROP, "Unable to find any playerState in multiview" );
++						return qfalse;
++					}
++				}
++			}
++		}
++		Com_Memcpy( snapshot->areamask, clSnap->clps[ clc.clientView ].areamask, sizeof( snapshot->areamask ) );
++		snapshot->ps = clSnap->clps[ clc.clientView ].ps;
++		entMask = clSnap->clps[ clc.clientView ].entMask;
++
++		count = 0;
++		startIndex = 0;
++		for ( entityNum = 0; entityNum < MAX_GENTITIES-1; entityNum++ ) {
++			if ( GET_ABIT( entMask, entityNum ) ) {
++				// skip own and spectated entity
++				if ( entityNum != clc.clientView && entityNum != snapshot->ps.clientNum )
++				{
++					startIndex = CL_GetParsedEntityIndexByID( clSnap, entityNum, startIndex, &parsedIndex );
++					if ( startIndex >= 0 ) {
++						// should never happen but anyway:
++						if ( count >= MAX_ENTITIES_IN_SNAPSHOT ) {
++							Com_Error( ERR_DROP, "snapshot entities count overflow for %i", clc.clientView );
++							break;
++						}
++						snapshot->entities[ count++ ] = cl.parseEntities[ parsedIndex ];
++					} else {
++						Com_Error( ERR_DROP, "packet entity not found in snapshot: %i", entityNum );
++						break;
++					}
++				}
++			}
++		}
++
++		snapshot->numEntities = count;
++		return qtrue;
++	}
++#endif // USE_MV
++
+ 	Com_Memcpy( snapshot->areamask, clSnap->areamask, sizeof( snapshot->areamask ) );
+ 	snapshot->ps = clSnap->ps;
+ 	count = clSnap->numEntities;
+Index: client/cl_keys.c
+===================================================================
+--- client/cl_keys.c	(revision 1472)
++++ client/cl_keys.c	(working copy)
+@@ -589,6 +589,25 @@
+ 		}
+ 	}
+ 
++
++#ifdef USE_MV
++	if ( (/* key == K_MOUSE1 || */ key == K_MOUSE2) && clc.demoplaying && cl.snap.multiview ) {
++		int id, n, d;
++		//if ( key == K_MOUSE1 )
++			d = 1;
++		//else
++		//	d = -1;
++		for ( id = (clc.clientView + d + MAX_CLIENTS ) % MAX_CLIENTS, n = 0; n < MAX_CLIENTS; n++, id = ( id + d + MAX_CLIENTS ) % MAX_CLIENTS ) {
++			if ( cl.snap.clps[ id ].valid ) {
++				Com_Printf( S_COLOR_CYAN "MultiView: switch POV %d => %d\n", clc.clientView, id );
++				clc.clientView = id;
++				break;
++			}
++		}
++	}
++#endif // USE_MV
++
++
+ 	// escape is always handled special
+ 	if ( key == K_ESCAPE ) {
+ #ifdef USE_CURL
+Index: client/cl_main.c
+===================================================================
+--- client/cl_main.c	(revision 1472)
++++ client/cl_main.c	(working copy)
+@@ -96,6 +96,11 @@
+ qboolean			cl_oldGameSet;
+ static	qboolean	noGameRestart = qfalse;
+ 
++#ifdef USE_MV
++void CL_Multiview_f( void );
++void CL_MultiviewFollow_f( void );
++#endif
++
+ #ifdef USE_CURL
+ download_t			download;
+ #endif
+@@ -3793,6 +3798,12 @@
+ #endif
+ 	Cmd_AddCommand( "modelist", CL_ModeList_f );
+ 
++#ifdef USE_MV
++	Cmd_AddCommand( "mvjoin", CL_Multiview_f );
++	Cmd_AddCommand( "mvleave", CL_Multiview_f );
++	Cmd_AddCommand( "mvfollow", CL_MultiviewFollow_f );
++#endif
++
+ 	CL_InitRef();
+ 
+ 	SCR_Init();
+@@ -3876,6 +3887,12 @@
+ 	Cmd_RemoveCommand( "dlmap" );
+ #endif
+ 
++#ifdef USE_MV
++	Cmd_RemoveCommand( "mvjoin" );
++	Cmd_RemoveCommand( "mvleave" );
++	Cmd_RemoveCommand( "mvfollow" );
++#endif
++
+ 	CL_ClearInput();
+ 
+ 	Cvar_Set( "cl_running", "0" );
+@@ -4837,3 +4854,70 @@
+ }
+ #endif // USE_CURL
+ 
++
++#ifdef USE_MV
++
++static qboolean GetConfigString( int index, char *buf, int size )
++{
++	int		offset;
++
++	if ( index < 0 || index >= MAX_CONFIGSTRINGS ) {
++		buf[0] = '\0';
++		return qfalse;
++	}
++
++	offset = cl.gameState.stringOffsets[ index ];
++	if ( !offset ) {
++		if ( size ) {
++			buf[0] = '\0';
++		}
++		return qfalse;
++	}
++
++	Q_strncpyz( buf, cl.gameState.stringData + offset, size );
++
++	return qtrue;
++}
++
++
++void CL_Multiview_f( void )
++{
++	char serverinfo[ MAX_INFO_STRING ];
++	char *v;
++	
++	if ( cls.state != CA_ACTIVE || !cls.servername[0] || clc.demoplaying ) {
++		Com_Printf( "Not connected.\n" );
++		return;
++	}
++
++	if ( !GetConfigString( CS_SERVERINFO, serverinfo, sizeof( serverinfo ) ) || !serverinfo[0] ) {
++		Com_Printf( "No serverinfo available.\n" );
++	}
++
++	v = Info_ValueForKey( serverinfo, "mvproto" );
++	if ( atoi( v ) != MV_PROTOCOL_VERSION ) {
++		Com_Printf( S_COLOR_YELLOW "Remote server does not support this function.\n" );
++		return;
++	}
++
++	CL_AddReliableCommand( Cmd_Argv( 0 ), qfalse );
++}
++
++
++void CL_MultiviewFollow_f( void )
++{
++	int clientNum;
++
++	if ( !cl.snap.multiview )
++		return;
++
++	clientNum = atoi( Cmd_Argv( 1 ) );
++
++	if ( (unsigned)clientNum >= MAX_CLIENTS )
++		return;
++
++	if ( GET_ABIT( cl.snap.clientMask, clientNum ) )
++		clc.clientView = clientNum;
++}
++
++#endif // USE_MV
+Index: client/cl_parse.c
+===================================================================
+--- client/cl_parse.c	(revision 1472)
++++ client/cl_parse.c	(working copy)
+@@ -36,6 +36,17 @@
+ 	"svc_EOF",
+ 	"svc_voipSpeex", // ioq3 extension
+ 	"svc_voipOpus",  // ioq3 extension
++#ifdef USE_MV
++	NULL, // 11
++	NULL, // 12
++	NULL, // 13
++	NULL, // 14
++	NULL, // 15
++	"svc_multiview",  // 1.32e multiview extension
++#ifdef USE_MV_ZCMD
++	"svc_zcmd",       // LZ-compressed version of svc_serverCommand
++#endif
++#endif
+ };
+ 
+ void SHOWNET( msg_t *msg, const char *s ) {
+@@ -200,13 +211,29 @@
+ for any reason, no changes to the state will be made at all.
+ ================
+ */
+-static void CL_ParseSnapshot( msg_t *msg ) {
+-	const clSnapshot_t *old;
++static void CL_ParseSnapshot( msg_t *msg, qboolean multiview ) {
++	clSnapshot_t *old;
+ 	clSnapshot_t	newSnap;
+ 	int			deltaNum;
+ 	int			oldMessageNum;
+ 	int			i, packetNum;
++	int			maxEntities;
++	int			commandTime;
+ 
++#ifdef USE_MV
++	int			clientNum;
++	entityState_t	*es;
++	playerState_t *oldPs;
++
++	int firstIndex;
++	int lastIndex;
++
++	if ( multiview )
++		maxEntities = MAX_GENTITIES;
++	else
++#endif // USE_MV
++	maxEntities = MAX_SNAPSHOT_ENTITIES;
++
+ 	// get the reliable sequence acknowledge number
+ 	// NOTE: now sent with all server to client messages
+ 	//clc.reliableAcknowledge = MSG_ReadLong( msg );
+@@ -252,7 +279,7 @@
+ 			// The frame that the server did the delta from
+ 			// is too old, so we can't reconstruct it properly.
+ 			Com_Printf ("Delta frame too old.\n");
+-		} else if ( cl.parseEntitiesNum - old->parseEntitiesNum > MAX_PARSE_ENTITIES - MAX_SNAPSHOT_ENTITIES ) {
++		} else if ( cl.parseEntitiesNum - old->parseEntitiesNum > MAX_PARSE_ENTITIES - maxEntities ) {
+ 			Com_Printf ("Delta parseEntitiesNum too old.\n");
+ 		} else {
+ 			newSnap.valid = qtrue;	// valid delta parse
+@@ -259,6 +286,146 @@
+ 		}
+ 	}
+ 
++#ifdef USE_MV
++	if ( multiview ) {
++	
++		if ( !clc.demoplaying && clc.recordfile != FS_INVALID_HANDLE )
++			clc.dm68compat = qfalse;
++
++		newSnap.multiview = qtrue;
++		newSnap.snapFlags |= SNAPFLAG_MULTIVIEW; // to inform CGAME module in runtime
++
++		commandTime = 0;
++
++		if ( old && old->multiview ) {
++			Com_Memcpy( newSnap.clientMask, old->clientMask, sizeof( newSnap.clientMask ) );
++			newSnap.mergeMask = old->mergeMask;
++			newSnap.version = old->version;
++		} else {
++			// already zeroed as new snapshot
++		}
++
++		SHOWNET( msg, "version" );
++		if ( MSG_ReadBits( msg, 1 ) ) {
++			newSnap.version = MSG_ReadByte( msg );
++		}
++
++		// from here we can start version-dependent snapshot parsing
++
++		if ( newSnap.version != MV_PROTOCOL_VERSION ) {
++			Com_Error( ERR_DROP, "CL_ParseSnapshot(): unknown multiview protocol version %i",
++				newSnap.version );
++		}
++
++		// playerState to entityState merge mask
++		SHOWNET( msg, "mergemask" );
++		if ( MSG_ReadBits( msg, 1 ) ) {
++			newSnap.mergeMask = MSG_ReadBits( msg, SM_BITS );
++		}
++
++		// playerstate mask
++		SHOWNET( msg, "psMask" );
++		while ( MSG_ReadBits( msg, 1 ) ) {
++			firstIndex = MSG_ReadBits( msg, 3 ); // 0..7
++			lastIndex = MSG_ReadBits( msg, 3 );  // 0..7
++			//for ( i = firstIndex; i < lastIndex + 1; i++ ) {
++			for ( ; firstIndex < lastIndex + 1; firstIndex++ ) {
++			//	newSnap.clientMask[ firstIndex ] = MSG_ReadByte( msg ); // direct mask
++				newSnap.clientMask[ firstIndex ] ^= MSG_ReadByte( msg ); // delta-xor mask
++			}
++		}
++		
++		// read playerstates
++		for ( clientNum = 0; clientNum < MAX_CLIENTS; clientNum++ ) {
++
++			if ( !GET_ABIT( newSnap.clientMask, clientNum ) )
++				continue; // not masked, skip
++	
++			// areamask
++			SHOWNET( msg, "areamask" );
++			newSnap.clps[ clientNum ].areabytes = MSG_ReadBits( msg, 6 ); // was MSG_ReadByte( msg );
++			if ( newSnap.clps[ clientNum ].areabytes > sizeof( newSnap.clps[ clientNum ].areamask ) ) {
++				Com_Error( ERR_DROP,"CL_ParseSnapshot: Invalid size %d for areamask in clps#%d",
++					newSnap.clps[ clientNum ].areabytes, clientNum );
++				return;
++			}
++			MSG_ReadData( msg, &newSnap.clps[ clientNum ].areamask, newSnap.clps[ clientNum ].areabytes );
++		
++			// playerstate
++			SHOWNET( msg, "playerstate" );
++			if ( old ) {
++				if ( !old->multiview && clientNum == clc.clientNum ) {
++					// transition to multiview?
++					oldPs = &old->ps;
++				} else if ( old->clps[ clientNum ].valid ) {
++					Com_Memcpy( newSnap.clps[ clientNum ].entMask, old->clps[ clientNum ].entMask, sizeof( newSnap.clps[ clientNum ].entMask ) );
++					oldPs = &old->clps[ clientNum ].ps;
++				} else {
++					oldPs = NULL;
++				}
++			} else {
++				oldPs = NULL;
++			}
++
++			MSG_ReadDeltaPlayerstate( msg, oldPs, &newSnap.clps[ clientNum ].ps );
++
++			// spectated (pramary?) playerstate ping
++			if ( clientNum == clc.clientView ) // clc.clientNum?
++				commandTime = newSnap.clps[ clientNum ].ps.commandTime;
++
++			// entity mask
++			SHOWNET( msg, "entity mask" );
++#if 1
++			while ( MSG_ReadBits( msg, 1 ) ) {
++				firstIndex = MSG_ReadBits( msg, 7 ); // 0..127
++				lastIndex = MSG_ReadBits( msg, 7 );  // 0..127
++				for ( i = firstIndex; i < lastIndex + 1; i++ ) {
++					//newSnap.clps[ clientNum ].entMask[ i ] = MSG_ReadByte( msg ); // direct mask
++					newSnap.clps[ clientNum ].entMask[ i ] ^= MSG_ReadByte( msg ); // delta-xor mask
++				}
++			}
++#else
++			MSG_ReadData( msg, &newSnap.clps[ clientNum ].entMask, sizeof( newSnap.clps[ clientNum ].entMask ) );
++#endif
++			newSnap.clps[ clientNum ].valid = qtrue;
++
++			if ( clientNum == clc.clientView /* clc.clientNum */ ) {
++				// copy data to primary playerstate
++				Com_Memcpy( &newSnap.areamask, &newSnap.clps[ clientNum ].areamask, sizeof( newSnap.areamask ) );
++				Com_Memcpy( &newSnap.ps, &newSnap.clps[ clientNum ].ps, sizeof( newSnap.ps ) );
++			}
++		} // for [all clients]
++
++		// read packet entities
++		SHOWNET( msg, "packet entities" );
++		CL_ParsePacketEntities( msg, old, &newSnap );
++
++		// apply skipmask to player entities
++		if ( newSnap.mergeMask ) {
++			for ( i = 0; i < newSnap.numEntities; i++ ) {
++				es = &cl.parseEntities [ (newSnap.parseEntitiesNum + i) & (MAX_PARSE_ENTITIES-1)];
++				if ( es->number >= MAX_CLIENTS )
++					break;
++				if ( newSnap.clps[ es->number ].valid )
++					MSG_PlayerStateToEntityState( &newSnap.clps[ es->number ].ps, es, qtrue, newSnap.mergeMask );
++			}
++		}
++	}
++	else // !multiview
++	{
++		// detect transition to non-multiview
++		if ( cl.snap.multiview ) {
++			clc.clientView = clc.clientNum;
++			if ( old ) {
++				// invalidate state
++				Com_Memset( &old->clps, 0, sizeof( old->clps ) );
++				Com_DPrintf( S_COLOR_CYAN "transition from multiview to legacy stream\n" );
++				//old->ps = old->clps[ clc.clientView ].ps;
++				//Com_Memcpy( old->areamask, old->clps[ clc.clientView ].areamask, sizeof( old->areamask ) );
++			}
++		}
++#endif // USE_MV
++
+ 	// read areamask
+ 	newSnap.areabytes = MSG_ReadByte( msg );
+ 	
+@@ -278,10 +445,16 @@
+ 		MSG_ReadDeltaPlayerstate( msg, NULL, &newSnap.ps );
+ 	}
+ 
++	commandTime = newSnap.ps.commandTime;
++
+ 	// read packet entities
+ 	SHOWNET( msg, "packet entities" );
+ 	CL_ParsePacketEntities( msg, old, &newSnap );
+ 
++#ifdef USE_MV
++	} // !extended snapshot
++#endif
++
+ 	// if not valid, dump the entire thing now that it has
+ 	// been properly read
+ 	if ( !newSnap.valid ) {
+@@ -307,7 +480,7 @@
+ 	// calculate ping time
+ 	for ( i = 0 ; i < PACKET_BACKUP ; i++ ) {
+ 		packetNum = ( clc.netchan.outgoingSequence - 1 - i ) & PACKET_MASK;
+-		if ( cl.snap.ps.commandTime >= cl.outPackets[ packetNum ].p_serverTime ) {
++		if ( commandTime >= cl.outPackets[ packetNum ].p_serverTime ) {
+ 			cl.snap.ping = cls.realtime - cl.outPackets[ packetNum ].p_realtime;
+ 			break;
+ 		}
+@@ -575,6 +748,11 @@
+ 
+ 	clc.eventMask |= EM_GAMESTATE;
+ 
++#ifdef USE_MV
++	clc.clientView = clc.clientNum;
++	clc.zexpectDeltaSeq = 0; // that will reset compression context
++#endif
++
+ 	clc.clientNum = MSG_ReadLong(msg);
+ 	// read the checksum feed
+ 	clc.checksumFeed = MSG_ReadLong( msg );
+@@ -783,6 +961,11 @@
+ 	if ( clc.serverCommandSequence >= seq ) {
+ 		return;
+ 	}
++
++#ifdef USE_MV
++	clc.zexpectDeltaSeq = 0; // reset if we get new uncompressed command
++#endif
++
+ 	clc.serverCommandSequence = seq;
+ 
+ 	index = seq & (MAX_RELIABLE_COMMANDS-1);
+@@ -812,8 +995,78 @@
+ }
+ 
+ 
++#if defined( USE_MV ) && defined( USE_MV_ZCMD )
+ /*
+ =====================
++CL_ParseZCommandString
++=====================
++*/
++void CL_ParseZCommandString( msg_t *msg ) {
++	
++	static lzctx_t ctx;	// compression context
++	int		deltaSeq;
++	int		textbits;
++	int		seq_size;
++	int		seq;
++
++	deltaSeq = MSG_ReadBits( msg, 3 ); // 0..2: delta sequence
++	textbits = MSG_ReadBits( msg, 1 ) + 7; // text bits - 7 or 8
++	seq_size = MSG_ReadBits( msg, 2 ) + 1; // command size in bytes // TODO: OCTETS?
++	seq = MSG_ReadBits( msg, seq_size * 8 ); // command sequence
++
++	// future extension, reserved and should be 0 for now
++	if ( MSG_ReadBits( msg, 1 ) != 0 ) {
++		Com_Error( ERR_DROP, "zcmd: bad control bit" ); 
++	}
++
++	//Com_DPrintf( S_COLOR_CYAN "cl: delta: %i, txb: %i, size: %i, seq: %i\n",
++	//	deltaSeq, textbits, seq_size, seq );
++
++	if ( seq <= clc.serverCommandSequence ) {
++		if ( deltaSeq == 0 && clc.zexpectDeltaSeq == 0 ) {
++			Com_Error( ERR_DROP, "zcmd: already stored uncompressed %i", seq );
++		}
++		Com_DPrintf( S_COLOR_YELLOW "zcmd: already stored sequence %i\n", seq );
++		LZSS_SeekEOS( msg, textbits );
++		return;
++	}
++
++	if ( deltaSeq == 0 ) { 
++		// decoder reset
++		Com_DPrintf( S_COLOR_RED" seq %i, reset decompression context\n", seq );
++		LZSS_InitContext( &ctx );
++		clc.zexpectDeltaSeq = 1;
++	} else 	{
++		// see if we have already executed stored it off
++		if ( deltaSeq != clc.zexpectDeltaSeq ) {
++			Com_DPrintf( S_COLOR_YELLOW "zcmd: unexpected delta %i instead of %i\n", deltaSeq, clc.zexpectDeltaSeq );
++			LZSS_SeekEOS( msg, textbits );
++			return;
++		}
++		if ( seq != clc.serverCommandSequence + 1 ) {
++			Com_DPrintf( S_COLOR_YELLOW " unexpected command sequence %i instead of %i\n", seq, clc.serverCommandSequence + 1 );
++			LZSS_SeekEOS( msg, textbits );
++			return;
++		}
++
++		if ( clc.zexpectDeltaSeq >= 7 )
++			clc.zexpectDeltaSeq = 1;
++		else
++			clc.zexpectDeltaSeq++;
++	}
++
++	// store command
++	LZSS_Expand( &ctx, msg, clc.serverCommands[ seq & (MAX_RELIABLE_COMMANDS-1) ], MAX_STRING_CHARS, textbits );
++
++	clc.serverCommandSequence = seq;
++
++	clc.eventMask |= EM_COMMAND;
++}
++#endif // USE_MV
++
++
++/*
++=====================
+ CL_ParseServerMessage
+ =====================
+ */
+@@ -870,12 +1123,22 @@
+ 		case svc_serverCommand:
+ 			CL_ParseCommandString( msg );
+ 			break;
++#if defined( USE_MV ) && defined( USE_MV_ZCMD )
++		case svc_zcmd:
++			CL_ParseZCommandString( msg );
++			break;
++#endif
+ 		case svc_gamestate:
+ 			CL_ParseGamestate( msg );
+ 			break;
+ 		case svc_snapshot:
+-			CL_ParseSnapshot( msg );
++			CL_ParseSnapshot( msg, qfalse );
+ 			break;
++#ifdef USE_MV
++		case svc_multiview:
++			CL_ParseSnapshot( msg, qtrue );
++			break;
++#endif
+ 		case svc_download:
+ 			if ( clc.demofile != FS_INVALID_HANDLE )
+ 				return;
+Index: client/client.h
+===================================================================
+--- client/client.h	(revision 1472)
++++ client/client.h	(working copy)
+@@ -62,6 +62,20 @@
+ 
+ 	int				serverCommandNum;		// execute all commands up to this before
+ 											// making the snapshot current
++#ifdef USE_MV
++	struct {
++		int				areabytes;
++		byte			areamask[MAX_MAP_AREA_BYTES]; // portalarea visibility bits
++		byte			entMask[MAX_GENTITIES/8];
++		playerState_t	ps;
++		qboolean		valid;
++	} clps[ MAX_CLIENTS ];
++	qboolean	multiview;
++	int			version;
++	int			mergeMask;
++	byte		clientMask[MAX_CLIENTS/8];
++#endif // USE_MV
++
+ } clSnapshot_t;
+ 
+ 
+@@ -84,7 +98,11 @@
+ // the parseEntities array must be large enough to hold PACKET_BACKUP frames of
+ // entities, so that when a delta compressed message arives from the server
+ // it can be un-deltad from the original 
++#ifdef USE_MV
++#define	MAX_PARSE_ENTITIES	( PACKET_BACKUP * MAX_GENTITIES )
++#else
+ #define	MAX_PARSE_ENTITIES	( PACKET_BACKUP * MAX_SNAPSHOT_ENTITIES )
++#endif
+ 
+ extern int g_console_field_width;
+ 
+@@ -164,6 +182,10 @@
+ typedef struct {
+ 
+ 	int			clientNum;
++#ifdef USE_MV
++	int			clientView;
++	int			zexpectDeltaSeq;			// for compressed server commands
++#endif
+ 	int			lastPacketSentTime;			// for retransmits during connection
+ 	int			lastPacketTime;				// for timeouts
+ 
+Index: qcommon/files.c
+===================================================================
+--- qcommon/files.c	(revision 1472)
++++ qcommon/files.c	(working copy)
+@@ -1648,6 +1648,63 @@
+ 
+ /*
+ =================
++FS_Home_ListFilteredFiles
++=================
++*/
++char **FS_Home_ListFilteredFiles( const char *path, const char *extension, const char *filter, int *numfiles ) {
++
++	const char *netpath;
++
++	if ( !fs_searchpaths ) {
++		Com_Error( ERR_FATAL, "Filesystem call made without initialization" );
++	}
++
++	if ( !path ) {
++		*numfiles = 0;
++		return NULL;
++	}
++
++	if ( !extension ) {
++		extension = "";
++	}
++
++	netpath = FS_BuildOSPath( fs_homepath->string, fs_gamedir, path );
++
++	return Sys_ListFiles( netpath, extension, filter, numfiles, qfalse );
++}
++
++
++/*
++=================
++FS_Home_FileSize
++=================
++*/
++int FS_Home_FileSize( const char *name ) {
++
++	const char *ospath;
++	int length;
++	FILE *f;
++
++	if ( !fs_searchpaths ) {
++		Com_Error( ERR_FATAL, "Filesystem call made without initialization" );
++	}
++
++	ospath = FS_BuildOSPath( fs_homepath->string, fs_gamedir, name );
++
++	f = Sys_FOpen( ospath, "rb" );
++	if ( f ) {
++		length = FS_FileLength( f );
++		fclose( f );
++	} else {
++		length = -1;
++	}
++
++	return length;
++}
++
++
++/*
++=================
+ FS_Read
+ 
+ Properly handles partial reads
+Index: qcommon/msg.c
+===================================================================
+--- qcommon/msg.c	(revision 1472)
++++ qcommon/msg.c	(working copy)
+@@ -661,46 +661,53 @@
+ 	const char	*name;
+ 	const int	offset;
+ 	const int	bits;	// 0 = float
++#ifdef USE_MV
++	int			mergeMask;
++#endif
+ } netField_t;
+ 
++#ifdef USE_MV
++int MSG_entMergeMask = 0;
++#endif
++
+ // using the stringizing operator to save typing...
+ #define	NETF(x) #x,(size_t)&((entityState_t*)0)->x
+ 
+ const netField_t entityStateFields[] = 
+ {
+-{ NETF(pos.trTime), 32 },
+-{ NETF(pos.trBase[0]), 0 },
+-{ NETF(pos.trBase[1]), 0 },
+-{ NETF(pos.trDelta[0]), 0 },
+-{ NETF(pos.trDelta[1]), 0 },
+-{ NETF(pos.trBase[2]), 0 },
+-{ NETF(apos.trBase[1]), 0 },
+-{ NETF(pos.trDelta[2]), 0 },
+-{ NETF(apos.trBase[0]), 0 },
++{ NETF(pos.trTime), 32, SM_TRTIME },				// CPMA: SM_TRTIME
++{ NETF(pos.trBase[0]), 0, SM_BASE },
++{ NETF(pos.trBase[1]), 0, SM_BASE },
++{ NETF(pos.trDelta[0]), 0, SM_BASE },				// CPMA: affected by SM_TRDELTA!
++{ NETF(pos.trDelta[1]), 0, SM_BASE },				// CPMA: affected by SM_TRDELTA!
++{ NETF(pos.trBase[2]), 0, SM_BASE },
++{ NETF(apos.trBase[1]), 0, SM_BASE },
++{ NETF(pos.trDelta[2]), 0, SM_BASE },				// CPMA: affected by SM_TRDELTA!
++{ NETF(apos.trBase[0]), 0, SM_BASE },
+ { NETF(event), 10 },
+-{ NETF(angles2[1]), 0 },
+-{ NETF(eType), 8 },
+-{ NETF(torsoAnim), 8 },
++{ NETF(angles2[YAW]), 0, SM_BASE },					// BASE
++{ NETF(eType), 8, SM_BASE },
++{ NETF(torsoAnim), 8, SM_BASE },					// BASE
+ { NETF(eventParm), 8 },
+-{ NETF(legsAnim), 8 },
+-{ NETF(groundEntityNum), GENTITYNUM_BITS },
+-{ NETF(pos.trType), 8 },
+-{ NETF(eFlags), 19 },
++{ NETF(legsAnim), 8, SM_BASE },						// BASE
++{ NETF(groundEntityNum), GENTITYNUM_BITS, SM_BASE },// BASE
++{ NETF(pos.trType), 8, SM_TRTYPE },					// !CPMA: SM_TRTYPE
++{ NETF(eFlags), 19, SM_EFLAGS },					// EFLAGS
+ { NETF(otherEntityNum), GENTITYNUM_BITS },
+-{ NETF(weapon), 8 },
+-{ NETF(clientNum), 8 },
++{ NETF(weapon), 8, SM_BASE },						// BASE
++{ NETF(clientNum), 8, SM_BASE },					// BASE
+ { NETF(angles[1]), 0 },
+ { NETF(pos.trDuration), 32 },
+-{ NETF(apos.trType), 8 },
++{ NETF(apos.trType), 8, SM_BASE },					// BASE
+ { NETF(origin[0]), 0 },
+ { NETF(origin[1]), 0 },
+ { NETF(origin[2]), 0 },
+ { NETF(solid), 24 },
+-{ NETF(powerups), MAX_POWERUPS },
++{ NETF(powerups), MAX_POWERUPS, SM_BASE },			// BASE
+ { NETF(modelindex), 8 },
+ { NETF(otherEntityNum2), GENTITYNUM_BITS },
+-{ NETF(loopSound), 8 },
+-{ NETF(generic1), 8 },
++{ NETF(loopSound), 8, SM_BASE },					// BASE
++{ NETF(generic1), 8, SM_BASE },						// BASE
+ { NETF(origin2[2]), 0 },
+ { NETF(origin2[0]), 0 },
+ { NETF(origin2[1]), 0 },
+@@ -709,10 +716,10 @@
+ { NETF(time), 32 },
+ { NETF(apos.trTime), 32 },
+ { NETF(apos.trDuration), 32 },
+-{ NETF(apos.trBase[2]), 0 },
+-{ NETF(apos.trDelta[0]), 0 },
+-{ NETF(apos.trDelta[1]), 0 },
+-{ NETF(apos.trDelta[2]), 0 },
++{ NETF(apos.trBase[2]), 0, SM_BASE },				// BASE
++{ NETF(apos.trDelta[0]), 0, SM_BASE },				// BASE
++{ NETF(apos.trDelta[1]), 0, SM_BASE },				// BASE
++{ NETF(apos.trDelta[2]), 0, SM_BASE },				// BASE
+ { NETF(time2), 32 },
+ { NETF(angles[2]), 0 },
+ { NETF(angles2[0]), 0 },
+@@ -721,7 +728,221 @@
+ { NETF(frame), 16 }
+ };
+ 
++#ifdef USE_MV
+ 
++#include "../game/bg_public.h"
++
++int MSG_PlayerStateToEntityStateXMask( const playerState_t *ps, const entityState_t *s, qboolean snap ) {
++	int		i;
++	int		tmp;
++	vec3_t	vec3;
++	int		mask;
++
++	mask = 0;
++
++	// SM_TRTIME
++	if ( s->pos.trTime != ps->commandTime ) // CPMA
++		mask |= SM_TRTIME;
++
++	if ( ps->pm_type == PM_INTERMISSION || ps->pm_type == PM_SPECTATOR ) {
++		if ( s->eType != ET_INVISIBLE ) {
++			//Com_DPrintf( S_COLOR_YELLOW "E#0.1\n" );
++			mask |= SM_BASE;
++		}
++	} else if ( ps->stats[STAT_HEALTH] <= GIB_HEALTH ) {
++		if ( s->eType != ET_INVISIBLE ) {
++			//Com_DPrintf( S_COLOR_YELLOW "E#0.2\n" );
++			mask |= SM_BASE;
++		}
++	} else {
++		if ( s->eType != ET_PLAYER ) {
++			//Com_DPrintf( S_COLOR_YELLOW "E#0.3\n" );
++			mask |= SM_BASE;
++		}
++	}
++
++	// !CPMA: SM_TRTYPE
++	if ( s->pos.trType != TR_INTERPOLATE ) {
++		mask |= SM_TRTYPE;
++	}
++
++	if ( s->apos.trType != TR_INTERPOLATE ) {
++		//Com_DPrintf( S_COLOR_YELLOW "E#2\n" );
++		mask |= SM_BASE;
++	}
++
++	VectorCopy( ps->origin, vec3 );
++	if ( snap )
++		SnapVector( vec3 );
++	if ( !VectorCompare( vec3, s->pos.trBase ) ) {
++		//Com_Printf( S_COLOR_YELLOW "E#3\n" );
++		mask |= SM_BASE;
++	}
++
++	// set the trDelta for flag direction
++	if ( !VectorCompare( ps->velocity, s->pos.trDelta ) ) {
++		VectorCopy( ps->velocity, vec3 );
++		SnapVector( vec3 );
++		if ( !VectorCompare( vec3, s->pos.trDelta ) )
++			mask |= SM_BASE;		// reject all
++		else
++			mask |= SM_TRDELTA; // CPMA
++	}
++
++	VectorCopy( ps->viewangles, vec3 );
++	if ( snap )
++		SnapVector( vec3 );
++	if ( !VectorCompare( vec3, s->apos.trBase ) ) {
++		//Com_DPrintf( S_COLOR_YELLOW "E#5\n" );
++		mask |= SM_BASE;
++	}
++
++	if ( s->weapon != ps->weapon || s->groundEntityNum != ps->groundEntityNum ) {
++		//Com_DPrintf( S_COLOR_YELLOW "E#6 s.w=%i ps.w=%i, s.en=%i ps.en=%i\n", s->weapon, ps->weapon, s->groundEntityNum, ps->groundEntityNum );
++		mask |= SM_BASE;
++	}
++
++	if ( s->angles2[YAW] != ps->movementDir ||
++		s->legsAnim != ps->legsAnim ||
++		s->torsoAnim != ps->torsoAnim ||
++		s->clientNum != ps->clientNum ) {
++			Com_Printf( S_COLOR_YELLOW "E#7\n" );
++			mask |= SM_BASE;
++	}
++
++	// EFLAGS
++	tmp = ps->eFlags;
++	if ( ps->stats[STAT_HEALTH] <= 0 ) {
++		tmp |= EF_DEAD;
++	} else {
++		tmp &= ~EF_DEAD;
++	}
++	if ( s->eFlags != tmp ) {
++		Com_Printf( S_COLOR_YELLOW "E#8: s->eFlags %i != %i health=%i\n", s->eFlags, tmp, ps->stats[ STAT_HEALTH ] );
++		mask |= SM_EFLAGS;
++	}
++
++	if ( s->loopSound != ps->loopSound || s->generic1 != ps->generic1 ) {
++		//Com_DPrintf( S_COLOR_YELLOW "E#9\n" );
++		mask |= SM_BASE;
++	}
++
++	// POWERUPS
++	tmp = 0; //s->powerups = 0;
++	for ( i = 0 ; i < MAX_POWERUPS; i++ ) {
++		if ( ps->powerups[ i ] ) {
++		//	s->powerups |= 1 << i;
++			tmp |= 1 << i;
++		}
++	}
++	if ( s->powerups != tmp ) {
++		mask |= SM_BASE;
++	}
++
++	return mask;
++}
++
++
++void MSG_PlayerStateToEntityState( playerState_t *ps, entityState_t *s, qboolean snap, skip_mask sm ) {
++	int		i;
++
++	if ( sm & SM_TRTIME ) 
++		s->pos.trTime = ps->commandTime;
++
++	if ( sm & SM_TRTYPE )
++		s->pos.trType = TR_INTERPOLATE;
++
++	//if ( sm & SM_TRDELTA )
++	//	VectorCopy( ps->velocity, s->pos.trDelta );
++
++	if ( sm & SM_BASE ) 
++	{
++		if ( ps->pm_type == PM_INTERMISSION || ps->pm_type == PM_SPECTATOR ) {
++			s->eType = ET_INVISIBLE;
++		} else if ( ps->stats[STAT_HEALTH] <= GIB_HEALTH ) {
++			s->eType = ET_INVISIBLE;
++		} else {
++			s->eType = ET_PLAYER;
++		}
++
++		//s->pos.trType = TR_INTERPOLATE; // -> now set by SM_TRTYPE
++		s->apos.trType = TR_INTERPOLATE;
++
++		VectorCopy( ps->origin, s->pos.trBase );
++		if ( snap )
++			SnapVector( s->pos.trBase );
++
++		// set the trDelta for flag direction
++		VectorCopy( ps->velocity, s->pos.trDelta );
++
++		if ( sm & SM_TRDELTA )
++			SnapVector( s->pos.trDelta ); // CPMA
++
++		VectorCopy( ps->viewangles, s->apos.trBase );
++		if ( snap )
++			SnapVector( s->apos.trBase );
++
++		s->weapon = ps->weapon;
++		s->groundEntityNum = ps->groundEntityNum; 
++
++		s->angles2[YAW] = ps->movementDir;
++		s->legsAnim = ps->legsAnim;
++		s->torsoAnim = ps->torsoAnim;
++		s->clientNum = ps->clientNum;
++
++		//s->eFlags = ps->eFlags; // -> SM_EFLAGS
++		s->loopSound = ps->loopSound;
++		s->generic1 = ps->generic1;
++
++		s->powerups = 0;
++		for ( i = 0 ; i < MAX_POWERUPS; i++ ) {
++			if ( ps->powerups[ i ] ) {
++				s->powerups |= 1 << i;
++			}
++		}
++	}
++
++	if ( sm & SM_EFLAGS ) {
++		s->eFlags = ps->eFlags;
++	}
++#if 0
++	// ET_PLAYER looks here instead of at number
++	// so corpses can also reference the proper config
++	//s->eFlags = ps->eFlags;
++	tmp = ps->eFlags;
++	if ( ps->stats[STAT_HEALTH] <= 0 ) {
++		//s->eFlags |= EF_DEAD;
++		tmp |= EF_DEAD;
++	} else {
++		//s->eFlags &= ~EF_DEAD;
++		tmp &= ~EF_DEAD;;
++	}
++	if ( s->eFlags != tmp )
++		return SM_3;
++
++	// moved up!
++	//if ( s->weapon != ps->weapon || s->groundEntityNum != ps->groundEntityNum )
++	//	return SM_4;
++
++	tmp = 0; //s->powerups = 0;
++	for ( i = 0 ; i < MAX_POWERUPS; i++ ) {
++		if ( ps->powerups[ i ] ) {
++		//	s->powerups |= 1 << i;
++			tmp |= 1 << i;
++		}
++	}
++	if ( s->powerups != tmp )
++		return SM_4;
++
++	if ( s->loopSound != ps->loopSound || s->generic1 != ps->generic1 )
++		return SM_4;
++#endif
++}
++
++
++#endif
++
++
+ // if (int)f == f and (int)f + ( 1<<(FLOAT_INT_BITS-1) ) < ( 1 << FLOAT_INT_BITS )
+ // the float will be sent with FLOAT_INT_BITS, otherwise all 32 bits will be sent
+ #define	FLOAT_INT_BITS	13
+@@ -773,6 +994,10 @@
+ 	for ( i = 0, field = entityStateFields ; i < numFields ; i++, field++ ) {
+ 		fromF = (int *)( (byte *)from + field->offset );
+ 		toF = (int *)( (byte *)to + field->offset );
++#ifdef USE_MV
++		if ( ( field->mergeMask & MSG_entMergeMask ) && to->number < MAX_CLIENTS )
++			continue;
++#endif
+ 		if ( *fromF != *toF ) {
+ 			lc = i+1;
+ 		}
+@@ -799,12 +1024,17 @@
+ 	for ( i = 0, field = entityStateFields ; i < lc ; i++, field++ ) {
+ 		fromF = (int *)( (byte *)from + field->offset );
+ 		toF = (int *)( (byte *)to + field->offset );
+-
++#ifdef USE_MV
++		if ( *fromF == *toF || ( ( field->mergeMask & MSG_entMergeMask ) && (to->number < MAX_CLIENTS) ) ) {
++			MSG_WriteBits( msg, 0, 1 );	// no change
++			continue;
++		}
++#else
+ 		if ( *fromF == *toF ) {
+ 			MSG_WriteBits( msg, 0, 1 );	// no change
+ 			continue;
+ 		}
+-
++#endif
+ 		MSG_WriteBits( msg, 1, 1 );	// changed
+ 
+ 		if ( field->bits == 0 ) {
+@@ -1335,4 +1565,383 @@
+ 	}
+ }
+ 
+-//===========================================================================
++
++#if defined( USE_MV ) && defined( USE_MV_ZCMD )
++
++// command compression/decompression
++
++#define LZ_MOD(a)  ( (a) & (LZ_WINDOW_SIZE - 1) )
++#define DEF_POS 0
++#define NUM_PASSES LZ_WINDOW_SIZE
++#define HASH_BLK LZ_MIN_MATCH
++
++static unsigned int hash_func( const byte *window, int pos )
++{
++	unsigned int h, i;
++	for ( i = 0, h = 0; i < HASH_BLK; i++ ) 
++		h = h * 101 + window[ pos + i ]; // MODULO( pos + i )
++	return h & (HTAB_SIZE-1);
++}
++
++
++static void hash_update( lzctx_t *ctx, int pos )
++{
++	int hash;
++
++	hash = hash_func( ctx->window, pos );
++
++	ctx->hvals[ pos ] = hash;
++
++	if ( ctx->htable[ hash ] < 0 )
++		ctx->htable[ hash ] = pos;
++	else 
++		ctx->hlist[ ctx->htlast[ hash ] ] = pos;
++
++	 // save last inserted
++	ctx->htlast[ hash ] = pos;
++
++	 // zero last
++	ctx->hlist[ pos ] = -1;
++}
++
++
++static void hash_delete( lzctx_t *ctx, int pos )
++{
++	int hash;
++	//pos = MODULO( pos ); // no need?
++
++	if ( ( hash = ctx->hvals[ pos ] ) < 0 ) // nothing inserted at this position?
++		return;
++
++	if ( ctx->htable[ hash ] == pos )
++	{
++		ctx->htable[ hash ] = ctx->hlist[ pos ]; // point to next bucket or -1
++		ctx->hlist[ pos ] = -1; // now unused
++      	ctx->hvals[ pos ] = -1; // now unused
++	}
++/*
++	else 
++	{
++		printf( "ERROR4 - must never happen!\n" );
++		fflush( NULL );
++		exit( 1 );
++	}
++*/
++}
++
++#define HASH_SEARCH_OPTIMIZE
++
++static int hash_search( const lzctx_t *ctx, int current_pos, int look_ahead, int *match_pos, int steps )
++{
++	int hash;
++	int start;
++	int n, match_len, last_match, s, v;
++	const byte *wcp;
++	const byte *window;
++
++	//if ( look_ahead < HASH_BLK ) 
++	//	return 1;
++
++	window = ctx->window;
++
++	wcp = ctx->window + current_pos; // small optimization
++
++	hash = hash_func( ctx->window, current_pos );
++
++	start = ctx->htable[ hash ];
++
++	match_len = HASH_BLK-1; // 2
++	last_match = 0;
++
++	s = HASH_BLK-1;
++
++#ifdef HASH_SEARCH_OPTIMIZE
++	v = wcp[ s ]; //lz_window[ current_pos + s ];
++#else
++	v = window[ LZ_MOD( current_pos + s) ];
++#endif
++
++	while ( start >= 0 ) // chain >= 0
++	{
++		// first valid match of last symbol
++#ifdef HASH_SEARCH_OPTIMIZE
++		if ( window[ start + s ] == v ) // lazy match of last symbol
++#else
++		if ( window[ LZ_MOD(start + s) ] == v ) // lazy match of last symbol
++#endif
++		{
++			for ( n = 0; n < look_ahead; n++ ) 
++			{
++#ifdef HASH_SEARCH_OPTIMIZE
++				if ( window[ start + n ] != wcp[ n ] ) // != lz_window[ LZ_MOD( current_pos + n ) ]
++#else
++				if ( window[ LZ_MOD(start + n) ] != window[ LZ_MOD( current_pos + n ) ] )
++#endif
++					break;
++			}
++			if ( n > match_len ) 
++			{
++				match_len = n;
++				last_match = start;
++				if ( n >= look_ahead )
++					break;
++				// save last match
++				s = n;
++#ifdef HASH_SEARCH_OPTIMIZE
++				v = wcp[ n ]; // window[ LZ_MOD(current_pos + s) ];
++				if ( ctx->htable[ hash_func( window, current_pos + n - (HASH_BLK-1) ) ] < 0 ) // quick reject
++#else
++				v = window[ LZ_MOD(current_pos + s) ];
++				if ( ctx->htable[ hash_func( window, LZ_MOD(current_pos + n - (HASH_BLK-1)) ) ] < 0 ) // quick reject
++#endif
++					break;
++
++			}
++		}
++		start = ctx->hlist[ start ]; // chain = chain->next; // switch to next item
++	}
++
++	*match_pos = last_match;
++
++	return match_len;
++}
++
++
++// clear dictionary and hash search structures
++void LZSS_InitContext( lzctx_t *ctx )
++{
++	int i;
++
++	for ( i = 0; i < DICT_SIZE; i++ )
++	{
++		ctx->hlist[ i ] = -1;
++		ctx->hvals[ i ] = -1;
++	}
++
++	for ( i = 0; i < HTAB_SIZE; i++ )
++	{
++		ctx->htable[ i ] = -1;
++		ctx->htlast[ i ] = -1;
++	}
++	ctx->current_pos = DEF_POS;
++
++	memset( ctx->window, '\0', sizeof( ctx->window ) );
++}
++
++
++void LZSS_SeekEOS( msg_t *msg, int charbits ) {
++	int c;
++	for ( ;; ) {
++		if ( MSG_ReadBits( msg, 1 ) ) {
++			c = MSG_ReadBits( msg, charbits );
++			if ( c == '\0' ) // FIXME: <= 0 ?
++				break;
++		} else {
++			MSG_ReadBits( msg, INDEX_BITS );
++			MSG_ReadBits( msg, LENGTH_BITS );
++		}
++	}
++}
++
++
++int LZSS_Expand( lzctx_t *ctx, msg_t *msg, byte *out, int maxsize, int charbits )
++{
++	int i;
++	int c;
++	int current_pos;
++	int match_len;
++	int match_pos;
++	byte *window;
++	const byte *base;
++	const byte *max;
++
++	window = ctx->window;
++	current_pos = ctx->current_pos; // DEF_POS
++
++	base = out;
++	max = out + maxsize - 1;
++		
++	for ( ;; ) {
++		if ( MSG_ReadBits( msg, 1 ) ) { // literal
++			c = MSG_ReadBits( msg, charbits );
++			if ( c == '\0' ) // c <= 0 ?
++				break;
++			window[ current_pos ] = (byte) c;
++			current_pos = LZ_MOD( current_pos + 1 );
++			if ( out < max )
++				*out++ = c;
++		} else { // match pair
++			match_pos = MSG_ReadBits( msg, INDEX_BITS );
++			match_len = MSG_ReadBits( msg, LENGTH_BITS );
++			match_pos = LZ_MOD( current_pos - match_pos );
++			for ( i = 0; i < match_len + LZ_MIN_MATCH; i++ ) {
++				c = window[ LZ_MOD( match_pos + i ) ];
++				window[ current_pos ] = (byte) c;
++				current_pos = LZ_MOD( current_pos + 1 );
++				if ( out < max )
++					*out++ = c;
++			}
++		}
++	}
++
++	*out = '\0'; // terminate string
++
++	ctx->current_pos = current_pos;
++
++	return (out - base);
++}
++
++
++int LZSS_CompressToStream( lzctx_t *ctx, lzstream_t *stream, const byte *in, int length )
++{
++	int i, j, c;
++	int look_ahead_bytes;
++	int current_pos;
++	int replace_count;
++	int match_len;
++	int match_pos;
++	const byte *eos;
++	int	count;
++	byte *window;
++	byte *output;
++
++	current_pos = ctx->current_pos; // DEF_POS
++	window = ctx->window;
++
++	eos = in + length;
++
++	for ( i = 0; i < LOOK_AHEAD_SIZE; i++ ) // i < 18
++	{
++		if ( in >= eos ) //if ( (c = getc (input)) == EOF )
++			break;
++		c = *in++;
++		j = LZ_MOD( current_pos + i );
++		window[ j ] = c;
++		// string search optimization
++#ifdef SEARCH_OPTIMIZE 
++		if ( current_pos + i >= LZ_WINDOW_SIZE ) 
++			window[ current_pos + i ] = c;
++#endif
++		// remove inserted characters from lookup
++		hash_delete( ctx, j );
++	}
++
++	look_ahead_bytes = i;
++
++#if 1
++	Com_Memset( stream->type, 0, ((length + 7)/8) + 1 );
++#else
++	Com_Memset( stream->type, 0, sizeof( stream->type ) );
++	Com_Memset( stream->cmd, 0, sizeof( stream->cmd ) );
++#endif
++
++	output = stream->cmd;
++	count = 0;
++
++	if ( stream->zdelta == 0 ) {
++		// initial state
++		match_len = 1;
++		match_pos = current_pos;
++	} else {
++		// dictionary is not empty so we can search for matches
++		match_len = hash_search( ctx, current_pos, look_ahead_bytes, &match_pos, NUM_PASSES );
++	}
++
++	while ( look_ahead_bytes > 0 )
++	{
++		if ( match_len < LZ_MIN_MATCH )
++		{
++			replace_count = 1;
++			//stream->type[ count / 8 ] |=  1 << ( count & 7 );
++			SET_ABIT( stream->type, count );
++			*output++ = window[ current_pos ];
++		}
++		else
++		{
++			i = LZ_MOD( current_pos - match_pos );
++			j = match_len - LZ_MIN_MATCH;
++			//stream->type[ count / 8 ] |= 0 << ( count & 7 );
++			*output++ = i;
++			*output++ = ( ( i >> (8 - LENGTH_BITS)) & LENGTH_MASK1 ) | j;
++			replace_count = match_len;
++		}
++
++		count++;
++
++		for ( i = 0; i < replace_count; i++ )
++		{
++			hash_delete( ctx, LZ_MOD( current_pos + LOOK_AHEAD_SIZE ) );
++			if ( in >= eos ) 	// if ( (c = getc (input)) == EOF )
++			{
++				look_ahead_bytes--;
++			}
++			else  
++			{
++				c = *in++;
++				window[ LZ_MOD( current_pos + LOOK_AHEAD_SIZE ) ] = c;
++				// string search optimization
++#ifdef SEARCH_OPTIMIZE
++				if ( current_pos + LOOK_AHEAD_SIZE >= LZ_WINDOW_SIZE ) 
++					window[ current_pos + LOOK_AHEAD_SIZE ] = c;
++#endif
++			}
++
++			if ( look_ahead_bytes >= HASH_BLK ) // > 0 
++				hash_update( ctx, current_pos );
++
++			current_pos = LZ_MOD( current_pos + 1 );
++		}
++
++		match_len = hash_search( ctx, current_pos, look_ahead_bytes, &match_pos, NUM_PASSES );
++	}
++
++	SET_ABIT( stream->type, count );
++	*output++ = '\0';
++	count++;
++
++	ctx->current_pos = current_pos;
++	stream->count = count;
++
++	//Com_Printf( "zcmd: [%3i.%i] compressed %i -> %i bits\n", 
++	//	stream->zcommandNum, stream->zdelta, length*8, (output - stream->cmd)*8 + count );
++
++	return count;
++}
++
++
++void MSG_WriteLZStream( msg_t *msg, lzstream_t *stream ) 
++{
++	int pos;
++	int len;
++	int i;
++	byte *cmd;
++
++	MSG_WriteByte( msg, svc_zcmd );
++	MSG_WriteBits( msg, stream->zdelta, 3 );
++	MSG_WriteBits( msg, stream->zcharbits - 7, 1 ); // 7..8 -> 0..1
++	MSG_WriteBits( msg, stream->zcommandSize - 1, 2 );
++	MSG_WriteBits( msg, stream->zcommandNum, stream->zcommandSize * 8 );
++	MSG_WriteBits( msg, 0, 1 ); // future extension, reserved
++
++	//Com_DPrintf( "\n >>> delta: %i, charbits: %i, size: %i, seq <<< \n", 
++	//	stream->zdelta, stream->zcharbits, stream->zcommandSize, stream->zcommandNum );
++
++	cmd = stream->cmd;
++	for ( i = 0; i < stream->count; i++ ) {
++		if ( GET_ABIT( stream->type, i ) ) {
++			// literal
++			MSG_WriteBits( msg, 1, 1 );
++			MSG_WriteBits( msg, *cmd++, stream->zcharbits );
++		} else {
++			// match pair
++			pos = *cmd++;
++			len = *cmd++;
++			pos |= ((len & LENGTH_MASK1) << (8 - LENGTH_BITS));
++			len &= LENGTH_MASK;
++			MSG_WriteBits( msg, 0, 1 );
++			MSG_WriteBits( msg, pos, INDEX_BITS );
++			MSG_WriteBits( msg, len, LENGTH_BITS );
++		}
++	}
++}
++#endif // USE_MV
+Index: qcommon/q_shared.h
+===================================================================
+--- qcommon/q_shared.h	(revision 1472)
++++ qcommon/q_shared.h	(working copy)
+@@ -26,7 +26,7 @@
+ // q_shared.h -- included first by ALL program modules.
+ // A user mod should never modify this file
+ 
+-#define Q3_VERSION            "Q3 1.32e"
++#define Q3_VERSION            "Q3 1.32e MV"
+ #ifndef SVN_VERSION
+   #define SVN_VERSION Q3_VERSION
+ #endif
+@@ -48,6 +48,13 @@
+ #define GAMENAME_FOR_MASTER		"Quake3Arena"
+ #define HEARTBEAT_FOR_MASTER	"QuakeArena-1"
+ 
++#define MV_PROTOCOL_VERSION	1 // multiview protocol version
++#define USE_MV				  // multiview enabled
++//#define USE_MV_ZCMD		// command compression
++
++#define GET_ABIT( byteArray, bitIndex ) ((byteArray)[ (bitIndex) / 8 ] & ( 1 << ( (bitIndex) & 7 ) ))
++#define SET_ABIT( byteArray, bitIndex ) (byteArray)[ (bitIndex) / 8 ] |= ( 1 << ( (bitIndex) & 7 ) )
++
+ #define DEMOEXT	"dm_"			// standard demo extension
+ 
+ #ifdef _MSC_VER
+@@ -1050,6 +1057,11 @@
+ #define	SNAPFLAG_NOT_ACTIVE		2	// snapshot used during connection and for zombies
+ #define SNAPFLAG_SERVERCOUNT	4	// toggled every map_restart so transitions can be detected
+ 
++#ifdef USE_MV
++#define SNAPFLAG_MULTIVIEW		8	// this snapshot built from multiview stream
++#endif
++
++
+ //
+ // per-level limits
+ //
+Index: qcommon/qcommon.h
+===================================================================
+--- qcommon/qcommon.h	(revision 1472)
++++ qcommon/qcommon.h	(working copy)
+@@ -121,6 +121,78 @@
+ 
+ void MSG_ReportChangeVectors_f( void );
+ 
++// PureMultiView protocol
++
++#ifdef USE_MV
++
++typedef enum {
++	SM_BASE = 1,
++	SM_EFLAGS = 2,
++	SM_TRTIME = 4,	 // CPMA
++	SM_TRTYPE = 8,	 // !CPMA
++	SM_TRDELTA = 16, // CPMA: snapped pos.trDelta values
++	SM_ALL = SM_BASE | SM_EFLAGS | SM_TRTIME | SM_TRTYPE | SM_TRDELTA,
++	SM_BITS = 5,
++} skip_mask;
++
++extern int MSG_entMergeMask;
++
++int MSG_PlayerStateToEntityStateXMask( const playerState_t *ps, const entityState_t *s, qboolean snap );
++void MSG_PlayerStateToEntityState( playerState_t *ps, entityState_t *s, qboolean snap, skip_mask sm );
++
++// command compression
++
++#define INDEX_BITS		12	// dictionary index size
++#define LENGTH_BITS		4	// match length bits
++#define LENGTH_MASK		((1<<LENGTH_BITS)-1)	
++#define LENGTH_MASK1	(0xFF & ~LENGTH_MASK)
++#define LZ_WINDOW_SIZE	(1 << INDEX_BITS)
++
++#define RAW_LOOK_AHEAD_SIZE (1 << LENGTH_BITS) // max match length
++#define LZ_MIN_MATCH 3 // minimal match length for efficient encoding
++#define LOOK_AHEAD_SIZE (RAW_LOOK_AHEAD_SIZE + LZ_MIN_MATCH - 1)
++
++#define DICT_SIZE LZ_WINDOW_SIZE
++#define HTAB_SIZE 2048
++
++#define SEARCH_OPTIMIZE
++
++typedef struct lz_ctx_s 
++{
++#ifdef SEARCH_OPTIMIZE
++	byte window[ PAD(LZ_WINDOW_SIZE + LOOK_AHEAD_SIZE, 4) ];
++#else
++	byte window[ LZ_WINDOW_SIZE ];
++#endif
++	int current_pos;
++	// hash context
++	short int htable[ HTAB_SIZE ];
++	short int htlast[ HTAB_SIZE ];
++	short int hlist[ DICT_SIZE ];
++	short int hvals[ DICT_SIZE ];
++} lzctx_t;
++
++typedef struct lzstream_s {
++	int		count;
++	byte	type[(MAX_STRING_CHARS/8)+4]; // bitarray: 0 - match pair, 1 - literal
++	byte	cmd[MAX_STRING_CHARS+1];
++
++	int		zdelta;	      // 0 - reset encoder, 1..7 - control sequences
++	int		zcharbits;    // 0 or 1
++	int		zcommandSize; // 0..3
++	int		zcommandNum;  // client->reliableSequence
++} lzstream_t;
++
++void LZSS_InitContext( lzctx_t *ctx ); 
++void LZSS_SeekEOS( msg_t *msg, int charbits );
++int LZSS_Expand( lzctx_t *ctx, msg_t *msg, byte *out, int maxsize, int charbits );
++int LZSS_Compress( lzctx_t *ctx, msg_t *msg, const byte *in, int length, int charbits );
++int LZSS_CompressToStream( lzctx_t *ctx, lzstream_t *stream, const byte *in, int length );
++void MSG_WriteLZStream( msg_t *msg, lzstream_t *stream );
++
++#endif // USE_MV
++
++
+ //============================================================================
+ 
+ /*
+@@ -316,6 +388,14 @@
+ 	// new commands, supported only by ioquake3 protocol but not legacy
+ 	svc_voipSpeex,     // not wrapped in USE_VOIP, so this value is reserved.
+ 	svc_voipOpus,      //
++
++#ifdef USE_MV
++	svc_multiview = 16, // 1.32e multiview extension
++#ifdef USE_MV_ZCMD
++	svc_zcmd = 17,      // LZ-compressed version of svc_serverCommand
++#endif
++#endif
++
+ };
+ 
+ 
+@@ -714,6 +794,8 @@
+ void FS_RestorePure( void );
+ 
+ int FS_Home_FOpenFileRead( const char *filename, fileHandle_t *file );
++char **FS_Home_ListFilteredFiles( const char *path, const char *extension, const char *filter, int *numfiles );
++int	FS_Home_FileSize( const char *name );
+ 
+ qboolean FS_FileIsInPAK( const char *filename, int *pChecksum, char *pakName );
+ // returns qtrue if a file is in the PAK file, otherwise qfalse
+Index: server/server.h
+===================================================================
+--- server/server.h	(revision 1472)
++++ server/server.h	(working copy)
+@@ -99,20 +99,45 @@
+ 	byte			areabits[MAX_MAP_AREA_BYTES];		// portalarea visibility bits
+ 	playerState_t	ps;
+ 	int				num_entities;
+-#if 0
+-	int				first_entity;		// into the circular sv_packet_entities[]
+-										// the entities MUST be in increasing state number
+-										// order, otherwise the delta compression will fail
++
++#ifdef USE_MV
++	qboolean		multiview;
++	int				version;
++	int				mergeMask;
++	int				first_psf;				// first playerState index
++	int				num_psf;				// number of playerStates to send
++	byte			psMask[MAX_CLIENTS/8];	// playerState mask
+ #endif
++
+ 	int				messageSent;		// time the message was transmitted
+ 	int				messageAcked;		// time the message was acked
+ 	int				messageSize;		// used to rate drop packets
+ 
+ 	int				frameNum;			// from snapshot storage to compare with last valid
++#ifdef USE_MV
++	entityState_t	*ents[ MAX_GENTITIES ];
++#else
+ 	entityState_t	*ents[ MAX_SNAPSHOT_ENTITIES ];
+-
++#endif
+ } clientSnapshot_t;
+ 
++#ifdef USE_MV
++
++#define MAX_MV_FILES 4096 // for directory caching
++
++typedef byte entMask_t[ MAX_GENTITIES / 8 ];
++
++typedef struct psFrame_s {
++	int				clientSlot;
++	int				areabytes;
++	byte			areabits[ MAX_MAP_AREA_BYTES ]; // portalarea visibility bits
++	playerState_t	ps;
++	entMask_t		entMask;
++} psFrame_t;
++
++#endif // USE_MV
++
++
+ typedef enum {
+ 	CS_FREE = 0,	// can be reused for a new connection
+ 	CS_ZOMBIE,		// client has been disconnected, but don't reuse
+@@ -222,6 +247,26 @@
+ 	char			tld[3]; // "XX\0"
+ 	const char		*country;
+ 
++#ifdef USE_MV
++	struct {
++		int				protocol;
++
++		int				scoreQueryTime;
++		int				lastRecvTime; // any received command
++		int				lastSentTime; // any sent command
++#ifdef USE_MV_ZCMD
++		//  command compression
++		struct			{
++			int			deltaSeq;
++			lzctx_t		ctx;
++			lzstream_t	stream[ MAX_RELIABLE_COMMANDS ];
++		} z;
++#endif
++		qboolean		recorder;
++		
++	} multiview;
++#endif // USE_MV
++
+ } client_t;
+ 
+ //=============================================================================
+@@ -253,6 +298,14 @@
+ 	snapshotFrame_t	snapFrames[ NUM_SNAPSHOT_FRAMES ];
+ 	snapshotFrame_t	*currFrame; // current frame that clients can refer
+ 
++#ifdef USE_MV	
++	int			numSnapshotPSF;				// sv_democlients->integer*PACKET_BACKUP*MAX_CLIENTS
++	int			nextSnapshotPSF;			// next snapshotPS to use
++	int			modSnapshotPSF;				// clamp value
++	psFrame_t	*snapshotPSF;				// [numSnapshotPS]
++	qboolean	emptyFrame;					// true if no game logic run during SV_Frame()
++#endif // USE_MV
++
+ } serverStatic_t;
+ 
+ #ifdef USE_BANS
+@@ -284,6 +337,25 @@
+ extern	cvar_t	*sv_maxclientsPerIP;
+ extern	cvar_t	*sv_clientTLD;
+ 
++#ifdef USE_MV
++extern	fileHandle_t	sv_demoFile;
++extern	char	sv_demoFileName[ MAX_OSPATH ];
++extern	char	sv_demoFileNameLast[ MAX_OSPATH ];
++
++extern	int		sv_demoClientID;
++extern	int		sv_lastAck;
++extern	int		sv_lastClientSeq;
++
++extern	cvar_t	*sv_mvClients;
++extern	cvar_t	*sv_mvPassword;
++extern	cvar_t	*sv_demoFlags;
++extern	cvar_t	*sv_autoRecord;
++
++extern	cvar_t	*sv_mvFileCount;
++extern	cvar_t	*sv_mvFolderSize;
++
++#endif // USE_MV
++
+ extern	cvar_t	*sv_privateClients;
+ extern	cvar_t	*sv_hostname;
+ extern	cvar_t	*sv_master[MAX_MASTER_SERVERS];
+@@ -371,6 +443,14 @@
+ void SV_FreeIP4DB( void );
+ void SV_PrintLocations_f( client_t *client );
+ 
++#ifdef USE_MV
++void SV_TrackDisconnect( int clientNum );
++void SV_ForwardServerCommands( client_t *recorder /*, const client_t *client */ );
++void SV_MultiViewStopRecord_f( void );
++int SV_FindActiveClient( qboolean checkCommands, int skipClientNum, int minActive );
++void SV_SetTargetClient( int clientNum );
++#endif // USE_MV
++
+ //
+ // sv_ccmds.c
+ //
+@@ -377,6 +457,10 @@
+ void SV_Heartbeat_f( void );
+ client_t *SV_GetPlayerByHandle( void );
+ 
++#ifdef USE_MV
++void SV_LoadRecordCache( void );
++void SV_SaveRecordCache( void );
++#endif
+ //
+ // sv_snapshot.c
+ //
+Index: server/sv_ccmds.c
+===================================================================
+--- server/sv_ccmds.c	(revision 1472)
++++ server/sv_ccmds.c	(working copy)
+@@ -269,7 +269,11 @@
+ 
+ 	// check for changes in variables that can't just be restarted
+ 	// check for maxclients change
++#ifdef USE_MV
++	if ( sv_maxclients->modified || sv_gametype->modified || sv_pure->modified || sv_mvClients->modified ) {
++#else
+ 	if ( sv_maxclients->modified || sv_gametype->modified || sv_pure->modified ) {
++#endif
+ 		char	mapname[MAX_QPATH];
+ 
+ 		Com_Printf( "variable change -- restarting.\n" );
+@@ -276,6 +280,9 @@
+ 		// restart the map the slow way
+ 		Q_strncpyz( mapname, Cvar_VariableString( "mapname" ), sizeof( mapname ) );
+ 
++#ifdef USE_MV
++		SV_MultiViewStopRecord_f(); // as an alternative: save/restore recorder state and continue recording?
++#endif
+ 		SV_SpawnServer( mapname, qfalse );
+ 		return;
+ 	}
+@@ -1456,8 +1463,537 @@
+ }
+ 
+ 
++#ifdef USE_MV
++
++#define MV_CACHE_FILE "demos/mv-cache.dat"
++#define MV_FILTER "/mv-*-*.dm_71"
++
++int mv_record_count;
++int mv_total_size;
++int mv_insert_index;
++
++typedef struct {
++	char name[28];
++	int  size;
++} mv_file_record_t;
++mv_file_record_t mvrecords[ MAX_MV_FILES ];
++
++
++static void SV_TrimRecords( int add_count, int add_size );
++
++static void SV_CreateRecordCache( void )
++{
++	mv_file_record_t *mvr;
++	int nfiles, i, len, size;
++	char **list, *name;
++
++	//Com_Printf( S_COLOR_CYAN "...creating record cache\n" );
++
++	mv_insert_index = mv_record_count;
++	mv_record_count = 0;
++	mv_total_size = 0;
++
++	Com_Memset( mvrecords, 0, sizeof( mvrecords ) );
++	list = FS_Home_ListFilteredFiles( "demos", ".dm_71", MV_FILTER, &nfiles );
++	for ( i = 0; i < nfiles; i++ ) 
++	{
++		name = list[i];
++		if ( name[0] == '\\' || name[0] == '/' )
++			name++;
++		len = (int)strlen( list[i] );
++		if ( len < 22 || len >= sizeof( mvr->name ) )
++			continue;
++
++		size = FS_Home_FileSize( va( "demos/%s", name ) );
++		if ( size <= 0 )
++			continue;
++
++		mvr = &mvrecords[ mv_record_count ];
++		mvr->size = PAD( size, 4096 );
++		strcpy( mvr->name, name );
++			
++		mv_total_size += mvr->size;
++
++		mv_record_count++;
++
++		if ( mv_record_count >= MAX_MV_FILES )
++			break;
++	}
++	FS_FreeFileList( list );
++
++	mv_insert_index = mv_record_count;
++	mv_insert_index &= (MAX_MV_FILES-1);
++}
++
++
+ /*
+ ==================
++SV_LoadRecordCache
++==================
++*/
++void SV_LoadRecordCache( void ) 
++{
++	mv_file_record_t *mvr;
++	fileHandle_t fh;
++	int fileSize, i;
++
++	mv_record_count = 0;
++	mv_insert_index = 0;
++	mv_total_size = 0;
++
++	fileSize = FS_Home_FOpenFileRead( MV_CACHE_FILE, &fh );
++	if ( fh == FS_INVALID_HANDLE )
++	{
++		SV_CreateRecordCache();
++		SV_TrimRecords( 0, 0 );
++		return;
++	}
++
++	if ( fileSize != sizeof( mvrecords ) )
++	{
++		FS_FCloseFile( fh );
++		SV_CreateRecordCache();
++		SV_TrimRecords( 0, 0 );
++		return;
++	}
++
++	//Com_Printf( S_COLOR_CYAN "...reading record cache from file\n" );
++	FS_Read( mvrecords, sizeof( mvrecords ), fh );
++	FS_FCloseFile( fh );
++
++	mvr = mvrecords;
++	for ( i = 0; i < MAX_MV_FILES; i++, mvr++ )
++	{
++		if ( !mvr->name[0] || mvr->size <= 0 )
++			break;
++		mv_total_size += PAD( mvr->size, 4096 );
++	}
++
++	mv_record_count = i;
++	mv_insert_index = i & (MAX_MV_FILES-1);
++
++	SV_TrimRecords( 0, 0 );
++
++	//Com_Printf( S_COLOR_CYAN "cache: %i items, %i bytes\n", mv_record_count, mv_total_size );
++}
++
++
++void SV_SaveRecordCache( void )
++{
++	mv_file_record_t z;
++	fileHandle_t fh;
++	int start;
++	int n, count, pad;
++
++	fh = FS_FOpenFileWrite( MV_CACHE_FILE );
++	if ( fh == FS_INVALID_HANDLE ) 
++		return;
++
++	count = mv_record_count;
++	if ( count > MAX_MV_FILES )
++		count = MAX_MV_FILES;
++
++	pad = MAX_MV_FILES - count;
++	Com_Memset( &z, 0, sizeof( z ) );
++
++	start = ( mv_insert_index - count ) & (MAX_MV_FILES-1);
++	//Com_Printf( S_COLOR_CYAN "writing %i cache records from %i\n", count, start );
++
++	while ( count > 0 )
++	{
++		n = count;
++		if ( start + n > MAX_MV_FILES )
++			n = MAX_MV_FILES - start;
++
++		FS_Write( &mvrecords[ start ], sizeof( mv_file_record_t ) * n, fh );
++		start = ( start + n ) & (MAX_MV_FILES-1);
++		count -= n;
++	}
++
++	for ( n = 0; n < pad; n++ )
++	{
++		FS_Write( &z, sizeof( z ), fh );
++	}
++
++	FS_FCloseFile( fh );
++}
++
++
++static void SV_TrimRecords( int add_count, int add_size )
++{
++	int max_count;
++	mv_file_record_t *mvr;
++
++	//Com_Printf( S_COLOR_YELLOW "trim records count:%i size%i\n", mv_record_count, mv_total_size );
++
++	// by file count
++	if (  sv_mvFileCount->integer > 0 || mv_record_count + add_count > MAX_MV_FILES )
++	{
++		if ( sv_mvFileCount->integer > 0 && sv_mvFileCount->integer < MAX_MV_FILES )
++			max_count = sv_mvFileCount->integer;
++		else
++			max_count = MAX_MV_FILES;
++
++		while ( mv_record_count + add_count > max_count && mv_record_count > 0 )
++		{
++				mvr = mvrecords + (( mv_insert_index - mv_record_count ) & (MAX_MV_FILES-1));
++				//Com_Printf( S_COLOR_RED "trim.count %i %s\n", mvr->size, mvr->name );
++				if ( mvr->name[0] ) 
++				{
++					FS_HomeRemove( va( "demos/%s", mvr->name ) );
++					mv_total_size -= mvr->size;
++				}
++				Com_Memset( mvr, 0, sizeof( *mvr ) );
++				mv_record_count--;
++		}
++	}
++
++	// by total size
++	if ( sv_mvFolderSize->integer > 0 )
++	{
++		while ( (mv_total_size + add_size) > (sv_mvFolderSize->integer * 1024 * 1024) && mv_record_count > 0 ) 
++		{
++				mvr = mvrecords + (( mv_insert_index - mv_record_count ) & (MAX_MV_FILES-1));
++				//Com_Printf( S_COLOR_RED "trim.size %i %s\n", mvr->size, mvr->name );
++				if ( mvr->name[0] ) 
++				{
++					FS_HomeRemove( va( "demos/%s", mvr->name ) );
++					mv_total_size -= mvr->size;
++				}
++				Com_Memset( mvr, 0, sizeof( *mvr ) );
++				mv_record_count--;
++		}
++	}
++}
++
++
++static void SV_InsertFileRecord( const char *name )
++{
++	mv_file_record_t *mvr;
++	int size, len;
++	
++	if ( !Q_stricmpn( name, "demos/", 6 ) )
++		name += 5;
++	else
++		return;
++
++	if ( !Com_FilterPath( MV_FILTER, name ) ) {
++		//Com_Printf( "filtered %s\n", name );
++		return;
++	}
++	name++; // skip '/'
++	
++	len = strlen( name );
++	if ( len < 22 || len >= sizeof( mvr->name ) ) {
++		//Com_Printf( "filtered1 %s\n", name );
++		return;
++	}
++
++	size = FS_Home_FileSize( va( "demos/%s", name ) );
++	if ( size <= 0 ) {
++		return;
++	}
++
++	size = PAD( size, 4096 );
++
++	SV_TrimRecords( 1, size );
++
++	mvr = &mvrecords[ mv_insert_index ];
++	strcpy( mvr->name, name );
++	mvr->size = size;
++
++	mv_total_size += mvr->size;
++	mv_insert_index = ( mv_insert_index + 1 ) & (MAX_MV_FILES-1);
++
++	if ( mv_record_count < MAX_MV_FILES )
++		mv_record_count++;
++
++	//Com_Printf( S_COLOR_CYAN "Record index %i, count %i\n", mv_insert_index, mv_record_count );
++	//SV_SaveRecordCache();
++}
++
++
++
++/*
++==================
++SV_SetTargetClient
++==================
++*/
++void SV_SetTargetClient( int clientNum )
++{
++	sv_lastAck = 0; // force to fetch latest target' reliable acknowledge
++	sv_lastClientSeq = 0;
++	sv_demoClientID = clientNum;
++}
++
++
++/*
++==================
++SV_ForwardServerCommands
++==================
++*/
++void SV_ForwardServerCommands( client_t *recorder /*, const client_t *client */ )
++{
++	const client_t *client;
++	const char *cmd;
++	int src_index;
++	int	dst_index;
++	int i;
++
++	if ( sv_demoClientID < 0 )
++		return;
++
++	client = svs.clients + sv_demoClientID;
++
++	// FIXME: track reliableSequence globally?
++	if ( !sv_lastAck ) {
++		sv_lastAck = client->reliableAcknowledge;
++	}
++
++	//if ( client->reliableAcknowledge >= client->reliableSequence )
++	if ( sv_lastAck >= client->reliableSequence )
++		return; // nothing to send
++
++	//for ( i = client->reliableAcknowledge + 1 ; i <= client->reliableSequence ; i++ ) {
++	for ( i = sv_lastAck + 1 ; i <= client->reliableSequence ; i++ ) {
++		src_index = i & ( MAX_RELIABLE_COMMANDS - 1 );
++		cmd = client->reliableCommands[ src_index ];
++		// filter commands here:
++		if ( strncmp( cmd, "tell ", 5 ) == 0 ) // TODO: other commands
++			continue;
++		dst_index = ++recorder->reliableSequence & ( MAX_RELIABLE_COMMANDS - 1 );
++		Q_strncpyz( recorder->reliableCommands[ dst_index ], cmd, sizeof( recorder->reliableCommands[ dst_index ] ) );
++	}
++
++	sv_lastAck = client->reliableSequence;
++}
++
++
++/*
++==================
++SV_MultiViewRecord_f
++==================
++*/
++static void SV_MultiViewRecord_f( void )
++{
++	entityState_t *base, nullstate;
++
++	client_t	*recorder;	// recorder slot
++	byte		msgData[ MAX_MSGLEN_BUF ];
++	msg_t		msg;
++
++	char demoName[ MAX_QPATH ];
++	char name[ MAX_QPATH ];
++	const char *s;
++	int i, cid, len;
++
++	if ( Cmd_Argc() > 2 ) {
++		Com_Printf( "usage: mvrecord [filename]\n" );
++		return;
++	}
++
++	if ( sv_demoFile != FS_INVALID_HANDLE ) {
++		Com_Printf( "Already recording multiview.\n" );
++		return;
++	}	
++
++	if ( sv.state != SS_GAME || !svs.clients ) {
++		Com_Printf( "Game is not running.\n" );
++		return;
++	}
++
++	cid = SV_FindActiveClient( qfalse /* checkCommands */, -1 /* skipClientNum */, 0 /* minActive */ );
++
++	if ( cid < 0 ) {
++		Com_Printf( "No active clients connected.\n" );
++		return;
++	}
++
++	if ( Cmd_Argc() == 2 ) {
++		s = Cmd_Argv( 1 );
++		Q_strncpyz( demoName, s, sizeof( demoName ) );
++		Com_sprintf( name, sizeof( name ), "demos/%s.%s%d", demoName, DEMOEXT, NEW_PROTOCOL_VERSION );
++	} else {
++		qtime_t t;
++		
++		Com_RealTime( &t );
++		// name in format mv-YYMMDD-HHmmSS.dm_71 (23+4) = 27, ok
++		sprintf( demoName, "mv-%02i%02i%02i-%02i%02i%02i", t.tm_year-100, t.tm_mon+1, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec );
++		Com_sprintf( name, sizeof( name ), "demos/%s.%s%d", demoName, DEMOEXT, NEW_PROTOCOL_VERSION );
++				
++		i = 0;
++		// try with suffix: mv-YYMMDD-HHmmSS-[0..999].dm_71
++		while ( FS_FileExists( name ) && i++ <= 999 )
++			Com_sprintf( name, sizeof( name ), "demos/%s-%i.%s%d", demoName, i, DEMOEXT, NEW_PROTOCOL_VERSION );
++	}
++
++	strcpy( sv_demoFileNameLast, name );
++	strcpy( sv_demoFileName, name );
++	// add .tmp to server-side demos so we can rename them later
++	Q_strcat( sv_demoFileName, sizeof( sv_demoFileName ), ".tmp" );
++
++	Com_Printf( S_COLOR_CYAN "start recording to %s using primary client id %i.\n", sv_demoFileName, cid );
++	sv_demoFile = FS_FOpenFileWrite( sv_demoFileName );
++
++	if ( sv_demoFile == FS_INVALID_HANDLE ) {
++		Com_Printf( "ERROR: couldn't open %s.\n", sv_demoFileName );
++		sv_demoFileName[0] = '\0';
++		sv_demoFileNameLast[0] = '\0';
++		return;
++	}
++
++	recorder = svs.clients + sv_maxclients->integer; // reserved recorder slot
++
++	SV_SetTargetClient( cid );
++
++	Com_Memset( recorder, 0, sizeof( *recorder ) );
++
++	recorder->multiview.protocol = MV_PROTOCOL_VERSION;
++	recorder->multiview.recorder = qtrue;
++	recorder->state = CS_ACTIVE;
++
++	recorder->deltaMessage = -1; // reset delta encoding in next snapshot
++	recorder->netchan.outgoingSequence = 1;
++	recorder->netchan.remoteAddress.type = NA_LOOPBACK;
++
++	// empty command buffer
++	recorder->reliableSequence = 0;
++	recorder->reliableAcknowledge = 0;
++
++	recorder->lastClientCommand = 1;
++
++	MSG_Init( &msg, msgData, MAX_MSGLEN );
++	MSG_Bitstream( &msg );
++
++	// NOTE, MRE: all server->client messages now acknowledge
++	MSG_WriteLong( &msg, recorder->lastClientCommand );
++
++	SV_UpdateServerCommandsToClient( recorder, &msg );	
++
++#ifdef USE_MV_ZCMD
++	// we are resetting delta sequence after gamestate
++	recorder->multiview.z.deltaSeq = 0;
++#endif
++
++	MSG_WriteByte( &msg, svc_gamestate );
++
++	// all future zcmds must have reliableSequence greater than this
++	MSG_WriteLong( &msg, recorder->reliableSequence );
++
++	// write the configstrings
++	for ( i = 0 ; i < MAX_CONFIGSTRINGS ; i++ ) {
++		if ( sv.configstrings[i][0] ) {
++			MSG_WriteByte( &msg, svc_configstring );
++			MSG_WriteShort( &msg, i );
++			MSG_WriteBigString( &msg, sv.configstrings[i] );
++		}
++	}
++
++	// write the baselines
++	Com_Memset( &nullstate, 0, sizeof( nullstate ) );
++	for ( i = 0 ; i < MAX_GENTITIES; i++ ) {
++		base = &sv.svEntities[ i ].baseline;
++		if ( !sv.baselineUsed[ i ] ) {
++			continue;
++		}
++		MSG_WriteByte( &msg, svc_baseline );
++		MSG_WriteDeltaEntity( &msg, &nullstate, base, qtrue );
++	}
++
++	MSG_WriteByte( &msg, svc_EOF );
++
++	MSG_WriteLong( &msg, sv_demoClientID ); // selected client id
++
++	// write the checksum feed
++	MSG_WriteLong( &msg, sv.checksumFeed );
++
++	// finalize packet
++	MSG_WriteByte( &msg, svc_EOF );
++
++	len = LittleLong( recorder->netchan.outgoingSequence - 1 );
++	FS_Write( &len, 4, sv_demoFile );
++	
++	// data size
++	len = LittleLong( msg.cursize );
++	FS_Write( &len, 4, sv_demoFile );
++	
++	// data
++	FS_Write( msg.data, msg.cursize, sv_demoFile );
++}
++
++
++/*
++==================
++SV_MultiViewStopRecord_f
++==================
++*/
++void SV_MultiViewStopRecord_f( void )
++{
++	client_t *recorder;
++
++	if ( !svs.clients )
++		return;
++
++	recorder = svs.clients + sv_maxclients->integer; // recorder slot
++
++	if ( sv_demoFile != FS_INVALID_HANDLE ) {
++
++		FS_FCloseFile( sv_demoFile );
++		sv_demoFile = FS_INVALID_HANDLE;
++
++		// rename final file
++		if ( sv_demoFileNameLast[0] && sv_demoFileName[0] ) {
++			FS_Rename( sv_demoFileName, sv_demoFileNameLast );
++		}
++		
++		// store in cache
++		SV_InsertFileRecord( sv_demoFileNameLast );
++
++		Com_Printf( S_COLOR_CYAN "stopped multiview recording.\n" );
++		return;
++	}
++
++	sv_demoFileName[0] = '\0';
++	sv_demoFileNameLast[0] = '\0';
++
++	SV_SetTargetClient( -1 );
++#if 1
++	Com_Memset( recorder, 0, sizeof( *recorder ) );
++#else
++	recorder->netchan.outgoingSequence = 0;
++	recorder->multiview.protocol = 0;
++	recorder->multiview.recorder = qfalse;
++	recorder->state = CS_FREE;
++#endif
++}
++
++
++/*
++==================
++SV_TrackDisconnect
++==================
++*/
++void SV_TrackDisconnect( int clientNum ) 
++{
++	int cid;
++
++	svs.clients[ clientNum ].multiview.scoreQueryTime = 0;
++
++	if ( clientNum == sv_demoClientID ) {
++		cid = SV_FindActiveClient( qfalse, sv_demoClientID, 0 ); // TODO: count sv_autoRecord?
++		if ( cid < 0 ) {
++			SV_MultiViewStopRecord_f();
++			return;			
++		}
++		Com_DPrintf( "mvrecorder: switch primary client id to %i\n", cid );
++		SV_SetTargetClient( cid );
++	}
++}
++#endif // USE_MV
++
++
++/*
++==================
+ SV_AddOperatorCommands
+ ==================
+ */
+@@ -1507,6 +2043,10 @@
+ #endif
+ 	Cmd_AddCommand( "filter", SV_AddFilter_f );
+ 	Cmd_AddCommand( "filtercmd", SV_AddFilterCmd_f );
++#ifdef USE_MV
++	Cmd_AddCommand( "mvrecord", SV_MultiViewRecord_f );
++	Cmd_AddCommand( "mvstoprecord", SV_MultiViewStopRecord_f );
++#endif
+ }
+ 
+ 
+Index: server/sv_client.c
+===================================================================
+--- server/sv_client.c	(revision 1472)
++++ server/sv_client.c	(working copy)
+@@ -740,6 +740,12 @@
+ 		SV_InjectLocation( newcl->tld, newcl->country );
+ 	}
+ 
++#ifdef USE_MV
++#ifdef USE_MV_ZCMD
++	cl->multiview.z.deltaSeq = 0; // reset on DirectConnect();
++#endif
++	cl->multiview.recorder = qfalse;
++#endif
+ 	// send the connect packet to the client
+ 	NET_OutOfBandPrint( NS_SERVER, from, "connectResponse %d", challenge );
+ 
+@@ -812,6 +818,10 @@
+ 	// Free all allocated data on the client structure
+ 	SV_FreeClient( drop );
+ 
++#ifdef USE_MV
++	SV_TrackDisconnect( drop - svs.clients );
++#endif
++
+ 	// tell everyone why they got dropped
+ 	if ( reason ) {
+ 		SV_SendServerCommand( NULL, "print \"%s" S_COLOR_WHITE " %s\n\"", name, reason );
+@@ -985,6 +995,15 @@
+ 	// the client side
+ 	SV_UpdateServerCommandsToClient( client, &msg );
+ 
++#ifdef USE_MV
++#ifdef USE_MV_ZCMD
++	// reset command compressor and score timer
++	//client->multiview.encoderInited = qfalse;
++	client->multiview.z.deltaSeq = 0; // force encoder reset on gamestate change
++#endif
++	client->multiview.scoreQueryTime = 0;
++#endif
++
+ 	// send the gamestate
+ 	MSG_WriteByte( &msg, svc_gamestate );
+ 	MSG_WriteLong( &msg, client->reliableSequence );
+@@ -1738,7 +1757,65 @@
+ }
+ 
+ 
++#ifdef USE_MV
+ /*
++=================
++void SV_MultiView_f
++=================
++*/
++void SV_MultiView_f( client_t *client ) {
++	int i, n;
++
++	if (  Q_stricmp( Cmd_Argv( 0 ), "mvjoin" ) == 0 ) {
++		if ( client->multiview.protocol > 0 ) {
++			SV_SendServerCommand( client, "print \"You are already in multiview state.\n\"" );
++			return;
++		}
++
++		// count active multiview clients
++		for ( i = 0, n = 0; i < sv_maxclients->integer; i++ ) {
++			if ( svs.clients[ i ].multiview.protocol > 0 )
++				n++;
++		}
++
++		if ( n >= sv_mvClients->integer ) {
++			SV_SendServerCommand( client, "print \""S_COLOR_YELLOW"No free multiview slots.\n\"" );
++			return;
++		}
++
++		if ( sv_mvPassword->string[0] != '\0' ) {
++			if ( Cmd_Argc() < 2 || strcmp( sv_mvPassword->string, Cmd_Argv(1) ) ) {
++				SV_SendServerCommand( client, "print \""S_COLOR_YELLOW"Invalid password.\n\"" );
++				return;
++			}
++		}
++
++		client->multiview.protocol = MV_PROTOCOL_VERSION;
++		client->multiview.scoreQueryTime = 0;
++#ifdef USE_MV_ZCMD
++		client->multiview.z.deltaSeq = 0; // reset on transition to multiview
++#endif
++		// FIXME: only local print?
++		SV_SendServerCommand( client, "print \"%s "S_COLOR_WHITE "joined multiview.\n\"", client->name );
++
++	} else { // assume "mvleave" in opposition to "mvjoin"
++		if ( client->multiview.protocol == 0 ) {
++			SV_SendServerCommand( client, "print \"You are not in multiview state.\n\"" );
++		} else {
++			SV_SendServerCommand( client, "print \"%s "S_COLOR_WHITE"leaved multiview.\n\"", client->name );
++			// FIXME: broadcast?
++			client->multiview.protocol = 0;
++			client->multiview.scoreQueryTime = 0;
++#ifdef USE_MV_ZCMD
++			client->multiview.z.deltaSeq = 0; // reset on leaving multiview state
++#endif
++		}
++	}
++}
++#endif
++
++
++/*
+ ==================
+ SV_UpdateUserinfo_f
+ ==================
+@@ -1853,7 +1930,10 @@
+ 	{"stopdl", SV_StopDownload_f},
+ 	{"donedl", SV_DoneDownload_f},
+ 	{"locations", SV_PrintLocations_f},
+-
++#ifdef USE_MV
++	{"mvjoin", SV_MultiView_f},
++	{"mvleave", SV_MultiView_f},
++#endif
+ 	{NULL, NULL}
+ };
+ 
+@@ -1928,6 +2008,9 @@
+ 			else
+ 				Cmd_Args_Sanitize( "\n\r" );
+ 			VM_Call( gvm, 1, GAME_CLIENT_COMMAND, cl - svs.clients );
++#ifdef USE_MV
++			cl->multiview.lastSentTime = svs.time;
++#endif
+ 		}
+ 	}
+ 
+@@ -1966,6 +2049,13 @@
+ 		return qfalse;
+ 	}
+ 
++#ifdef USE_MV
++	if ( !cl->multiview.recorder && sv_demoFile != FS_INVALID_HANDLE && sv_demoClientID == (cl - svs.clients) ) {
++		// forward changes to recorder slot
++		svs.clients[ sv_maxclients->integer ].lastClientCommand++;
++	}
++#endif
++
+ 	cl->lastClientCommand = seq;
+ 	Q_strncpyz( cl->lastClientCommandString, s, sizeof( cl->lastClientCommandString ) );
+ 
+Index: server/sv_init.c
+===================================================================
+--- server/sv_init.c	(revision 1472)
++++ server/sv_init.c	(working copy)
+@@ -248,6 +248,19 @@
+ 	if ( sv_maxclients->integer < minimum ) {
+ 		Cvar_Set( "sv_maxclients", va("%i", minimum) );
+ 	}
++
++#ifdef USE_MV
++	sv_maxclients->modified = qfalse;
++
++	// get the current demoClients value
++	Cvar_Get( "sv_mvClients", "0", 0 );
++	sv_mvClients->modified = qfalse;
++
++	if ( sv_mvClients->integer > sv_maxclients->integer ) {
++		Cvar_Set( "sv_mvClients", va( "%i", sv_maxclients->integer ) );
++		sv_mvClients->modified = qfalse;
++	}
++#endif
+ }
+ 
+ 
+@@ -258,6 +271,18 @@
+ */
+ static void SV_SetSnapshotParams( void ) 
+ {
++#ifdef USE_MV
++	svs.numSnapshotPSF = sv_mvClients->integer * PACKET_BACKUP * MAX_CLIENTS;
++
++	// reserve 2 additional frames for recorder slot
++	svs.numSnapshotPSF += 2 * MAX_CLIENTS;
++
++	if ( svs.numSnapshotPSF )
++		svs.modSnapshotPSF = ( 0x10000000 / svs.numSnapshotPSF ) * svs.numSnapshotPSF;
++	else
++		svs.modSnapshotPSF = 1;
++#endif	
++
+ 	// PACKET_BACKUP frames is just about 6.67MB so use that even on listen servers
+ 	svs.numSnapshotEntities = PACKET_BACKUP * MAX_GENTITIES;
+ }
+@@ -279,8 +304,14 @@
+ 	}
+ 	SV_BoundMaxClients( 1 );
+ 
++#ifdef USE_MV
++	svs.clients = Z_TagMalloc( ( sv_maxclients->integer + 1 ) * sizeof( client_t ), TAG_CLIENTS ); // +1 client slot for recorder
++	Com_Memset( svs.clients, 0, ( sv_maxclients->integer + 1 ) * sizeof( client_t ) );
++#else
+ 	svs.clients = Z_TagMalloc( sv_maxclients->integer * sizeof( client_t ), TAG_CLIENTS );
+ 	Com_Memset( svs.clients, 0, sv_maxclients->integer * sizeof( client_t ) );
++#endif
++
+ 	SV_SetSnapshotParams();
+ 	svs.initialized = qtrue;
+ 
+@@ -306,6 +337,10 @@
+ 	int		i;
+ 	client_t	*oldClients;
+ 	int		count;
++#ifdef USE_MV
++	int		oldMVClients;
++	client_t recorder;
++#endif
+ 
+ 	// get the highest client number in use
+ 	count = 0;
+@@ -317,11 +352,25 @@
+ 	}
+ 	count++;
+ 
++#ifdef USE_MV
++	if ( sv_demoFile != FS_INVALID_HANDLE && svs.clients[ sv_maxclients->integer ].state >= CS_ACTIVE )
++		// save recorder slot state
++		memcpy( &recorder, &svs.clients[ sv_maxclients->integer ], sizeof( recorder ) );
++	else
++		recorder.multiview.recorder = qfalse;
++
++	oldMVClients = sv_mvClients->integer;
++#endif
++
+ 	oldMaxClients = sv_maxclients->integer;
+ 	// never go below the highest client number in use
+ 	SV_BoundMaxClients( count );
+ 	// if still the same
++#ifdef USE_MV
++	if ( sv_maxclients->integer == oldMaxClients && sv_mvClients->integer == oldMVClients ) {
++#else
+ 	if ( sv_maxclients->integer == oldMaxClients ) {
++#endif
+ 		return;
+ 	}
+ 
+@@ -340,8 +389,13 @@
+ 	Z_Free( svs.clients );
+ 
+ 	// allocate new clients
+-	svs.clients = Z_TagMalloc( sv_maxclients->integer * sizeof(client_t), TAG_CLIENTS );
+-	Com_Memset( svs.clients, 0, sv_maxclients->integer * sizeof(client_t) );
++#ifdef USE_MV
++	svs.clients = Z_TagMalloc( ( sv_maxclients->integer + 1 ) * sizeof( client_t ), TAG_CLIENTS );
++	Com_Memset( svs.clients, 0, ( sv_maxclients->integer + 1 ) * sizeof( client_t ) );
++#else
++	svs.clients = Z_TagMalloc( sv_maxclients->integer * sizeof( client_t ), TAG_CLIENTS );
++	Com_Memset( svs.clients, 0, sv_maxclients->integer * sizeof( client_t ) );
++#endif
+ 
+ 	// copy the clients over
+ 	for ( i = 0 ; i < count ; i++ ) {
+@@ -350,6 +404,13 @@
+ 		}
+ 	}
+ 
++#ifdef USE_MV
++	if ( recorder.multiview.recorder ) {
++		// restore recorder slot state
++		Com_Memcpy( &svs.clients[ sv_maxclients->integer ], &recorder, sizeof( recorder ) );
++	}
++#endif
++
+ 	// free the old clients on the hunk
+ 	Hunk_FreeTempMemory( oldClients );
+ 	
+@@ -404,6 +465,10 @@
+ 
+ 	Sys_SetStatus( "Initializing server..." );
+ 
++#ifdef USE_MV
++	SV_LoadRecordCache();
++#endif
++
+ #ifndef DEDICATED
+ 	// if not running a dedicated server CL_MapLoading will connect the client to the server
+ 	// also print some status stuff
+@@ -430,7 +495,11 @@
+ 		SV_Startup();
+ 	} else {
+ 		// check for maxclients change
++#ifdef USE_MV
++		if ( sv_maxclients->modified || sv_mvClients->modified ) {
++#else
+ 		if ( sv_maxclients->modified ) {
++#endif
+ 			SV_ChangeMaxClients();
+ 		}
+ 	}
+@@ -450,6 +519,16 @@
+ 	// initialize snapshot storage
+ 	SV_InitSnapshotStorage();
+ 
++#ifdef USE_MV
++	// MV protocol support
++	if ( svs.numSnapshotPSF ) // can be zero?
++		svs.snapshotPSF = Hunk_Alloc( sizeof(psFrame_t)*svs.numSnapshotPSF, h_high );
++	else
++		svs.snapshotPSF = NULL;
++
++	svs.nextSnapshotPSF = 0;
++#endif
++
+ 	// toggle the server bit so clients can detect that a
+ 	// server has changed
+ 	svs.snapFlagServerBit ^= SNAPFLAG_SERVERCOUNT;
+@@ -709,6 +788,26 @@
+ 	sv_clientTLD = Cvar_Get( "sv_clientTLD", "0", CVAR_ARCHIVE_ND );
+ 	Cvar_CheckRange( sv_clientTLD, NULL, NULL, CV_INTEGER );
+ 
++#ifdef USE_MV
++	Cvar_Get( "mvproto", va( "%i", MV_PROTOCOL_VERSION ), CVAR_SERVERINFO | CVAR_ROM );
++	sv_autoRecord = Cvar_Get( "sv_mvAutoRecord", "0", CVAR_ARCHIVE | CVAR_SERVERINFO );
++	sv_demoFlags = Cvar_Get( "sv_mvFlags", "3", CVAR_ARCHIVE );
++	sv_mvClients = Cvar_Get( "sv_mvClients", "0", CVAR_ARCHIVE | CVAR_LATCH );
++	Cvar_CheckRange( sv_mvClients, "0", NULL, CV_INTEGER );
++	sv_mvPassword = Cvar_Get( "sv_mvPassword", "", CVAR_ARCHIVE );
++
++	sv_mvFileCount = Cvar_Get( "sv_mvFileCount", "1024", CVAR_ARCHIVE );
++	Cvar_CheckRange( sv_mvFileCount, "0", XSTRING( MAX_MV_FILES ), CV_INTEGER );
++
++	sv_mvFolderSize = Cvar_Get( "sv_mvFolderSize", "768", CVAR_ARCHIVE );
++	Cvar_CheckRange( sv_mvFolderSize, "0", "2048", CV_INTEGER );
++
++	//Cvar_SetDescription( sv_mvFileCount, "Max. count of autorecorded demos, older demos will be deleted to release free space\n" );
++	//Cvar_SetDescription( sv_mvFolderSize, "Max. total size of autorecorded demos in megabytes, older demos will be deleted to release free space\n" );
++
++	SV_LoadRecordCache();
++#endif
++
+ 	sv_minRate = Cvar_Get ("sv_minRate", "0", CVAR_ARCHIVE_ND | CVAR_SERVERINFO );
+ 	sv_maxRate = Cvar_Get ("sv_maxRate", "0", CVAR_ARCHIVE_ND | CVAR_SERVERINFO );
+ 	sv_dlRate = Cvar_Get("sv_dlRate", "100", CVAR_ARCHIVE | CVAR_SERVERINFO);
+@@ -829,6 +928,9 @@
+ */
+ void SV_Shutdown( const char *finalmsg ) {
+ 	if ( !com_sv_running || !com_sv_running->integer ) {
++#ifdef USE_MV
++		SV_SaveRecordCache();
++#endif
+ 		return;
+ 	}
+ 
+@@ -840,6 +942,18 @@
+ 		SV_FinalMessage( finalmsg );
+ 	}
+ 
++#ifdef USE_MV
++	if ( sv_demoFile != FS_INVALID_HANDLE ) {
++		// finalize record
++		if ( svs.clients[ sv_maxclients->integer ].multiview.recorder ) {
++			SV_SendClientSnapshot( &svs.clients[ sv_maxclients->integer ] );
++		}
++		SV_MultiViewStopRecord_f();
++	}
++
++	SV_SaveRecordCache();
++#endif
++
+ 	SV_RemoveOperatorCommands();
+ 	SV_MasterShutdown();
+ 	SV_ShutdownGameProgs();
+Index: server/sv_main.c
+===================================================================
+--- server/sv_main.c	(revision 1472)
++++ server/sv_main.c	(working copy)
+@@ -36,6 +36,23 @@
+ cvar_t	*sv_maxclientsPerIP;
+ cvar_t	*sv_clientTLD;
+ 
++#ifdef USE_MV
++fileHandle_t	sv_demoFile = FS_INVALID_HANDLE;
++char	sv_demoFileName[ MAX_OSPATH ];
++char	sv_demoFileNameLast[ MAX_OSPATH ];
++int		sv_demoClientID; // current client
++int		sv_lastAck;
++int		sv_lastClientSeq;
++
++cvar_t	*sv_mvClients;
++cvar_t	*sv_mvPassword;
++cvar_t	*sv_demoFlags;
++cvar_t	*sv_autoRecord;
++
++cvar_t	*sv_mvFileCount;
++cvar_t	*sv_mvFolderSize;
++#endif
++
+ cvar_t	*sv_privateClients;		// number of clients reserved for password
+ cvar_t	*sv_hostname;
+ cvar_t	*sv_master[MAX_MASTER_SERVERS];		// master server ip address
+@@ -1349,6 +1366,22 @@
+ 		}
+ 	}
+ 
++#ifdef USE_MV
++	if ( svs.nextSnapshotPSF > svs.modSnapshotPSF + svs.numSnapshotPSF ) {
++		svs.nextSnapshotPSF -= svs.modSnapshotPSF;
++		if ( svs.clients ) {
++			for ( i = 0; i < sv_maxclients->integer; i++ ) {
++				if ( svs.clients[ i ].state < CS_CONNECTED )
++					continue;
++				for ( n = 0; n < PACKET_BACKUP; n++ ) {
++					if ( svs.clients[ i ].frames[ n ].first_psf > svs.modSnapshotPSF )
++						svs.clients[ i ].frames[ n ].first_psf -= svs.modSnapshotPSF;
++				}
++			}
++		}
++	}
++#endif
++
+ 	if ( sv.restartTime && sv.time >= sv.restartTime ) {
+ 		sv.restartTime = 0;
+ 		Cbuf_AddText( "map_restart 0\n" );
+@@ -1376,6 +1409,10 @@
+ 
+ 	if (com_dedicated->integer) SV_BotFrame (sv.time);
+ 
++#ifdef USE_MV
++	svs.emptyFrame = qtrue;
++#endif
++
+ 	// run the game simulation in chunks
+ 	while ( sv.timeResidual >= frameMsec ) {
+ 		sv.timeResidual -= frameMsec;
+@@ -1384,6 +1421,9 @@
+ 
+ 		// let everything in the world think and move
+ 		VM_Call( gvm, 1, GAME_RUN_FRAME, sv.time );
++#ifdef USE_MV
++		svs.emptyFrame = qfalse; // ok, run recorder
++#endif
+ 	}
+ 
+ 	if ( com_speeds->integer ) {
+@@ -1399,6 +1439,17 @@
+ 	// send messages back to the clients
+ 	SV_SendClientMessages();
+ 
++#ifdef USE_MV
++	svs.emptyFrame = qfalse;
++	if ( sv_autoRecord->integer > 0 ) {
++		if ( sv_demoFile == FS_INVALID_HANDLE ) {
++			if ( SV_FindActiveClient( qtrue, -1, sv_autoRecord->integer ) >= 0 ) {
++				Cbuf_AddText( "mvrecord\n" );
++			}
++		}
++	}
++#endif
++
+ 	// send a heartbeat to the master if needed
+ 	SV_MasterHeartbeat(HEARTBEAT_FOR_MASTER);
+ }
+Index: server/sv_snapshot.c
+===================================================================
+--- server/sv_snapshot.c	(revision 1472)
++++ server/sv_snapshot.c	(working copy)
+@@ -113,14 +113,170 @@
+ }
+ 
+ 
++#ifdef USE_MV
++static int SV_GetMergeMaskEntities( clientSnapshot_t *snap )
++{
++	const entityState_t *ent;
++	psFrame_t *psf;
++	int skipMask;
++	int i, n;
++
++	n = 0;
++	skipMask = 0;
++	psf = NULL;
++
++	if ( !svs.currFrame )
++		return skipMask;
++	
++	for ( i = 0; i < sv_maxclients->integer; i++ ) {
++		ent = svs.currFrame->ents[ i ];
++		if ( ent->number >= sv_maxclients->integer )
++			break;
++		for ( /*n = 0 */; n < snap->num_psf; n++ ) {
++			psf = &svs.snapshotPSF[ ( snap->first_psf + n ) % svs.numSnapshotPSF ];
++			if ( psf->clientSlot == ent->number ) {
++				skipMask |= MSG_PlayerStateToEntityStateXMask( &psf->ps, ent, qtrue );
++			}
++		}
++		//if ( n >= snap->num_psf ) {
++		//	Com_Error( ERR_DROP, "ent[%i] not found in psf array", ent->number );
++		//	break;
++		//}
++	}
++	return skipMask;
++}
++
++
++static void SV_EmitByteMask( msg_t *msg, const byte *mask, const int maxIndex, const int indexBits, qboolean ignoreFirstZero )
++{
++	int firstIndex;
++	int lastIndex;
++
++	for ( firstIndex = 0; firstIndex < maxIndex; firstIndex++ ) {
++		if ( mask[ firstIndex ] ) {
++			lastIndex = firstIndex;
++			while ( lastIndex < maxIndex-1 ) {
++				if ( mask[ lastIndex + 1 ] )
++					lastIndex++;
++				else if ( ignoreFirstZero && lastIndex < maxIndex-2 && mask[ lastIndex + 2 ] )
++					lastIndex += 2; // skip single zero block
++				else
++					break;
++			}
++			//printf( "start: %i end: %i\n", firstIndex, lastIndex );
++			MSG_WriteBits( msg, 1, 1 ); // delta change
++			MSG_WriteBits( msg, firstIndex, indexBits );
++			MSG_WriteBits( msg, lastIndex, indexBits );
++			for ( ; firstIndex < lastIndex + 1 ; firstIndex++ ) {
++				MSG_WriteByte( msg, mask[ firstIndex ] );
++			}
++			firstIndex = lastIndex;
++		}
++	}
++	MSG_WriteBits( msg, 0, 1 ); // no delta
++}
++
++
++static void SV_EmitPlayerStates( int baseClientID, const clientSnapshot_t *from, const clientSnapshot_t *to, msg_t *msg, skip_mask sm )
++{
++	psFrame_t *psf;
++	const psFrame_t *old_psf;
++	const playerState_t *oldPs;
++
++	int i, n;
++	int clientSlot;
++	int oldIndex;
++
++	const byte *oldPsMask;
++	byte oldPsMaskBuf[MAX_CLIENTS/8];
++	byte newPsMask[MAX_CLIENTS/8];
++
++	const byte *oldEntMask;
++	byte oldEntMaskBuf[MAX_GENTITIES/8];
++	byte newEntMask[MAX_GENTITIES/8];
++
++	// generate playerstate mask
++	if ( !from || !from->num_psf ) {
++		Com_Memset( oldPsMaskBuf, 0, sizeof( oldPsMaskBuf ) );
++		oldPsMask = oldPsMaskBuf;
++	} else {
++		oldPsMask = from->psMask;
++	}
++
++#if 1
++	// delta-xor playerstate bitmask
++	for ( i = 0; i < ARRAY_LEN( newPsMask ); i++ ) {
++		newPsMask[ i ] = to->psMask[ i ] ^ oldPsMask[ i ];
++	}
++	SV_EmitByteMask( msg, newPsMask, MAX_CLIENTS/8, 3, qfalse );
++#else
++	MSG_WriteData( msg, to->psMask[ i ], sizeof( to->psMasks ) ); // direct playerstate mask
++#endif
++
++	oldIndex = 0;
++	clientSlot = 0;
++	old_psf = NULL; // silent warning
++	
++	for ( i = 0; i < to->num_psf; i++ ) 
++	{
++		psf = &svs.snapshotPSF[ ( to->first_psf + i ) % svs.numSnapshotPSF ];
++		clientSlot = psf->clientSlot;
++		// check if masked in previous frame:
++		if ( !GET_ABIT( oldPsMask, clientSlot ) ) {
++			if ( from && clientSlot == baseClientID ) // FIXME: ps->clientNum?
++				oldPs = &from->ps; // transition from legacy to multiview mode
++			else
++				oldPs = NULL; // new playerstate
++			// empty entity mask
++			Com_Memset( oldEntMaskBuf, 0, sizeof( oldEntMaskBuf ) );
++			oldEntMask = oldEntMaskBuf;
++		} else {
++			// masked in previous frame so MUST exist
++			old_psf = NULL;
++			 // search for client state in old frame
++			for ( ; oldIndex < from->num_psf; oldIndex++ ) {
++				old_psf = &svs.snapshotPSF[ ( from->first_psf + oldIndex ) % svs.numSnapshotPSF ];
++				if ( old_psf->clientSlot == clientSlot )
++					break;
++			}
++			if ( oldIndex >= from->num_psf ) { // should never happen?
++				Com_Error( ERR_DROP, "oldIndex(%i) >= from->num_psf(%i), from->first_pfs=%i", oldIndex, from->num_psf, from->first_psf );
++				continue;
++			}
++			oldPs = &old_psf->ps;
++			oldEntMask = old_psf->entMask;
++		}
++		
++		// areabytes
++		MSG_WriteBits( msg, psf->areabytes, 6 ); // was 8
++		MSG_WriteData( msg, psf->areabits, psf->areabytes );
++
++		// playerstate
++		MSG_WriteDeltaPlayerstate( msg, oldPs, &psf->ps );
++
++#if 1
++		// delta-xor mask
++		for ( n = 0; n < ARRAY_LEN( newEntMask ); n++ ) {
++			newEntMask[ n ] = psf->entMask[ n ] ^ oldEntMask[ n ];
++		}
++		SV_EmitByteMask( msg, newEntMask, sizeof( newEntMask ), 7, qtrue );
++#else 
++		// direct mask
++		MSG_WriteData( msg, psf->entMask.mask, sizeof( psf->entMask.mask ) );
++#endif
++	}
++}
++#endif // USE_MV
++
++
+ /*
+ ==================
+ SV_WriteSnapshotToClient
+ ==================
+ */
+-static void SV_WriteSnapshotToClient( const client_t *client, msg_t *msg ) {
++static void SV_WriteSnapshotToClient( client_t *client, msg_t *msg ) {
+ 	const clientSnapshot_t	*oldframe;
+-	const clientSnapshot_t	*frame;
++	clientSnapshot_t	*frame;
+ 	int					lastframe;
+ 	int					i;
+ 	int					snapFlags;
+@@ -149,8 +305,20 @@
+ 			oldframe = NULL;
+ 			lastframe = 0;
+ 		}
++#ifdef USE_MV
++		else if ( frame->multiview && oldframe->first_psf <= svs.nextSnapshotPSF - svs.numSnapshotPSF ) {
++			Com_DPrintf( "%s: Delta request from out of date playerstate.\n", client->name );
++			oldframe = NULL;
++			lastframe = 0;
++		}
++#endif
+ 	}
+ 
++#ifdef USE_MV
++	if ( frame->multiview )
++		MSG_WriteByte( msg, svc_multiview );
++	else
++#endif
+ 	MSG_WriteByte (msg, svc_snapshot);
+ 
+ 	// NOTE, MRE: now sent at the start of every message from server to client
+@@ -184,6 +352,49 @@
+ 
+ 	MSG_WriteByte (msg, snapFlags);
+ 
++#ifdef USE_MV
++	if ( frame->multiview ) {
++		int newmask;
++		int oldmask;
++		int	oldversion;
++
++		frame->version = MV_PROTOCOL_VERSION;
++
++		if ( !oldframe || !oldframe->multiview ) {
++			oldversion = 0;
++			oldmask = 0;
++		} else {
++			oldversion = oldframe->version;
++			oldmask = oldframe->mergeMask;
++		}
++
++		// emit protocol version in first message
++		if ( oldversion != frame->version ) {
++			MSG_WriteBits( msg, 1, 1 );
++			MSG_WriteByte( msg, frame->version );
++		} else {
++			MSG_WriteBits( msg, 0, 1 );
++		}
++		
++		newmask = SM_ALL & ~SV_GetMergeMaskEntities( frame );
++
++		// emit skip-merge mask
++		if ( oldmask != newmask ) {
++			MSG_WriteBits( msg, 1, 1 );
++			MSG_WriteBits( msg, newmask, SM_BITS );
++		} else {
++			MSG_WriteBits( msg, 0, 1 );
++		}
++
++		frame->mergeMask = newmask;
++
++		SV_EmitPlayerStates( client - svs.clients, oldframe, frame, msg, newmask );
++		MSG_entMergeMask = newmask; // emit packet entities with skipmask
++		SV_EmitPacketEntities( oldframe, frame, msg );
++		MSG_entMergeMask = 0; // don't forget to reset that! 
++	} else {
++#endif
++
+ 	// send over the areabits
+ 	MSG_WriteByte (msg, frame->areabytes);
+ 	MSG_WriteData (msg, frame->areabits, frame->areabytes);
+@@ -206,7 +417,10 @@
+ 	}
+ 
+ 	// delta encode the entities
+-	SV_EmitPacketEntities (oldframe, frame, msg);
++	SV_EmitPacketEntities( oldframe, frame, msg );
++#ifdef USE_MV
++	} // !client->MVProtocol
++#endif
+ 
+ 	// padding for rate debugging
+ 	if ( sv_padPackets->integer ) {
+@@ -217,6 +431,72 @@
+ }
+ 
+ 
++#if defined( USE_MV ) && defined( USE_MV_ZCMD )
++
++static int SV_GetTextBits( const byte *cmd, int cmdlen ) {
++	int n;
++	for ( n = 0; n < cmdlen; n++ ) {
++		if ( cmd[ n ] > 127 ) {
++			return 8;
++		}
++	}
++	return 7;
++}
++
++
++static int SV_GetCmdSize( int Cmd ) 
++{
++	if ( (unsigned)Cmd <= 0xFF ) {
++		return 1;
++	} else if ( (unsigned)Cmd <= 0xFFFF ) {
++		return 2;
++	} else if ( (unsigned)Cmd <= 0xFFFFFF ) {
++		return 3;
++	} else {
++		return 4;
++	}
++}
++
++
++static qboolean SV_BuildCompressedBuffer( client_t *client, int reliableSequence )
++{
++	int index;
++	int cmdLen;
++	const char *cmd;
++	lzstream_t *stream;
++
++	index = reliableSequence & (MAX_RELIABLE_COMMANDS-1);
++
++	if ( client->multiview.z.stream[ index ].zcommandNum == reliableSequence )
++		return qfalse; // already compressed
++
++	//Com_DPrintf( S_COLOR_YELLOW "zcmd: compressing %i.%i\n", reliableSequence, client->multiview.z.deltaSeq );
++
++	cmd = client->reliableCommands[ index ];
++	cmdLen = strlen( cmd );
++
++	if ( client->multiview.z.deltaSeq == 0 ) {
++		LZSS_InitContext( &client->multiview.z.ctx );
++	} 
++
++	stream = &client->multiview.z.stream[ index ];
++	stream->zdelta = client->multiview.z.deltaSeq;
++	stream->zcommandNum = reliableSequence;
++	stream->zcommandSize = SV_GetCmdSize( reliableSequence );
++	stream->zcharbits = SV_GetTextBits( (byte*)cmd, cmdLen );
++	/* stream->count = */ LZSS_CompressToStream( &client->multiview.z.ctx, stream, (byte*)cmd, cmdLen );
++
++	// don't forget to update delta sequence
++	if ( client->multiview.z.deltaSeq >= 7 )
++		client->multiview.z.deltaSeq = 1;
++	else
++		client->multiview.z.deltaSeq++;
++
++	return qtrue;
++}
++#endif // USE_MV
++
++
+ /*
+ ==================
+ SV_UpdateServerCommandsToClient
+@@ -227,6 +507,61 @@
+ void SV_UpdateServerCommandsToClient( client_t *client, msg_t *msg ) {
+ 	int		i;
+ 
++#ifdef USE_MV
++	if ( client->multiview.protocol /*&& client->state >= CS_CONNECTED*/ ) {
++
++		if ( client->multiview.recorder ) {
++			// forward target client commands to recorder slot
++			SV_ForwardServerCommands( client ); // TODO: forward all clients?
++		}
++
++		if ( client->reliableAcknowledge >= client->reliableSequence ) {
++#ifdef USE_MV_ZCMD
++			// nothing to send, reset compression sequences
++			for ( i = 0; i < MAX_RELIABLE_COMMANDS; i++ )
++				client->multiview.z.stream[ i ].zcommandNum = -1;
++#endif
++			//client->reliableSent = client->reliableSequence;
++			client->reliableSent = -1;
++			return;
++		}
++
++		// write any unacknowledged serverCommands
++		for ( i = client->reliableAcknowledge + 1 ; i <= client->reliableSequence ; i++ ) {
++#if defined( USE_MV ) && defined( USE_MV_ZCMD )
++			// !!! do not start compression sequence from already sent uncompressed commands
++			// (re)send them uncompressed and only after that initiate compression sequence
++			if ( i <= client->reliableSent ) {
++				MSG_WriteByte( msg, svc_serverCommand );
++				MSG_WriteLong( msg, i );
++				MSG_WriteString( msg, client->reliableCommands[ i & (MAX_RELIABLE_COMMANDS-1) ] );
++			} else{
++				// build new compressed stream or re-send existing
++				SV_BuildCompressedBuffer( client, i );
++				MSG_WriteLZStream( msg, &client->multiview.z.stream[ i & (MAX_RELIABLE_COMMANDS-1) ] );
++				// TODO: indicate compressedSent?
++			}
++#else
++			MSG_WriteByte( msg, svc_serverCommand );
++			MSG_WriteLong( msg, i );
++			MSG_WriteString( msg, client->reliableCommands[ i & (MAX_RELIABLE_COMMANDS-1) ] );
++#endif
++		}
++
++		// recorder operations always success:
++		if ( client->multiview.recorder )
++			client->reliableAcknowledge = client->reliableSequence;
++		client->multiview.lastRecvTime = svs.time;
++		// TODO: indicate compressedSent?
++		//client->reliableSent = client->reliableSequence;
++		return;
++	}
++#ifdef USE_MV_ZCMD
++	// reset on inactive/non-multiview
++	client->multiview.z.deltaSeq = 0;
++#endif
++#endif // USE_MV
++
+ 	// write any unacknowledged serverCommands
+ 	for ( i = client->reliableAcknowledge + 1 ; i <= client->reliableSequence ; i++ ) {
+ 		MSG_WriteByte( msg, svc_serverCommand );
+@@ -234,6 +569,12 @@
+ 		MSG_WriteString( msg, client->reliableCommands[ i & (MAX_RELIABLE_COMMANDS-1) ] );
+ 	}
+ 	client->reliableSent = client->reliableSequence;
++
++#ifdef USE_MV
++	if ( client->reliableSequence > client->reliableAcknowledge ) {
++		client->multiview.lastRecvTime = svs.time;
++	}
++#endif
+ }
+ 
+ /*
+@@ -253,6 +594,21 @@
+ } snapshotEntityNumbers_t;
+ 
+ 
++typedef struct clientPVS_s {
++	int		snapshotFrame; // svs.snapshotFrame
++
++	int		clientNum;
++	int		areabytes;
++	byte	areabits[MAX_MAP_AREA_BYTES];		// portalarea visibility bits
++	snapshotEntityNumbers_t	numbers;
++
++	byte	entMask[MAX_GENTITIES/8];
++	qboolean entMaskBuilt;
++
++} clientPVS_t;
++
++static clientPVS_t client_pvs[ MAX_CLIENTS ];
++
+ /*
+ =============
+ SV_SortEntityNumbers
+@@ -273,11 +629,11 @@
+ 		}
+ 	}
+ 	// consistency check for delta encoding
+-	for ( i = 1 ; i < size; i++ ) {
+-		if ( num[i-1] >= num[i] ) {
+-			Com_Error( ERR_DROP, "%s: invalid entity number %i", __func__, num[ i ] );
+-		}
+-	}
++	//for ( i = 1 ; i < size; i++ ) {
++	//	if ( num[i-1] >= num[i] ) {
++	//		Com_Error( ERR_DROP, "%s: invalid entity number %i", __func__, num[ i ] );
++	//	}
++	//}
+ }
+ 
+ 
+@@ -305,8 +661,7 @@
+ SV_AddEntitiesVisibleFromPoint
+ ===============
+ */
+-static void SV_AddEntitiesVisibleFromPoint( const vec3_t origin, clientSnapshot_t *frame,
+-									snapshotEntityNumbers_t *eNums, qboolean portal ) {
++static void SV_AddEntitiesVisibleFromPoint( const vec3_t origin, clientPVS_t *pvs, qboolean portal ) {
+ 	int		e, i;
+ 	sharedEntity_t *ent;
+ 	svEntity_t	*svEnt;
+@@ -329,7 +684,7 @@
+ 	clientcluster = CM_LeafCluster (leafnum);
+ 
+ 	// calculate the visible areas
+-	frame->areabytes = CM_WriteAreaBits( frame->areabits, clientarea );
++	pvs->areabytes = CM_WriteAreaBits( pvs->areabits, clientarea );
+ 
+ 	clientpvs = CM_ClusterPVS (clientcluster);
+ 
+@@ -339,21 +694,21 @@
+ 
+ 		// entities can be flagged to be sent to only one client
+ 		if ( ent->r.svFlags & SVF_SINGLECLIENT ) {
+-			if ( ent->r.singleClient != frame->ps.clientNum ) {
++			if ( ent->r.singleClient != pvs->clientNum ) {
+ 				continue;
+ 			}
+ 		}
+ 		// entities can be flagged to be sent to everyone but one client
+ 		if ( ent->r.svFlags & SVF_NOTSINGLECLIENT ) {
+-			if ( ent->r.singleClient == frame->ps.clientNum ) {
++			if ( ent->r.singleClient == pvs->clientNum ) {
+ 				continue;
+ 			}
+ 		}
+ 		// entities can be flagged to be sent to a given mask of clients
+ 		if ( ent->r.svFlags & SVF_CLIENTMASK ) {
+-			if (frame->ps.clientNum >= 32)
++			if ( pvs->clientNum >= 32 )
+ 				Com_Error( ERR_DROP, "SVF_CLIENTMASK: clientNum >= 32" );
+-			if (~ent->r.singleClient & (1 << frame->ps.clientNum))
++			if ( ~ent->r.singleClient & (1 << pvs->clientNum) )
+ 				continue;
+ 		}
+ 
+@@ -366,7 +721,7 @@
+ 
+ 		// broadcast entities are always sent
+ 		if ( ent->r.svFlags & SVF_BROADCAST ) {
+-			SV_AddIndexToSnapshot( svEnt, e, eNums );
++			SV_AddIndexToSnapshot( svEnt, e, &pvs->numbers );
+ 			continue;
+ 		}
+ 
+@@ -412,7 +767,7 @@
+ 		}
+ 
+ 		// add it
+-		SV_AddIndexToSnapshot( svEnt, e, eNums );
++		SV_AddIndexToSnapshot( svEnt, e, &pvs->numbers );
+ 
+ 		// if it's a portal entity, add everything visible from its camera position
+ 		if ( ent->r.svFlags & SVF_PORTAL && !portal ) {
+@@ -423,16 +778,16 @@
+ 					continue;
+ 				}
+ 			}
+-			eNums->unordered = qtrue;
+-			SV_AddEntitiesVisibleFromPoint( ent->s.origin2, frame, eNums, portal );
++			pvs->numbers.unordered = qtrue;
++			SV_AddEntitiesVisibleFromPoint( ent->s.origin2, pvs, portal );
+ 		}
+ 	}
+ 
+-	ent = SV_GentityNum( frame->ps.clientNum );
++	ent = SV_GentityNum( pvs->clientNum );
+ 	// merge second PVS at ent->r.s.origin2
+ 	if ( ent->r.svFlags & SVF_SELF_PORTAL2 && !portal ) {
+-		SV_AddEntitiesVisibleFromPoint( ent->r.s.origin2, frame, eNums, qtrue );
+-		eNums->unordered = qtrue;
++		SV_AddEntitiesVisibleFromPoint( ent->r.s.origin2, pvs, qtrue );
++		pvs->numbers.unordered = qtrue;
+ 	}
+ }
+ 
+@@ -454,6 +809,8 @@
+ 	svs.lastValidFrame = 0;
+ 
+ 	svs.currFrame = NULL;
++
++	Com_Memset( client_pvs, 0, sizeof( client_pvs ) );
+ }
+ 
+ 
+@@ -569,7 +926,184 @@
+ }
+ 
+ 
++static clientPVS_t *SV_BuildClientPVS( int clientSlot, const playerState_t *ps, qboolean buildEntityMask ) 
++{
++	svEntity_t	*svEnt;
++	clientPVS_t	*pvs;
++	vec3_t	org;
++	int i;
++	
++	pvs = &client_pvs[ clientSlot ];
++
++	if ( pvs->snapshotFrame != svs.snapshotFrame /*|| pvs->clientNum != ps->clientNum*/ ) {
++		pvs->snapshotFrame = svs.snapshotFrame;
++
++		// find the client's viewpoint
++		VectorCopy( ps->origin, org );
++		org[2] += ps->viewheight;
++
++		// bump the counter used to prevent double adding
++		sv.snapshotCounter++;
++
++		// never send client's own entity, because it can
++		// be regenerated from the playerstate
++		svEnt = &sv.svEntities[ ps->clientNum ];
++		svEnt->snapshotCounter = sv.snapshotCounter;
++
++		// add all the entities directly visible to the eye, which
++		// may include portal entities that merge other viewpoints
++		pvs->clientNum = ps->clientNum;
++		pvs->areabytes = 0;
++		memset( pvs->areabits, 0, sizeof ( pvs->areabits ) );
++
++		// empty entities before visibility check
++		pvs->entMaskBuilt = qfalse;
++		pvs->numbers.numSnapshotEntities = 0;
++		pvs->numbers.unordered = qfalse;
++		SV_AddEntitiesVisibleFromPoint( org, pvs, qfalse );
++		// if there were portals visible, there may be out of order entities
++		// in the list which will need to be resorted for the delta compression
++		// to work correctly.  This also catches the error condition
++		// of an entity being included twice.
++		if ( pvs->numbers.unordered ) {
++			SV_SortEntityNumbers( &pvs->numbers.snapshotEntities[0], pvs->numbers.numSnapshotEntities );
++		}
++
++		// now that all viewpoint's areabits have been OR'd together, invert
++		// all of them to make it a mask vector, which is what the renderer wants
++		for ( i = 0 ; i < MAX_MAP_AREA_BYTES/4 ; i++ ) {
++			((int *)pvs->areabits)[i] = ((int *)pvs->areabits)[i] ^ -1;
++		}
++	}
++
++	if ( buildEntityMask && !pvs->entMaskBuilt ) {
++		pvs->entMaskBuilt = qtrue;
++		memset( pvs->entMask, 0, sizeof ( pvs->entMask ) );
++		for ( i = 0; i < pvs->numbers.numSnapshotEntities ; i++ ) {
++			SET_ABIT( pvs->entMask, svs.currFrame->ents[ pvs->numbers.snapshotEntities[ i ] ]->number );
++		}
++	}
++
++	return pvs;
++}
++
++
++#ifdef USE_MV
+ /*
++==================
++SV_FindActiveClient
++
++find first human client we can use as primary/score requester
++bots is not good for that because they may not receive all feedback from game VM
++==================
++*/
++int SV_FindActiveClient( qboolean checkCommands, int skipClientNum, int minActive ) {
++	playerState_t *ps;
++	client_t *clist[ MAX_CLIENTS ];
++	client_t *cl;
++	int	longestInactivity;
++	int	longestSpecInactivity;
++	int bestIndex;
++	int i, nactive;
++
++	nactive = 0;	// number of active clients
++	bestIndex = -1;
++	longestInactivity = INT_MIN;
++	longestSpecInactivity = INT_MIN;
++
++	for ( i = 0, cl = svs.clients; i < sv_maxclients->integer ; i++, cl++ ) {
++
++		if ( cl->state != CS_ACTIVE || cl->gentity == NULL )
++			continue;
++
++		if ( cl->gentity->r.svFlags & SVF_BOT || i == skipClientNum )
++			continue;
++
++		if ( checkCommands ) {
++			// wait a few seconds after any command received/sent
++			// to avoid dropping score request by flood protection
++			// or lagging target client too much
++			if ( cl->multiview.lastRecvTime + 500 > svs.time )
++				continue;
++
++			if ( cl->multiview.lastSentTime + 1500 > svs.time )
++				continue;
++
++			// never send anything to client that has unacknowledged commands
++			if ( cl->reliableSequence > cl->reliableAcknowledge )
++				continue;
++		}
++
++		if ( longestInactivity < svs.time - cl->multiview.scoreQueryTime ) {
++			longestInactivity = svs.time - cl->multiview.scoreQueryTime;
++			bestIndex = cl - svs.clients;
++		}
++
++		clist[ nactive++ ] = cl;
++	}
++
++	if ( nactive < minActive )
++		return -1;
++
++	// count spectators from active
++	for ( i = 0; i < nactive; i++ ) {
++		cl = clist[ i ];
++		ps = SV_GameClientNum( cl - svs.clients );
++		if ( ps->persistant[ PERS_TEAM ] == TEAM_SPECTATOR || ps->pm_flags & PMF_FOLLOW ) {
++			if ( longestSpecInactivity < svs.time - cl->multiview.scoreQueryTime ) {
++				longestSpecInactivity = svs.time - cl->multiview.scoreQueryTime;
++				bestIndex = cl - svs.clients;
++			}
++		}
++	}
++
++	return bestIndex;
++}
++
++
++static void SV_QueryClientScore( client_t *client )
++{
++	#define	SCORE_RECORDER 1
++	#define	SCORE_CLIENT   2
++	#define SCORE_PERIOD   10000
++
++	int clientNum;
++
++	if ( client->multiview.scoreQueryTime == 0 )
++	{
++		// first time init?
++		client->multiview.scoreQueryTime = svs.time + SCORE_PERIOD/3;
++	}
++	else if ( svs.time >= client->multiview.scoreQueryTime ) 
++	{
++		//} else if ( svs.time > client->multiview.scoreQueryTime + SCORE_PERIOD ) {
++		if ( client->multiview.recorder && sv_demoFlags->integer & SCORE_RECORDER ) {
++
++			clientNum = SV_FindActiveClient( qtrue, -1, 0 ); // count last sent command, ignore noone
++			if ( clientNum != -1 ) {
++				if ( clientNum != sv_demoClientID ) {
++					//Com_DPrintf( S_COLOR_YELLOW " change score target from %i to %i\n", clientNum, sv_demoClientID );
++					SV_SetTargetClient( clientNum );
++				}
++
++				SV_ExecuteClientCommand( svs.clients + sv_demoClientID, "score" );
++
++				client->multiview.scoreQueryTime = svs.time + SCORE_PERIOD;
++				svs.clients[ sv_demoClientID ].multiview.scoreQueryTime = svs.time + SCORE_PERIOD;
++					
++			} else {
++				//Com_DPrintf( S_COLOR_YELLOW "no active clients available for 'score'\n" ); // debug print
++			}
++		} else if ( sv_demoFlags->integer & SCORE_CLIENT ) {
++			SV_ExecuteClientCommand( client, "score" );
++			client->multiview.scoreQueryTime = svs.time + SCORE_PERIOD;
++		}
++	}
++}
++#endif // USE_MV
++
++
++/*
+ =============
+ SV_BuildClientSnapshot
+ 
+@@ -583,13 +1117,11 @@
+ =============
+ */
+ static void SV_BuildClientSnapshot( client_t *client ) {
+-	vec3_t						org;
+ 	clientSnapshot_t			*frame;
+-	snapshotEntityNumbers_t		entityNumbers;
+ 	int							i, cl;
+-	svEntity_t					*svEnt;
+ 	int							clientNum;
+ 	playerState_t				*ps;
++	clientPVS_t					*pvs;
+ 
+ 	// this is the frame we are creating
+ 	frame = &client->frames[ client->netchan.outgoingSequence & PACKET_MASK ];
+@@ -602,6 +1134,21 @@
+ 	// https://zerowing.idsoftware.com/bugzilla/show_bug.cgi?id=62
+ 	frame->num_entities = 0;
+ 	frame->frameNum = svs.currentSnapshotFrame;
++
++#ifdef USE_MV
++	if ( client->multiview.protocol > 0 ) {
++		frame->multiview = qtrue;
++		// select primary client slot
++		if ( client->multiview.recorder ) {
++			cl = sv_demoClientID;
++		}
++	} else {
++		frame->multiview = qfalse;
++	}
++	Com_Memset( frame->psMask, 0, sizeof( frame->psMask ) );
++	frame->first_psf = svs.nextSnapshotPSF;
++	frame->num_psf = 0;
++#endif
+ 	
+ 	if ( client->state == CS_ZOMBIE )
+ 		return;
+@@ -611,7 +1158,7 @@
+ 	frame->ps = *ps;
+ 
+ 	clientNum = frame->ps.clientNum;
+-	if ( clientNum < 0 || clientNum >= MAX_GENTITIES ) {
++	if ( clientNum < 0 || clientNum >= MAX_GENTITIES-1 ) {
+ 		Com_Error( ERR_DROP, "SV_SvEntityForGentity: bad gEnt" );
+ 	}
+ 
+@@ -618,7 +1165,11 @@
+ 	// we set client->gentity only after sending gamestate
+ 	// so don't send any packetentities changes until CS_PRIMED
+ 	// because new gamestate will invalidate them anyway
++#ifdef USE_MV
++	if ( !client->gentity && !client->multiview.recorder ) {
++#else
+ 	if ( !client->gentity ) {
++#endif
+ 		return;
+ 	}
+ 
+@@ -627,47 +1178,79 @@
+ 		SV_BuildCommonSnapshot();
+ 	}
+ 
+-	// bump the counter used to prevent double adding
+-	sv.snapshotCounter++;
++	frame->frameNum = svs.currFrame->frameNum;
+ 
+-	// empty entities before visibility check
+-	entityNumbers.numSnapshotEntities = 0;
++#ifdef USE_MV
++	if ( frame->multiview ) {
++		clientPVS_t *pvs;
++		psFrame_t *psf;
++		int slot;
++		for ( slot = 0 ; slot < sv_maxclients->integer; slot++ ) {
++			// record only form primary slot or active clients
++			if ( slot == cl || svs.clients[ slot ].state == CS_ACTIVE ) {
+ 
+-	frame->frameNum = svs.currFrame->frameNum;
++				// get current playerstate
++				ps = SV_GameClientNum( slot );
+ 
+-	// never send client's own entity, because it can
+-	// be regenerated from the playerstate
+-	svEnt = &sv.svEntities[ clientNum ];
+-	svEnt->snapshotCounter = sv.snapshotCounter;
++				// skip bots in spectator state
++				if ( ps->persistant[ PERS_TEAM ] == TEAM_SPECTATOR && svs.clients[ slot ].netchan.remoteAddress.type == NA_BOT ) {
++					continue;
++				}
+ 
+-	// find the client's viewpoint
+-	VectorCopy( ps->origin, org );
+-	org[2] += ps->viewheight;
++				// allocate playerstate frame
++				psf = &svs.snapshotPSF[ svs.nextSnapshotPSF % svs.numSnapshotPSF ]; 
++				svs.nextSnapshotPSF++;
++				frame->num_psf++;
+ 
+-	// add all the entities directly visible to the eye, which
+-	// may include portal entities that merge other viewpoints
+-	entityNumbers.unordered = qfalse;
+-	SV_AddEntitiesVisibleFromPoint( org, frame, &entityNumbers, qfalse );
++				SET_ABIT( frame->psMask, slot );
+ 
+-	// if there were portals visible, there may be out of order entities
+-	// in the list which will need to be resorted for the delta compression
+-	// to work correctly.  This also catches the error condition
+-	// of an entity being included twice.
+-	if ( entityNumbers.unordered ) {
+-		SV_SortEntityNumbers( &entityNumbers.snapshotEntities[0], 
+-			entityNumbers.numSnapshotEntities );
+-	}
++				psf->ps = *ps;
++				psf->clientSlot = slot;
+ 
+-	// now that all viewpoint's areabits have been OR'd together, invert
+-	// all of them to make it a mask vector, which is what the renderer wants
+-	for ( i = 0 ; i < MAX_MAP_AREA_BYTES/4 ; i++ ) {
+-		((int *)frame->areabits)[i] = ((int *)frame->areabits)[i] ^ -1;
++				pvs = SV_BuildClientPVS( slot, &psf->ps, qtrue );
++				psf->areabytes = pvs->areabytes;
++				memcpy( psf->areabits, pvs->areabits, sizeof( psf->areabits ) );
++
++				if ( slot == cl ) {
++					// save for primary client
++					frame->areabytes = psf->areabytes;
++					Com_Memcpy( frame->areabits, psf->areabits, sizeof( frame->areabits ) );
++				}
++				// copy generated entity mask
++				memcpy( psf->entMask, pvs->entMask, sizeof( psf->entMask ) );
++			}
++		}
++
++		// get ALL pointers from common snapshot
++		frame->num_entities = svs.currFrame->count;
++		for ( i = 0 ; i < frame->num_entities ; i++ ) {
++			frame->ents[ i ] = svs.currFrame->ents[ i ];
++		}
++
++#ifdef USE_MV_ZCMD
++		// some extras
++		if ( client->deltaMessage <= 0 )
++			client->multiview.z.deltaSeq = 0;
++#endif
++		
++		// auto score request
++		if ( sv_demoFlags->integer & ( SCORE_RECORDER | SCORE_CLIENT ) )
++			SV_QueryClientScore( client );
++
+ 	}
++	else // non-multiview frame
++#endif
++	{
++		pvs = SV_BuildClientPVS( cl, ps, qfalse );
+ 
+-	frame->num_entities = entityNumbers.numSnapshotEntities;
+-	// get pointers from common snapshot
+-	for ( i = 0 ; i < entityNumbers.numSnapshotEntities ; i++ )	{
+-		frame->ents[ i ] = svs.currFrame->ents[ entityNumbers.snapshotEntities[ i ] ];
++		memcpy( frame->areabits, pvs->areabits, sizeof( frame->areabits ) );
++		frame->areabytes = pvs->areabytes;
++
++		frame->num_entities = pvs->numbers.numSnapshotEntities;
++		// get pointers from common snapshot
++		for ( i = 0 ; i < pvs->numbers.numSnapshotEntities ; i++ )	{
++			frame->ents[ i ] = svs.currFrame->ents[ pvs->numbers.snapshotEntities[ i ] ];
++		}
+ 	}
+ }
+ 
+@@ -681,6 +1264,32 @@
+ */
+ void SV_SendMessageToClient( msg_t *msg, client_t *client )
+ {
++#ifdef USE_MV
++	if ( client->multiview.protocol && client->multiview.recorder && sv_demoFile != FS_INVALID_HANDLE ) {
++		int v;
++
++		 // finalize packet
++		MSG_WriteByte( msg, svc_EOF );
++
++		// write message sequence
++		v = LittleLong( client->netchan.outgoingSequence );
++		FS_Write( &v, 4, sv_demoFile );
++
++		// write message size
++		v = LittleLong( msg->cursize );
++		FS_Write( &v, 4, sv_demoFile );
++
++		// write data
++		FS_Write( msg->data, msg->cursize, sv_demoFile );
++
++		// update delta sequence
++		client->deltaMessage = client->netchan.outgoingSequence;
++		client->netchan.outgoingSequence++;
++
++		return;
++	}
++#endif // USE_MV
++
+ 	// record information about the message
+ 	client->frames[client->netchan.outgoingSequence & PACKET_MASK].messageSize = msg->cursize;
+ 	client->frames[client->netchan.outgoingSequence & PACKET_MASK].messageSent = svs.msgTime;
+@@ -748,6 +1357,22 @@
+ 
+ 	svs.msgTime = Sys_Milliseconds();
+ 
++#ifdef USE_MV
++	if ( sv_demoFile != FS_INVALID_HANDLE )
++	{
++		if ( !svs.emptyFrame ) // we want to record only synced game frames
++		{
++			c = svs.clients + sv_maxclients->integer; // recorder slot
++			if ( c->state >= CS_PRIMED )
++			{
++				SV_SendClientSnapshot( c );
++				c->lastSnapshotTime = svs.time;
++				c->rateDelayed = qfalse;
++			}
++		}
++	}
++#endif // USE_MV
++
+ 	// send a message to each connected client
+ 	for( i = 0; i < sv_maxclients->integer; i++ )
+ 	{

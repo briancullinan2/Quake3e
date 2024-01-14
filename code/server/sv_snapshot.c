@@ -152,6 +152,16 @@ static void SV_WriteSnapshotToClient( const client_t *client, msg_t *msg ) {
 			oldframe = NULL;
 			lastframe = 0;
 		}
+#ifdef USE_MV
+		if ( frame->multiview && oldframe->first_psf <= svs.nextSnapshotPSF - svs.numSnapshotPSF ) {
+			Com_Printf( "%s: Delta request from out of date playerstate.\n", client->name );
+			oldframe = NULL;
+			lastframe = 0;
+		} else if ( frame->multiview && oldframe->version != MV_PROTOCOL_VERSION ) {
+			oldframe = NULL;
+			lastframe = 0;
+		}
+#endif
 	}
 
 	MSG_WriteByte( msg, svc_snapshot );
@@ -187,6 +197,47 @@ static void SV_WriteSnapshotToClient( const client_t *client, msg_t *msg ) {
 
 	MSG_WriteByte (msg, snapFlags);
 
+
+#ifdef USE_MV
+	if ( frame->multiview ) {
+		int oldmask;
+		int	oldversion;
+
+		if ( !oldframe || !oldframe->multiview ) {
+			oldversion = 0;
+			oldmask = 0;
+		} else {
+			oldversion = oldframe->version;
+			oldmask = oldframe->mergeMask;
+		}
+
+		// emit protocol version in first message
+		if ( oldversion != frame->version ) {
+			MSG_WriteBits( msg, 1, 1 );
+			MSG_WriteByte( msg, frame->version );
+		} else {
+			MSG_WriteBits( msg, 0, 1 );
+		}
+
+		// emit skip-merge mask
+		if ( oldmask != frame->mergeMask ) {
+			MSG_WriteBits( msg, 1, 1 );
+			MSG_WriteBits( msg, frame->mergeMask, SM_BITS );
+		} else {
+			MSG_WriteBits( msg, 0, 1 );
+		}
+
+		SV_EmitPlayerStates( client - svs.clients, oldframe, frame, msg, frame->mergeMask );
+		MSG_entMergeMask = frame->mergeMask; // emit packet entities with skipmask
+		if((int)(client - svs.clients) > 0) {
+			//Com_Printf("ents [%i]: %i -> %i, %i, %i\n", (int)(client - svs.clients), gvmi, frame->num_entities, client->gameWorld, client->newWorld);
+		}
+		SV_EmitPacketEntities( oldframe, frame, msg );
+		MSG_entMergeMask = 0; // don't forget to reset that! 
+	} else {
+#endif
+
+
 	// send over the areabits
 	MSG_WriteByte (msg, frame->areabytes);
 	MSG_WriteData (msg, frame->areabits, frame->areabytes);
@@ -217,6 +268,10 @@ static void SV_WriteSnapshotToClient( const client_t *client, msg_t *msg ) {
 			MSG_WriteByte (msg, svc_nop);
 		}
 	}
+#ifdef USE_MV
+	}
+#endif
+
 }
 
 
@@ -230,6 +285,60 @@ SV_UpdateServerCommandsToClient
 void SV_UpdateServerCommandsToClient( client_t *client, msg_t *msg ) {
 	int i, n;
 
+
+#ifdef USE_MV
+	if ( client->multiview.protocol /*&& client->state >= CS_CONNECTED*/ ) {
+
+		if ( client->multiview.recorder ) {
+			// forward target client commands to recorder slot
+			SV_ForwardServerCommands( client ); // TODO: forward all clients?
+		}
+
+		if ( client->reliableAcknowledge >= client->reliableSequence ) {
+#ifdef USE_MV_ZCMD
+			// nothing to send, reset compression sequences
+			for ( i = 0; i < MAX_RELIABLE_COMMANDS; i++ )
+				client->multiview.z.stream[ i ].zcommandNum = -1;
+#endif
+			return;
+		}
+
+		for ( i = client->reliableAcknowledge + 1 ; i <= client->reliableSequence ; i++ ) {
+#ifdef USE_MV_ZCMD
+			// !!! do not start compression sequence from already sent uncompressed commands
+			// (re)send them uncompressed and only after that initiate compression sequence
+			/*if ( i <= client->reliableSent ) {
+				MSG_WriteByte( msg, svc_serverCommand );
+				MSG_WriteLong( msg, i );
+				MSG_WriteString( msg, client->reliableCommands[ i & (MAX_RELIABLE_COMMANDS-1) ] );
+			} else {*/
+				// build new compressed stream or re-send existing
+				SV_BuildCompressedBuffer( client, i );
+				MSG_WriteLZStream( msg, &client->multiview.z.stream[ i & (MAX_RELIABLE_COMMANDS-1) ] );
+				// TODO: indicate compressedSent?
+			//}
+#else
+			MSG_WriteByte( msg, svc_serverCommand );
+			MSG_WriteLong( msg, i );
+			MSG_WriteString( msg, client->reliableCommands[ i & (MAX_RELIABLE_COMMANDS-1) ] );
+#endif
+		}
+
+		// recorder operations always success:
+		if ( client->multiview.recorder )
+			client->reliableAcknowledge = client->reliableSequence;
+		client->multiview.lastRecvTime = svs.time;
+		// TODO: indicate compressedSent?
+		//client->reliableSent = client->reliableSequence;
+		return;
+	}
+#ifdef USE_MV_ZCMD
+	// reset on inactive/non-multiview
+	client->multiview.z.deltaSeq = 0;
+#endif
+#endif // USE_MV
+
+
 	// write any unacknowledged serverCommands
 	n = client->reliableSequence - client->reliableAcknowledge;
 
@@ -239,6 +348,14 @@ void SV_UpdateServerCommandsToClient( client_t *client, msg_t *msg ) {
 		MSG_WriteLong( msg, index );
 		MSG_WriteString( msg, client->reliableCommands[ index & (MAX_RELIABLE_COMMANDS-1) ] );
 	}
+
+
+#ifdef USE_MV
+	if ( client->reliableSequence > client->reliableAcknowledge ) {
+		client->multiview.lastRecvTime = svs.time;
+	}
+#endif
+
 }
 
 /*
@@ -249,6 +366,8 @@ Build a client snapshot structure
 =============================================================================
 */
 
+#ifdef USE_MV
+
 
 typedef int entityNum_t;
 typedef struct {
@@ -256,6 +375,26 @@ typedef struct {
 	entityNum_t	snapshotEntities[ MAX_SNAPSHOT_ENTITIES ];
 	qboolean unordered;
 } snapshotEntityNumbers_t;
+
+
+
+typedef struct clientPVS_s {
+	int		snapshotFrame; // svs.snapshotFrame
+
+	int		clientNum;
+	int		areabytes;
+	byte	areabits[MAX_MAP_AREA_BYTES];		// portalarea visibility bits
+	snapshotEntityNumbers_t	numbers;
+
+	byte	entMask[MAX_GENTITIES/8];
+	qboolean entMaskBuilt;
+
+} clientPVS_t;
+
+static clientPVS_t client_pvs[ MAX_CLIENTS ];
+
+#endif
+
 
 
 /*
@@ -576,6 +715,9 @@ static void SV_BuildCommonSnapshot( void )
 }
 
 
+#define	SCORE_RECORDER 1
+#define	SCORE_CLIENT   2
+#define SCORE_PERIOD   10000
 /*
 =============
 SV_BuildClientSnapshot
@@ -610,6 +752,28 @@ static void SV_BuildClientSnapshot( client_t *client ) {
 	frame->num_entities = 0;
 	frame->frameNum = svs.currentSnapshotFrame;
 	
+
+
+#ifdef USE_MV
+	if ( client->multiview.protocol > 0 ) {
+		frame->multiview = qtrue;
+		frame->version = MV_PROTOCOL_VERSION;
+		if(client->mvAck == 0)
+			client->mvAck = client->messageAcknowledge;
+		// select primary client slot
+		if ( client->multiview.recorder ) {
+			cl = sv_demoClientID;
+		}
+	} else {
+		frame->multiview = qfalse;
+		client->mvAck = 0;
+	}
+	Com_Memset( frame->psMask, 0, sizeof( frame->psMask ) );
+	frame->first_psf = svs.nextSnapshotPSF;
+	frame->num_psf = 0;
+#endif
+
+
 	if ( client->state == CS_ZOMBIE )
 		return;
 
@@ -625,7 +789,12 @@ static void SV_BuildClientSnapshot( client_t *client ) {
 	// we set client->gentity only after sending gamestate
 	// so don't send any packetentities changes until CS_PRIMED
 	// because new gamestate will invalidate them anyway
-	if ( !client->gentity ) {
+#ifdef USE_MV
+	if ( !client->gentity && !client->multiview.recorder )
+#else
+	if ( !client->gentity )
+#endif
+	{
 		return;
 	}
 
@@ -641,6 +810,80 @@ static void SV_BuildClientSnapshot( client_t *client ) {
 	entityNumbers.numSnapshotEntities = 0;
 
 	frame->frameNum = svs.currFrame->frameNum;
+
+
+#ifdef USE_MV
+	if ( frame->multiview ) {
+		clientPVS_t *pvs;
+		psFrame_t *psf;
+		int		clientarea, clientcluster;
+		int		leafnum;
+
+		int slot;
+
+		for ( slot = 0 ; slot < sv_maxclients->integer; slot++ ) {
+			// record only form primary slot or active clients
+			if ( slot == cl || svs.clients[ slot ].state == CS_ACTIVE ) {
+
+				// get current playerstate
+				ps = SV_GameClientNum( slot );
+
+				// skip bots in spectator state
+				if ( ps->persistant[ PERS_TEAM ] == TEAM_SPECTATOR 
+					&& svs.clients[ slot ].netchan.remoteAddress.type == NA_BOT ) {
+					continue;
+				}
+
+				// allocate playerstate frame
+				psf = &svs.snapshotPSF[ svs.nextSnapshotPSF % svs.numSnapshotPSF ]; 
+				svs.nextSnapshotPSF++;
+				frame->num_psf++;
+
+				SET_ABIT( frame->psMask, slot );
+
+				psf->ps = *ps;
+				psf->clientSlot = slot;
+
+				// TODO: probably fix this
+				leafnum = CM_PointLeafnum (ps->origin);
+				clientarea = CM_LeafArea (leafnum);
+				clientcluster = CM_LeafCluster (leafnum);
+
+				pvs = CM_ClusterPVS(clientcluster);
+
+				psf->areabytes = pvs->areabytes;
+				memcpy( psf->areabits, pvs->areabits, sizeof( psf->areabits ) );
+
+				if ( slot == cl ) {
+					// save for primary client
+					frame->areabytes = psf->areabytes;
+					Com_Memcpy( frame->areabits, psf->areabits, sizeof( frame->areabits ) );
+				}
+				// copy generated entity mask
+				memcpy( psf->entMask, pvs->entMask, sizeof( psf->entMask ) );
+			}
+		}
+
+		// get ALL pointers from common snapshot
+		frame->num_entities = svs.currFrame->count;
+		for ( i = 0 ; i < frame->num_entities ; i++ ) {
+			frame->ents[ i ] = svs.currFrame->ents[ i ];
+		}
+		frame->mergeMask = SM_ALL & ~SV_GetMergeMaskEntities( frame );
+
+#ifdef USE_MV_ZCMD
+		// some extras
+		if ( client->deltaMessage <= 0 )
+			client->multiview.z.deltaSeq = 0;
+#endif
+		
+		// auto score request
+		if ( sv_demoFlags->integer & ( SCORE_RECORDER | SCORE_CLIENT ) )
+			SV_QueryClientScore( client );
+
+	} else { // non-multiview frame
+#endif
+
 
 	// never send client's own entity, because it can
 	// be regenerated from the playerstate
@@ -676,6 +919,11 @@ static void SV_BuildClientSnapshot( client_t *client ) {
 	for ( i = 0 ; i < entityNumbers.numSnapshotEntities ; i++ )	{
 		frame->ents[ i ] = svs.currFrame->ents[ entityNumbers.snapshotEntities[ i ] ];
 	}
+	
+#ifdef USE_MV
+	}
+#endif
+
 }
 
 
@@ -686,8 +934,36 @@ SV_SendMessageToClient
 Called by SV_SendClientSnapshot and SV_SendClientGameState
 =======================
 */
-void SV_SendMessageToClient( msg_t *msg, client_t *client )
-{
+void SV_SendMessageToClient( msg_t *msg, client_t *client ) {
+
+
+#ifdef USE_MV
+
+	if ( client->multiview.protocol && client->multiview.recorder
+		&& sv_demoFile != FS_INVALID_HANDLE ) {
+		int v;
+
+		 // finalize packet
+		MSG_WriteByte( msg, svc_EOF );
+
+		// write message sequence
+		v = LittleLong( client->netchan.outgoingSequence );
+		FS_Write( &v, 4, sv_demoFile );
+
+		// write message size
+		v = LittleLong( msg->cursize );
+		FS_Write( &v, 4, sv_demoFile );
+
+		// write data
+		FS_Write( msg->data, msg->cursize, sv_demoFile );
+
+		// update delta sequence
+		client->deltaMessage = client->netchan.outgoingSequence;
+		client->netchan.outgoingSequence++;
+		return;
+	}
+#endif // USE_MV
+
 	// record information about the message
 	client->frames[client->netchan.outgoingSequence & PACKET_MASK].messageSize = msg->cursize;
 	client->frames[client->netchan.outgoingSequence & PACKET_MASK].messageSent = svs.msgTime;
@@ -713,11 +989,13 @@ void SV_SendClientSnapshot( client_t *client ) {
 	// build the snapshot
 	SV_BuildClientSnapshot( client );
 
+#ifndef USE_MV // send bots to client
 	// bots need to have their snapshots build, but
 	// the query them directly without needing to be sent
 	if ( client->netchan.remoteAddress.type == NA_BOT ) {
 		return;
 	}
+#endif
 
 	MSG_Init( &msg, msg_buf, MAX_MSGLEN );
 	msg.allowoverflow = qtrue;
@@ -754,6 +1032,18 @@ void SV_SendClientMessages( void )
 	client_t	*c;
 
 	svs.msgTime = Sys_Milliseconds();
+
+#ifdef USE_MV
+	c = svs.clients + sv_maxclients->integer; // recorder slot
+	if ( sv_demoFile != FS_INVALID_HANDLE
+	 	&& !svs.emptyFrame // we want to record only synced game frames
+		&& c->state >= CS_PRIMED)
+	{
+		SV_SendClientSnapshot( c );
+		c->lastSnapshotTime = svs.time;
+		c->rateDelayed = qfalse;
+	}
+#endif // USE_MV
 
 	// send a message to each connected client
 	for( i = 0; i < sv_maxclients->integer; i++ )

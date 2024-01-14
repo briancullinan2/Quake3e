@@ -762,6 +762,13 @@ gotnewcl:
 		SV_InjectLocation( newcl->tld, newcl->country );
 	}
 
+#ifdef USE_MV
+#ifdef USE_MV_ZCMD
+	newcl->multiview.z.deltaSeq = 0; // reset on DirectConnect();
+#endif
+	newcl->multiview.recorder = qfalse;
+#endif
+
 	// send the connect packet to the client
 	if ( longstr /*&& !compat*/ ) {
 		NET_OutOfBandPrint( NS_SERVER, from, "connectResponse %d %d", challenge, sv_proto );
@@ -837,6 +844,10 @@ void SV_DropClient( client_t *drop, const char *reason ) {
 
 	// Free all allocated data on the client structure
 	SV_FreeClient( drop );
+
+#ifdef USE_MV
+	SV_TrackDisconnect( drop - svs.clients );
+#endif
 
 	// tell everyone why they got dropped
 	if ( reason ) {
@@ -1014,6 +1025,15 @@ static void SV_SendClientGameState( client_t *client ) {
 	// with a gamestate and it sets the clc.serverCommandSequence at
 	// the client side
 	SV_UpdateServerCommandsToClient( client, &msg );
+
+#ifdef USE_MV
+#ifdef USE_MV_ZCMD
+	// reset command compressor and score timer
+	//client->multiview.encoderInited = qfalse;
+	client->multiview.z.deltaSeq = 0; // force encoder reset on gamestate change
+#endif
+	client->multiview.scoreQueryTime = 0;
+#endif
 
 	// send the gamestate
 	MSG_WriteByte( &msg, svc_gamestate );
@@ -1886,6 +1906,10 @@ static const ucmd_t ucmds[] = {
 	{"donedl", SV_DoneDownload_f},
 	{"locations", SV_PrintLocations_f},
 
+#ifdef USE_MV
+	{"mvjoin", SV_MultiView_f},
+	{"mvleave", SV_MultiView_f},
+#endif
 	{NULL, NULL}
 };
 
@@ -1960,6 +1984,11 @@ qboolean SV_ExecuteClientCommand( client_t *cl, const char *s ) {
 			else
 				Cmd_Args_Sanitize( "\n\r" );
 			VM_Call( gvm, 1, GAME_CLIENT_COMMAND, cl - svs.clients );
+
+#ifdef USE_MV
+			cl->multiview.lastSentTime = svs.time;
+#endif
+
 		}
 	}
 
