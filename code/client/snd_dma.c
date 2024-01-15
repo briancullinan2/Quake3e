@@ -63,8 +63,14 @@ channel_t   s_channels[MAX_CHANNELS];
 channel_t   loop_channels[MAX_CHANNELS];
 int			numLoopChannels;
 
-static		qboolean	s_soundStarted;
-static		qboolean	s_soundMuted;
+#ifndef __WASM__
+static		
+#endif
+qboolean	s_soundStarted;
+#ifndef __WASM__
+static		
+#endif
+qboolean	s_soundMuted;
 
 dma_t		dma;
 
@@ -331,7 +337,9 @@ static sfxHandle_t S_Base_RegisterSound( const char *name, qboolean compressed )
 
 	if ( sfx->soundData ) {
 		if ( sfx->defaultSound ) {
+#ifndef __WASM__
 			Com_Printf( S_COLOR_YELLOW "WARNING: could not find %s - using default\n", sfx->soundName );
+#endif
 			return 0;
 		}
 		return sfx - s_knownSfx;
@@ -343,7 +351,9 @@ static sfxHandle_t S_Base_RegisterSound( const char *name, qboolean compressed )
 	S_memoryLoad( sfx );
 
 	if ( sfx->defaultSound ) {
+#ifndef __WASM__
 		Com_Printf( S_COLOR_YELLOW "WARNING: could not find %s - using default\n", sfx->soundName );
+#endif
 		return 0;
 	}
 
@@ -359,15 +369,23 @@ S_BeginRegistration
 static void S_Base_BeginRegistration( void ) {
 	s_soundMuted = qfalse;		// we can play again
 
+#ifndef __WASM__
 	if ( s_numSfx )
 		return;
+#endif
 
 	SND_setup();
 
+#ifndef __WASM__
 	Com_Memset( s_knownSfx, 0, sizeof( s_knownSfx ) );
 	Com_Memset( sfxHash, 0, sizeof( sfxHash ) );
+#endif
 
+#ifdef __WASM__
+	S_Base_RegisterSound( "sound/misc/silence.wav", qfalse ); // changed to a sound in baseq3
+#else
 	S_Base_RegisterSound( "sound/feedback/hit.wav", qfalse ); // changed to a sound in baseq3
+#endif
 }
 
 
@@ -398,6 +416,11 @@ static void S_SpatializeOrigin( const vec3_t origin, int master_vol, int *left_v
 	vec_t	lscale, rscale, scale;
 	vec3_t	source_vec;
 	vec3_t	vec;
+
+#ifdef __WASM__
+	// TODO: change speaker position in web audio
+	return;
+#endif
 
 	const float dist_mult = SOUND_ATTENUATE;
 	
@@ -729,7 +752,11 @@ void S_Base_AddLoopingSound( int entityNum, const vec3_t origin, const vec3_t ve
 	}
 
 	if ( !sfx->soundLength ) {
+#ifdef __WASM__
+		return;
+#else
 		Com_Error( ERR_DROP, "%s has length 0", sfx->soundName );
+#endif
 	}
 
 	VectorCopy( origin, loopSounds[entityNum].origin );
@@ -793,7 +820,11 @@ void S_Base_AddRealLoopingSound( int entityNum, const vec3_t origin, const vec3_
 	}
 
 	if ( !sfx->soundLength ) {
+#ifdef __WASM__
+		return;
+#else
 		Com_Error( ERR_DROP, "%s has length 0", sfx->soundName );
+#endif
 	}
 	VectorCopy( origin, loopSounds[entityNum].origin );
 	VectorCopy( velocity, loopSounds[entityNum].velocity );
@@ -1024,6 +1055,10 @@ void S_Base_Respatialize( int entityNum, const vec3_t head, vec3_t axis[3], int 
 	channel_t	*ch;
 	vec3_t		origin;
 
+#ifdef __WASM__
+	return;
+#endif
+
 	if ( !s_soundStarted || s_soundMuted ) {
 		return;
 	}
@@ -1084,7 +1119,18 @@ static qboolean S_ScanChannelStarts( void ) {
 		// into the very first sample
 		if ( ch->startSample == START_SAMPLE_IMMEDIATE ) {
 			ch->startSample = s_paintedtime;
+#ifndef __WASM__
 			newSamples = qtrue;
+#else
+extern void S_PaintChannel( channel_t *ch, const sfx_t *sc, int count, int sampleOffset );
+			int count, sampleOffset; 
+			sampleOffset = s_paintedtime - ch->startSample;
+			count = (s_paintedtime + 13) - s_paintedtime;
+			if ( sampleOffset + count > ch->thesfx->soundLength ) {
+				count = ch->thesfx->soundLength - sampleOffset;
+			}
+			S_PaintChannel(ch, ch->thesfx, count, sampleOffset);
+#endif
 			continue;
 		}
 
@@ -1196,7 +1242,7 @@ static void S_Update_( int msec ) {
 		return;
 	}
 
-	thisTime = Com_Milliseconds();
+	thisTime = Sys_Milliseconds();
 
 	// Updates s_soundtime
 	S_GetSoundtime();
@@ -1236,6 +1282,7 @@ static void S_Update_( int msec ) {
 	}
 
 	// add raw data from streamed samples
+#ifndef __WASM__
 	S_UpdateBackgroundTrack();
 
 	SNDDMA_BeginPainting();
@@ -1243,6 +1290,7 @@ static void S_Update_( int msec ) {
 	S_PaintChannels( endtime );
 
 	SNDDMA_Submit();
+#endif
 
 	lastTime = thisTime;
 }
@@ -1458,6 +1506,10 @@ static void S_Base_Shutdown( void ) {
 	s_soundStarted = qfalse;
 
 	s_numSfx = 0; // clean up sound cache -EC-
+#ifdef __WASM__
+	Com_Memset( s_knownSfx, 0, sizeof( s_knownSfx ) );
+	Com_Memset( sfxHash, 0, sizeof( sfxHash ) );
+#endif
 
 	if ( dma_buffer2 != buffer2 )
 		free( dma_buffer2 );
@@ -1521,12 +1573,19 @@ qboolean S_Base_Init( soundInterface_t *si ) {
 
 	r = SNDDMA_Init();
 
+#ifndef __WASM__
 	if ( r ) {
 		s_soundStarted = qtrue;
 		s_soundMuted = qtrue;
 //		s_numSfx = 0;
 
 		Com_Memset( sfxHash, 0, sizeof( sfxHash ) );
+#else
+		s_soundStarted = r;
+		if(r) {
+			s_soundMuted = qtrue;
+		}
+#endif
 
 		s_soundtime = 0;
 		s_paintedtime = 0;
@@ -1540,9 +1599,11 @@ qboolean S_Base_Init( soundInterface_t *si ) {
 			dma_buffer2 = malloc( dma.samples * dma.samplebits/8 );
 			memset( dma_buffer2, 0, dma.samples * dma.samplebits/8 );
 		}
+#ifndef __WASM__
 	} else {
 		return qfalse;
 	}
+#endif
 
 	si->Shutdown = S_Base_Shutdown;
 	si->StartSound = S_Base_StartSound;

@@ -172,6 +172,13 @@ static void SV_Map_f( void ) {
 	len = FS_FOpenFileRead( expanded, NULL, qfalse );
 	FS_RestorePure();
 	if ( len == -1 ) {
+#ifdef __WASM__
+		qboolean	CL_Download( const char *cmd, const char *pakname, qboolean autoDownload );
+		static char alreadyTried[MAX_OSPATH];
+		if(Q_stricmp(alreadyTried, map) != 0 && CL_Download( Cmd_Argv(0), map, qtrue )) {
+			Q_strncpyz(alreadyTried, map, sizeof(alreadyTried));
+		} else
+#endif
 		Com_Printf( "Can't find map %s\n", expanded );
 		return;
 	}
@@ -331,6 +338,14 @@ static void SV_MapRestart_f( void ) {
 		}
 
 		if ( client->netchan.remoteAddress.type == NA_BOT ) {
+#if defined(USE_LOCAL_DED) || defined(__WASM__)
+			// drop bots on map restart because they will be re-added by arena config
+			// TODO: only drop bots on single-player mode?
+			if (Cvar_VariableIntegerValue( "g_gametype" ) == GT_SINGLE_PLAYER) {
+				SV_DropClient( client, NULL );
+				continue;
+			}
+#endif
 			isBot = qtrue;
 		} else {
 			isBot = qfalse;
@@ -1396,6 +1411,7 @@ Also called by SV_DropClient, SV_DirectConnect, and SV_SpawnServer
 */
 void SV_Heartbeat_f( void ) {
 	svs.nextHeartbeatTime = svs.time;
+	svs.forceHeartbeat = qtrue;
 }
 
 
@@ -1526,6 +1542,10 @@ static void SV_CompleteMapName( const char *args, int argNum ) {
 }
 
 
+//#ifdef __WASM__
+void SV_MakeMinimap(void);
+//#endif
+
 /*
 ==================
 SV_AddOperatorCommands
@@ -1580,6 +1600,9 @@ void SV_AddOperatorCommands( void ) {
 #endif
 	Cmd_AddCommand( "filter", SV_AddFilter_f );
 	Cmd_AddCommand( "filtercmd", SV_AddFilterCmd_f );
+//#ifdef __WASM__
+	Cmd_AddCommand ("minimap", SV_MakeMinimap);
+//#endif
 }
 
 

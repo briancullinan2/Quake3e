@@ -196,6 +196,8 @@ or configs will never get loaded from disk!
 
 */
 
+#ifndef __WASM__
+
 // every time a new demo pk3 file is built, this checksum must be updated.
 // the easiest way to get it is to just run the game and see what it spits out
 #define	DEMO_PAK0_CHECKSUM	2985612116u
@@ -210,6 +212,32 @@ static const unsigned pak_checksums[] = {
 	908855077u,
 	977125798u
 };
+
+
+#else
+
+typedef struct altChecksumFiles {
+	char pakFilename[20];
+	unsigned altChecksum;
+	int *headerLongs;
+	int numHeaderLongs;
+} altChecksumFiles_t;
+
+static unsigned pak8a[] = 
+{0,3926835518,736239216,334726484,1769521377,4202768680,398305030,3055912304,3319732176,1153350843,3769072725,2720435158,4283363005,2513798360,3196420357,3294239822,3843894834,3612475719,2452860159,1771172871,521576783,2625819854,584016992,2958438589,1429740117,692665736,2782664450,2014190904,2605149972,3557074172,1493690996,1695508328,2506974389,1119778648,4100615894,207768556,2962204083,2989626223,834694448,998360432,2468686401,590702909,4262317924,4090096319,2021230797,913943199,2705129625,4262899421,1366373502,3617588623,2090316327,1489331521,4262317924,4090096319,2021230797,2021230797,913943199,2705129625,4262899421,1366373502,3617588623,2090316327,1489331521,756019980,3319986050,2936458518,1654841402,4112743226,1068586093,1401170057,490473087,956283964,1582219463,4106187763,3522732034,3930678813,4150711566,2793092674,3739835880,3674567183,3798185172,3666345486,2994942517,1272299605,3275207171,867236152,1994416512,583491622,2679656084,2054855793,2216416451,3634873522,3842827215,3600358968,2772540046,524533412,1262644876,1021576846,570308653,3190592338,2050935401,2322029085,4105773991,1528985787,1635175012,3461261149,2650237048,1632416110,2290912050,4253405899,772083468,2004614012,3276688688,2358222605,3730959469,1663787964,3129394621,433571376,949686090,4022328675,1482074390,147556280,3993444853,3516686239,692213471,2396676371,2525919655,2181919263,2866617875,567238308,1777622049,2526871802,1544980608,3929608672,1078565448,578648295,418670111,3269476184,3518090876,362533177,1477836325,269752830,546857576,3988115811,3095238384,3670144132,3286061346,2953382418,2797602118,2613905158,3821306670,2756396361,80235487,3794546000,3320940892,3020815043,553464634,3585597447,3771589513,2117132357,3389226997,3621428080,571938637,3498531776,3235014181,267571670,3252186061,1642506645,1309329426,2015676612,4204742729,1799578886,1732762157,248206417,2078167977,2216461138,1866819357,1524371252,3808546946,3207715107,1100481281,1793984879,2443342384,4103520306,1251380216,3377382031,1047946387,2072236435,2532989182,2836600589,3453330260,1552649093,4007608366,2972303737,1742323804,1734502319,1265542426,3902170010,2025207911,378331702,818320060,2639181107,632514819,1578912020,887994084,1389950679,3417578204,1697703158,774987403,494500645,293317761,2172725341,2757600324,2936139107,320472903,2121331099,2249035898,1278052730,1615104875,3882557698,869036284,1119031802,4077461711,768941098,3719054150,3224402855,949344497,1513967688};
+
+static unsigned pak8ajs[] = {0,4168817368,648165122,3945419347,1851007370,4202768680,876243795,1942151452,3178592546,1153350843,3769072725,2720435158,4283363005,2513798360,3196420357,3294239822,3843894834,3612475719,2452860159,1771172871,521576783,2625819854,584016992,2958438589,1429740117,692665736,2782664450,2014190904,2605149972,3557074172,1493690996,1695508328,2506974389,1119778648,4100615894,207768556,2962204083,2989626223,834694448,998360432,2468686401,590702909,4262317924,4090096319,2021230797,913943199,2705129625,4262899421,1366373502,3617588623,2090316327,1489331521,4262317924,4090096319,2021230797,2021230797,913943199,2705129625,4262899421,1366373502,3617588623,2090316327,1489331521,756019980,3319986050,2936458518,1654841402,4112743226,1068586093,1401170057,490473087,956283964,1582219463,4106187763,3522732034,3930678813,4150711566,2793092674,3739835880,3674567183,3798185172,3666345486,2994942517,1272299605,3275207171,867236152,1994416512,583491622,2679656084,2054855793,2216416451,3634873522,3842827215,3600358968,2772540046,524533412,1262644876,1021576846,570308653,3190592338,2050935401,2322029085,4105773991,1528985787,1635175012,3461261149,2650237048,1632416110,2290912050,4253405899,772083468,2004614012,3276688688,2358222605,3730959469,1663787964,3129394621,433571376,949686090,4022328675,1482074390,147556280,3993444853,3516686239,692213471,2396676371,2525919655,2181919263,2866617875,567238308,1777622049,2526871802,1544980608,3929608672,1078565448,578648295,418670111,3269476184,3518090876,362533177,1477836325,269752830,546857576,3988115811,3095238384,3670144132,3286061346,2953382418,2797602118,2613905158,3821306670,2756396361,80235487,3794546000,3320940892,3020815043,553464634,3585597447,3771589513,2117132357,3389226997,3621428080,571938637,3498531776,3235014181,267571670,3252186061,1642506645,1309329426,2015676612,4204742729,1799578886,1732762157,248206417,2078167977,2216461138,1866819357,1524371252,3808546946,3207715107,1100481281,1793984879,2443342384,4103520306,1251380216,3377382031,1047946387,2072236435,2532989182,2836600589,3453330260,1552649093,4007608366,2972303737,1742323804,1734502319,1265542426,3902170010,2025207911,378331702,818320060,2639181107,632514819,1578912020,887994084,1389950679,3417578204,1697703158,774987403,494500645,293317761,2172725341,2757600324,2936139107,320472903,2121331099,2249035898,1278052730,1615104875,3882557698,869036284,1119031802,3065140807,2983784925,3847931960,1863303811,949344497,1513967688};
+
+static unsigned pak8pk3[] = {0,695294960,269430381,2656948387,485997170,1095318617};
+
+static altChecksumFiles_t hardcoded_checksums[] = {
+//	{"pak8a", {-231307135}}
+	{"pak8.pk3", 977125798u, (int *)pak8pk3, sizeof(pak8pk3) / sizeof(pak8pk3[0])},
+	{"pak8a.pk3", 3665059719u, (int *)pak8a, sizeof(pak8a) / sizeof(pak8a[0])},
+	{"pak8a.pk3", 4063660161u, (int *)pak8ajs, sizeof(pak8ajs) / sizeof(pak8ajs[0])},
+};
+
+#endif
 
 // if this is defined, the executable positively won't work with any paks other
 // than the demo pak, even if productid is present.  This is only used for our
@@ -378,7 +406,9 @@ void Com_AppendCDKey( const char *filename );
 void Com_ReadCDKey( const char *filename );
 
 static int FS_GetModList( char *listbuf, int bufsize );
+#ifndef __WASM__
 static void FS_CheckIdPaks( void );
+#endif
 void FS_Reload( void );
 
 
@@ -403,6 +433,11 @@ static qboolean FS_PakIsPure( const pack_t *pack ) {
 	if ( fs_numServerPaks ) {
 		for ( i = 0 ; i < fs_numServerPaks ; i++ ) {
 			// FIXME: also use hashed file names
+#ifdef __WASM__
+			if(Q_stricmp(pack->pakBasename, "pak0") == 0) {
+				return qtrue;
+			}
+#endif
 			// NOTE TTimo: a pk3 with same checksum but different name would be validated too
 			//   I don't see this as allowing for any exploit, it would only happen if the client does manips of its file names 'not a bug'
 			if ( pack->checksum == fs_serverPaks[i] ) {
@@ -612,7 +647,10 @@ FS_CreatePath
 Creates any directories needed to store the given filename
 ============
 */
-static qboolean FS_CreatePath( const char *OSPath ) {
+#ifndef __WASM__
+static 
+#endif
+qboolean FS_CreatePath( const char *OSPath ) {
 	char	path[MAX_OSPATH*2+1];
 	char	*ofs;
 	
@@ -1605,8 +1643,10 @@ int FS_FOpenFileRead( const char *filename, fileHandle_t *file, qboolean uniqueF
 			// is the element a pak file?
 			if ( search->pack && search->pack->hashTable[ (hash = fullHash & (search->pack->hashSize-1)) ] ) {
 				// skip non-pure files
+#ifndef __WASM__
 				if ( !FS_PakIsPure( search->pack ) )
 					continue;
+#endif
 				// look through all the pak file elements
 				pak = search->pack;
 				pakFile = pak->hashTable[hash];
@@ -1618,7 +1658,11 @@ int FS_FOpenFileRead( const char *filename, fileHandle_t *file, qboolean uniqueF
 					}
 					pakFile = pakFile->next;
 				} while ( pakFile != NULL );
-			} else if ( search->dir && search->policy != DIR_DENY ) {
+			} else if ( search->dir
+#ifndef __WASM__
+		&& search->policy != DIR_DENY 
+#endif
+ ) {
 				dir = search->dir;
 				netpath = FS_BuildOSPath( dir->path, dir->gamedir, filename );
 				temp = Sys_FOpen( netpath, "rb" );
@@ -1646,9 +1690,11 @@ int FS_FOpenFileRead( const char *filename, fileHandle_t *file, qboolean uniqueF
 		// is the element a pak file?
 		if ( search->pack && search->pack->hashTable[ (hash = fullHash & (search->pack->hashSize-1)) ] ) {
 			// disregard if it doesn't match one of the allowed pure pak files
+#ifndef __WASM__
 			if ( !FS_PakIsPure( search->pack ) ) {
 				continue;
 			}
+#endif
 			// look through all the pak file elements
 			pak = search->pack;
 			pakFile = pak->hashTable[hash];
@@ -1660,7 +1706,11 @@ int FS_FOpenFileRead( const char *filename, fileHandle_t *file, qboolean uniqueF
 				}
 				pakFile = pakFile->next;
 			} while ( pakFile != NULL );
-		} else if ( search->dir && search->policy != DIR_DENY ) {
+		} else if ( search->dir 
+#ifndef __WASM__
+		&& search->policy != DIR_DENY 
+#endif
+) {
 			// check a file in the directory tree
 			dir = search->dir;
 
@@ -2052,6 +2102,7 @@ qboolean FS_FileIsInPAK( const char *filename, int *pChecksum, char *pakName ) {
 		// is the element a pak file?
 		if ( search->pack && search->pack->hashTable[ (hash = fullHash & (search->pack->hashSize-1)) ] ) {
 			// disregard if it doesn't match one of the allowed pure pak files
+#ifndef __WASM__
 			//if ( !FS_PakIsPure( search->pack ) ) {
 			//	continue;
 			//}
@@ -2059,6 +2110,7 @@ qboolean FS_FileIsInPAK( const char *filename, int *pChecksum, char *pakName ) {
 			if ( search->pack->exclude ) {
 				continue;
 			}
+#endif
 
 			// look through all the pak file elements
 			pak = search->pack;
@@ -3344,6 +3396,9 @@ static char **FS_ListFilteredFiles( const char *path, const char *extension, con
 		if ( !FS_AllowListExternal( extension ) )
 			flags &= ~FS_MATCH_EXTERN;
 	}
+#ifdef __WASM__
+	flags |= FS_MATCH_ANY;
+#endif
 
 	if ( !path ) {
 		*numfiles = 0;
@@ -3374,11 +3429,13 @@ static char **FS_ListFilteredFiles( const char *path, const char *extension, con
 		// is the element a pak file?
 		if ( search->pack && ( flags & FS_MATCH_PK3s ) ) {
 
+#ifndef __WASM__
 			//ZOID:  If we are pure, don't search for files on paks that
 			// aren't on the pure list
 			if ( !FS_PakIsPure( search->pack ) && !( flags & FS_MATCH_UNPURE ) ) {
 				continue;
 			}
+#endif
 
 			// look through all the pak file elements
 			pak = search->pack;
@@ -3437,7 +3494,12 @@ static char **FS_ListFilteredFiles( const char *path, const char *extension, con
 					nfiles = FS_AddFileToList( name + temp, list, nfiles );
 				}
 			}
-		} else if ( search->dir && ( flags & FS_MATCH_EXTERN ) && search->policy != DIR_DENY ) { // scan for files in the filesystem
+		} else if ( search->dir 
+#ifndef __WASM__
+		&& ( flags & FS_MATCH_EXTERN ) 
+		&& search->policy != DIR_DENY 
+#endif
+ ) { // scan for files in the filesystem
 			const char *netpath;
 			int		numSysFiles;
 			char	**sysFiles;
@@ -4161,10 +4223,13 @@ static void FS_AddGameDirectory( const char *path, const char *dir ) {
 	pakfilesi = 0;
 	pakdirsi = 0;
 
+#ifndef __WASM__
 	if ( fs_numServerPaks ) {
 		numdirs = 0;
 		pakdirs = NULL;
-	} else {
+	} else 
+#endif
+	{
 		// Get top level directories (we'll filter them later since the Sys_ListFiles filtering is terrible)
 		pakdirs = Sys_ListFiles( curpath, "/", NULL, &numdirs, qfalse );
 		if ( numdirs >= 2 ) {
@@ -4820,10 +4885,13 @@ static void FS_Startup( void ) {
 
 	fs_gamedirvar->modified = qfalse; // We just loaded, it's not modified
 
+// BECAUSE OF REPACKAGING!
+#ifndef __WASM__
 	// check original q3a files
 	if ( FS_IsBaseGame( BASEGAME ) || FS_IsBaseGame( BASEDEMO ) ) {
 		FS_CheckIdPaks();
 	}
+#endif
 
 #ifdef FS_MISSING
 	if (missingFiles == NULL) {
@@ -4855,6 +4923,7 @@ static void FS_PrintSearchPaths( void )
 	}
 }
 
+#ifndef __WASM__
 
 /*
 ===================
@@ -4923,7 +4992,11 @@ static void FS_CheckIdPaks( void )
 						"**************************************************\n\n\n",
 						pakBasename[3]-'0', path->pack->checksum );
 				}
+#ifndef __WASM__
 				Com_Error(ERR_FATAL, "\n* You need to install correct Quake III Arena files in order to play *");
+#else
+				// this isn't going to work with repacked assets, need spoofing from planet_quake
+#endif
 			}
 
 			foundPak |= 1<<(pakBasename[3]-'0');
@@ -4953,13 +5026,17 @@ static void FS_CheckIdPaks( void )
 			"the correct place and that every file\n"
 			"in the %s directory is present and readable.\n", BASEGAME);
 
+#ifndef __WASM__
 		if(!fs_gamedirvar->string[0]
 		|| !Q_stricmp( fs_gamedirvar->string, BASEGAME )
 		|| !Q_stricmp( fs_gamedirvar->string, BASETA ))
 			Com_Error(ERR_FATAL, "\n*** you need to install Quake III Arena in order to play ***");
+#endif
 	}
 }
 
+
+#endif
 
 /*
 =====================
@@ -5081,6 +5158,40 @@ const char *FS_ReferencedPakChecksums( void ) {
 }
 
 
+#ifdef __WASM__
+
+
+int getAltChecksum(const char *pakName, int *altChecksum) {
+	const altChecksumFiles_t *alt;
+	int c, i;
+	qboolean found = qfalse;
+	int useChecksum = 0;
+	//int useChecksum2;
+	// add alternate checksums
+	for(c = 0; c < ARRAY_LEN(hardcoded_checksums); c++) {
+		alt = &hardcoded_checksums[c];
+		//if(Q_stristr(pakName, alt->pakFilename)) {
+			for(i = 0; i < fs_numServerReferencedPaks; i++) {
+				if(alt->altChecksum == (unsigned int)fs_serverReferencedPaks[i]) {
+					found = qtrue;
+					alt->headerLongs[0] = LittleLong( fs_checksumFeed );
+					useChecksum = Com_BlockChecksum( alt->headerLongs, sizeof( alt->headerLongs[0] ) * alt->numHeaderLongs );
+					//useChecksum2 = Com_BlockChecksum( alt->headerLongs + 1, sizeof( alt->headerLongs[0] ) * (alt->numHeaderLongs - 1) );
+					//Com_Printf( "FS_ReferencedPakPureChecksums: (%i) %i == %i (pure: %i, feed: %i)\n",
+					// 	alt->numHeaderLongs, alt->altChecksum, useChecksum2, useChecksum, fs_checksumFeed);
+					break;
+				}
+			}
+		//}
+	}
+	
+	memcpy(altChecksum, &LittleLong(useChecksum), 4);
+	return found;
+}
+
+#endif
+
+
 /*
 =====================
 FS_ReferencedPakPureChecksums
@@ -5103,16 +5214,33 @@ const char *FS_ReferencedPakPureChecksums( int maxlen ) {
 
 	checksum = fs_checksumFeed;
 	numPaks = 0;
+
+#if defined(USE_ALTCHECKSUM) || defined(__WASM__)
+	int altChecksum = 0;
+	qboolean found = qfalse;
+#endif
+
 	for ( nFlags = FS_CGAME_REF; nFlags; nFlags = nFlags >> 1 ) {
 		if ( nFlags & FS_GENERAL_REF ) {
 			// add a delimiter between must haves and general refs
 			s = Q_stradd( s, "@ " );
 			if ( s > max ) // client-side overflow
 				break;
+#if defined(USE_ALTCHECKSUM) || defined(__WASM__)
+			// PRETEND LIKE THERE'S OVERFLOW NOT TO LEAK HIDDEN PAKS
+			break;
+#endif
 		}
 		for ( search = fs_searchpaths ; search ; search = search->next ) {
 			// is the element a pak file and has it been referenced based on flag?
 			if ( search->pack && (search->pack->referenced & nFlags)) {
+#if defined(USE_ALTCHECKSUM) || defined(__WASM__)
+				if(getAltChecksum(search->pack->pakFilename, &altChecksum)) {
+					break;
+				}
+				found = qtrue;
+#endif
+
 				s = Q_stradd( s, va( "%i ", search->pack->pure_checksum ) );
 				if ( s > max ) // client-side overflow
 					break;
@@ -5123,6 +5251,19 @@ const char *FS_ReferencedPakPureChecksums( int maxlen ) {
 				numPaks++;
 			}
 		}
+
+#if defined(USE_ALTCHECKSUM) || defined(__WASM__)
+		if(!found) {
+			s = Q_stradd( s, va( "%i ", altChecksum ) );
+			if ( nFlags & (FS_CGAME_REF | FS_UI_REF) ) {
+				// break
+			} else {
+				checksum ^= altChecksum;
+				numPaks++;
+			}
+		}
+#endif
+
 	}
 
 	// last checksum is the encoded number of referenced pk3s
@@ -5272,7 +5413,12 @@ void FS_PureServerSetLoadedPaks( const char *pakSums, const char *pakNames ) {
 
 	fs_numServerPaks = c;
 
+#ifndef __WASM__
+	// prevent browser client redownloading a bunch of assets just because it can't load from FS
 	FS_SetDirPolicy( c ? DIR_DENY : DIR_ALLOW );
+#else
+	FS_SetDirPolicy( DIR_ALLOW );
+#endif
 
 	for ( i = 0 ; i < c ; i++ ) {
 		fs_serverPaks[i] = atoi( Cmd_Argv( i ) );
@@ -5442,7 +5588,15 @@ void FS_Restart( int checksumFeed ) {
 			Com_Error( ERR_DROP, "Invalid game folder" );
 			return;
 		}
+#ifndef __WASM__
 		Com_Error( ERR_FATAL, "Couldn't load default.cfg" );
+#else
+		if(com_errorEntered) {
+			Com_Printf( ERR_FATAL, "Couldn't load default.cfg" );
+			Sys_Exit(1);
+		}
+		//Cbuf_AddText( "dlmap q3dm17\n" );
+#endif
 	}
 
 	// new check before safeMode
@@ -5737,10 +5891,12 @@ fileHandle_t FS_PipeOpenWrite( const char *cmd, const char *filename ) {
 		return FS_INVALID_HANDLE;
 	}
 
+#ifndef __WASM__
 #ifdef _WIN32
 	fd->handleFiles.file.o = _popen( cmd, "wb" );
 #else
 	fd->handleFiles.file.o = popen( cmd, "w" );
+#endif
 #endif
 
 	if ( fd->handleFiles.file.o == NULL ) {
@@ -5764,10 +5920,12 @@ void FS_PipeClose( fileHandle_t f )
 		return;
 
 	if ( fsh[f].handleFiles.file.o ) {
+#ifndef __WASM__
 #ifdef _WIN32
 		_pclose( fsh[f].handleFiles.file.o );
 #else
 		pclose( fsh[f].handleFiles.file.o );
+#endif
 #endif
 	}
 

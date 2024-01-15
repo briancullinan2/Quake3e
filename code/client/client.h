@@ -207,13 +207,15 @@ typedef struct {
 	char		downloadList[BIG_INFO_STRING]; // list of paks we need to download
 	qboolean	downloadRestart;	// if true, we need to do another FS_Restart because we downloaded a pak
 
-#ifdef USE_CURL
+#if defined(USE_CURL) || defined(__WASM__)
 	qboolean	cURLEnabled;
 	qboolean	cURLUsed;
 	qboolean	cURLDisconnected;
 	char		downloadURL[MAX_OSPATH];
+#ifndef __WASM__
 	CURL		*downloadCURL;
 	CURLM		*downloadCURLM;
+#endif
 #endif /* USE_CURL */
 
 	// demo information
@@ -375,6 +377,12 @@ qboolean	CL_Download( const char *cmd, const char *pakname, qboolean autoDownloa
 
 #endif
 
+#ifdef __WASM__
+void		Com_DL_Cleanup( void * );
+qboolean	CL_Download( const char *cmd, const char *pakname, qboolean autoDownload );
+void CL_BeginDownload( const char *localName, const char *remoteName );
+#endif
+
 //=============================================================================
 
 extern	vm_t			*cgvm;	// interface to cgame dll or vm
@@ -434,6 +442,12 @@ extern	cvar_t	*r_colorbits;
 extern	cvar_t	*cl_stencilbits;
 extern	cvar_t	*cl_depthbits;
 extern	cvar_t	*cl_drawBuffer;
+
+
+
+extern  cvar_t  *cl_birdsEye;
+extern  cvar_t  *sv_birdsEye;
+
 
 //=================================================
 

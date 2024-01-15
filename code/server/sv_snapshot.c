@@ -137,7 +137,9 @@ static void SV_WriteSnapshotToClient( const client_t *client, msg_t *msg ) {
 		// client hasn't gotten a good message through in a long time
 		if ( com_developer->integer ) {
 			if ( client->deltaMessage != client->netchan.outgoingSequence - ( PACKET_BACKUP + 1 ) ) {
-				Com_Printf( "%s: Delta request from out of date packet.\n", client->name );
+//#ifdef __WASM__
+				//Com_Printf( "%s: Delta request from out of date packet.\n", client->name );
+//#endif
 			}
 		}
 		oldframe = NULL;
