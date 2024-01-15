@@ -43,7 +43,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define STEAMPATH_APPID			"2200"
 
 #define MAX_TEAMNAME            32
-#define MAX_MASTER_SERVERS      5	// number of supported master servers
+#define MAX_MASTER_SERVERS      24	// number of supported master servers
 
 #define GAMENAME_FOR_MASTER		"Quake3Arena"
 #define HEARTBEAT_FOR_MASTER	"QuakeArena-1"
@@ -191,6 +191,10 @@ float FloatSwap( const float *f );
 	#endif
 #endif
 
+#ifdef __WASM__
+#include "../wasm/sys_overrides.h"
+#else
+
 #if defined (_WIN32)
 #if !defined(_MSC_VER)
 // use GCC/Clang functions
@@ -209,6 +213,8 @@ int Q_longjmp_c(void *, int);
 #else // !_WIN32
 #define Q_setjmp setjmp
 #define Q_longjmp longjmp
+#endif
+
 #endif
 
 typedef unsigned char byte;
@@ -782,6 +788,7 @@ typedef struct pc_token_s
 } pc_token_t;
 
 // data is an in/out parm, returns a parsed out token
+void COM_MatchToken( const char**buf_p, const char *match );
 
 qboolean SkipBracedSection( const char **program, int depth );
 void SkipRestOfLine( const char **data );

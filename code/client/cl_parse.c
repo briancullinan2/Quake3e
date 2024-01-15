@@ -865,7 +865,7 @@ void CL_ParseServerMessage( msg_t *msg ) {
 	// parse the message
 	while ( 1 ) {
 		if ( msg->readcount > msg->cursize ) {
-			Com_Error( ERR_DROP,"CL_ParseServerMessage: read past end of server message" );
+			Com_Error( ERR_DROP,"CL_ParseServerMessage: read past end of server message (%i > %i)", msg->readcount, msg->cursize );
 			break;
 		}
 

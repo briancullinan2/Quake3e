@@ -54,7 +54,7 @@ cvar_t	*cl_activeAction;
 cvar_t	*cl_motdString;
 
 cvar_t	*cl_allowDownload;
-#ifdef USE_CURL
+#if defined(USE_CURL) || defined(__WASM__)
 cvar_t	*cl_mapAutoDownload;
 #endif
 cvar_t	*cl_conXOffset;
@@ -94,6 +94,17 @@ cvar_t *cl_stencilbits;
 cvar_t *cl_depthbits;
 cvar_t *cl_drawBuffer;
 
+
+cvar_t *cl_birdsEye;
+cvar_t *sv_birdsEye;
+
+
+#ifdef USE_MASTER_LAN
+cvar_t	*cl_master[MAX_MASTER_SERVERS];		// master server ip address
+#endif
+
+
+
 clientActive_t		cl;
 clientConnection_t	clc;
 clientStatic_t		cls;
@@ -107,6 +118,12 @@ static	qboolean	noGameRestart = qfalse;
 
 #ifdef USE_CURL
 download_t			download;
+#endif
+
+#ifdef __WASM__
+cvar_t  *cl_returnURL;
+
+void			*download;
 #endif
 
 // Structure containing functions exported from refresh DLL
@@ -135,7 +152,7 @@ static void CL_ServerStatus_f( void );
 static void CL_ServerStatusResponse( const netadr_t *from, msg_t *msg );
 static void CL_ServerInfoPacket( const netadr_t *from, msg_t *msg );
 
-#ifdef USE_CURL
+#if defined(USE_CURL) || defined(__WASM__) 
 static void CL_Download_f( void );
 #endif
 static void CL_LocalServers_f( void );
@@ -1003,6 +1020,9 @@ void CL_ShutdownAll( void ) {
 #ifdef USE_CURL
 	CL_cURL_Shutdown();
 #endif
+#ifdef __WASM__
+	Com_DL_Cleanup( &download );
+#endif
 
 	// clear and mute all sounds until next registration
 	S_DisableSounds();
@@ -1297,6 +1317,14 @@ qboolean CL_Disconnect( qboolean showMainMenu ) {
 
 	cl_disconnecting = qfalse;
 
+#if 0 //def __WASM__
+extern void Sys_Return( void );
+
+	if(showMainMenu) {
+		Sys_Return();
+	}
+#endif
+
 	return cl_restarted;
 }
 
@@ -1512,7 +1540,9 @@ void CL_Disconnect_f( void ) {
 			}
 			Cvar_Set( "com_errorMessage", "" );
 			if ( !CL_Disconnect( qfalse ) ) { // restart client if not done already
+//#ifndef __WASM__
 				CL_FlushMemory();
+//#endif
 			}
 			if ( uivm ) {
 				VM_Call( uivm, 1, UI_SET_ACTIVE_MENU, UIMENU_MAIN );
@@ -1772,6 +1802,20 @@ static void CL_ResetPureClientAtServer( void ) {
 }
 
 
+#ifdef __WASM__
+/*
+=================
+CL_Vid_Restart_Fast
+*/
+extern void GL_GetDrawableSize( int *w, int *h );
+
+static void CL_Vid_Restart_Fast() {
+	glconfig_t *glConfig = re.GetConfig();
+	GL_GetDrawableSize( &glConfig->vidWidth, &glConfig->vidHeight );
+	cls.glconfig = *glConfig;
+}
+#endif
+
 /*
 =================
 CL_Vid_Restart
@@ -1783,6 +1827,16 @@ doesn't know what graphics to reload
 =================
 */
 static void CL_Vid_Restart( refShutdownCode_t shutdownCode ) {
+
+/*
+#ifdef __WASM__
+  char *arg = Cmd_Argv(1);
+  if (!strcmp(arg, "fast")) {
+    CL_Vid_Restart_Fast();
+    return;
+  }
+#endif
+*/
 
 	// Settings may have changed so stop recording now
 	if ( CL_VideoRecording() )
@@ -2039,7 +2093,21 @@ static void CL_DownloadsComplete( void ) {
 	// if this is a local client then only the client part of the hunk
 	// will be cleared, note that this is done after the hunk mark has been set
 	//if ( !com_sv_running->integer )
+#ifndef __WASM__
 	CL_FlushMemory();
+#else
+extern	qboolean	first_click;
+
+	re.InitShaders();
+	if(!first_click) {
+		S_Shutdown();
+		cls.soundStarted = qtrue;
+		S_Init();
+		cls.soundRegistered = qtrue;
+		S_BeginRegistration();
+	}
+#endif
+
 
 	// initialize the CGame
 	cls.cgameStarted = qtrue;
@@ -2058,6 +2126,8 @@ static void CL_DownloadsComplete( void ) {
 	CL_WritePacket();
 }
 
+
+#ifndef __WASM__
 
 /*
 =================
@@ -2089,6 +2159,7 @@ static void CL_BeginDownload( const char *localName, const char *remoteName ) {
 	CL_AddReliableCommand( va("download %s", remoteName), qfalse );
 }
 
+#endif
 
 /*
 =================
@@ -2170,6 +2241,7 @@ void CL_NextDownload( void )
 #endif /* USE_CURL */
 
 		if( !useCURL ) {
+#ifndef __WASM__
 		if( (cl_allowDownload->integer & DLF_NO_UDP) ) {
 				Com_Error(ERR_DROP, "UDP Downloads are "
 					"disabled on your client. "
@@ -2181,6 +2253,20 @@ void CL_NextDownload( void )
 				CL_BeginDownload( localName, remoteName );
 			}
 		}
+#else
+		if( (cl_allowDownload->integer & DLF_NO_REDIRECT) ) {
+				Com_Error(ERR_DROP, "WARNING: server allows download "
+				"redirection, but it disabled by client "
+				"configuration (cl_allowDownload is %d)\n",
+				cl_allowDownload->integer);
+				return;
+			}
+			else {
+				CL_BeginDownload( localName, remoteName );
+			}
+		}
+#endif
+
 		clc.downloadRestart = qtrue;
 
 		// move over the rest
@@ -2497,12 +2583,43 @@ static void CL_ServersResponsePacket( const netadr_t* from, msg_t *msg, qboolean
 	byte*			buffptr;
 	byte*			buffend;
 	serverInfo_t	*server;
+	serverInfo_t *servers = &cls.globalServers[0];
+	int	*max = &cls.numglobalservers;
+
+#ifdef USE_MASTER_LAN
+	qboolean websocket = qfalse;
+
+	// check if server response is from a specific list
+	netadr_t addr;
+	if(cls.pingUpdateSource == AS_LOCAL) {
+		for (i = 0; i < MAX_MASTER_SERVERS; i++) {
+			memset(&addr, 0, sizeof(addr));
+			if(!cl_master[i]->string[0]) {
+				continue;
+			}
+
+			if(!NET_StringToAdr(cl_master[i]->string, &addr, NA_UNSPEC)) {
+				continue;
+			}
+
+			if (NET_CompareAdr(from, &addr)) {
+				servers = &cls.localServers[0];
+				max = &cls.numlocalservers;
+				if(!Q_stricmpn(addr.protocol, "ws", 2)
+				 	|| !Q_stricmpn(addr.protocol, "wss", 3)) {
+					websocket = qtrue;
+				}
+				break;
+			}
+		}
+	}
+#endif
 
 	//Com_Printf("CL_ServersResponsePacket\n"); // moved down
 
-	if (cls.numglobalservers == -1) {
+	if (*max == -1) {
 		// state to detect lack of servers or lack of response
-		cls.numglobalservers = 0;
+		*max = 0;
 		cls.numGlobalServerAddresses = 0;
 		hash_reset();
 	}
@@ -2570,7 +2687,7 @@ static void CL_ServersResponsePacket( const netadr_t* from, msg_t *msg, qboolean
 			break;
 	}
 
-	count = cls.numglobalservers;
+	count = *max;
 
 	for (i = 0; i < numservers && count < MAX_GLOBAL_SERVERS; i++) {
 
@@ -2583,7 +2700,7 @@ static void CL_ServersResponsePacket( const netadr_t* from, msg_t *msg, qboolean
 		hash_insert( &addresses[i] );
 
 		// build net address
-		server = &cls.globalServers[count];
+		server = &servers[count];
 
 		CL_InitServerInfo( server, &addresses[i] );
 		// advance to next slot
@@ -2601,7 +2718,7 @@ static void CL_ServersResponsePacket( const netadr_t* from, msg_t *msg, qboolean
 		}
 	}
 
-	cls.numglobalservers = count;
+	*max = count;
 	total = count + cls.numGlobalServerAddresses;
 
 	Com_Printf( "getserversResponse:%3d servers parsed (total %d)\n", numservers, total);
@@ -3287,6 +3404,10 @@ void CL_StartHunkUsers( void ) {
 		cls.uiStarted = qtrue;
 		CL_InitUI();
 	}
+
+	if(!cls.uiStarted) {
+		Key_SetCatcher( Key_GetCatcher( ) | KEYCATCH_CONSOLE );
+	}
 }
 
 
@@ -3829,6 +3950,11 @@ static void CL_InitGLimp_Cvars( void )
 
 	cl_drawBuffer = Cvar_Get( "r_drawBuffer", "GL_BACK", CVAR_CHEAT );
 	Cvar_SetDescription( cl_drawBuffer, "Specifies buffer to draw from: GL_FRONT or GL_BACK." );
+
+	cl_birdsEye = Cvar_Get( "cg_birdsEye", "0", 0 );
+	sv_birdsEye = Cvar_Get( "g_birdsEye", "0", 0 );
+
+
 #ifdef USE_RENDERER_DLOPEN
 #ifdef RENDERER_DEFAULT
 	cl_renderer = Cvar_Get( "cl_renderer", XSTRING( RENDERER_DEFAULT ), CVAR_ARCHIVE | CVAR_LATCH );
@@ -3916,6 +4042,12 @@ void CL_Init( void ) {
 	rconAddress = Cvar_Get ("rconAddress", "", 0);
 	Cvar_SetDescription( rconAddress, "The IP address of the remote console you wish to connect to." );
 
+#ifdef USE_MASTER_LAN
+	for ( int index = 0; index < MAX_MASTER_SERVERS; index++ ) {
+    cl_master[index] = Cvar_Get(va("cl_master%d", index + 1), "", CVAR_ARCHIVE);
+  }
+#endif
+
 	cl_allowDownload = Cvar_Get( "cl_allowDownload", "1", CVAR_ARCHIVE_ND );
 	Cvar_SetDescription( cl_allowDownload, "Enables downloading of content needed in server. Valid bitmask flags:\n 1: Downloading enabled\n 2: Do not use HTTP/FTP downloads\n 4: Do not use UDP downloads" );
 #ifdef USE_CURL
@@ -3960,7 +4092,14 @@ void CL_Init( void ) {
 	cl_guidServerUniq = Cvar_Get( "cl_guidServerUniq", "1", CVAR_ARCHIVE_ND );
 	Cvar_SetDescription( cl_guidServerUniq, "Makes cl_guid unique for each server." );
 
+#ifdef __WASM__
+	//extern void CL_MenuModified(char *oldValue, char *newValue, cvar_t *cv);
+	//Cvar_SetModifiedFunc(Cvar_Get("ui_breadCrumb", "", CVAR_TEMP), CL_MenuModified);
+	cl_returnURL = Cvar_Get("cl_returnURL", "", CVAR_TEMP);
+	cl_dlURL = Cvar_Get( "cl_dlURL", "/maps/repacked/%1", CVAR_ARCHIVE_ND );
+#else
 	cl_dlURL = Cvar_Get( "cl_dlURL", "http://ws.q3df.org/maps/download/%1", CVAR_ARCHIVE_ND );
+#endif
 	Cvar_SetDescription( cl_dlURL, "Cvar must point to download location." );
 
 	cl_dlDirectory = Cvar_Get( "cl_dlDirectory", "0", CVAR_ARCHIVE_ND );
@@ -4021,7 +4160,9 @@ void CL_Init( void ) {
 	Cmd_SetCommandCompletionFunc( "rcon", CL_CompleteRcon );
 	Cmd_AddCommand ("ping", CL_Ping_f );
 	Cmd_AddCommand ("serverstatus", CL_ServerStatus_f );
+#ifndef __WASM__
 	Cmd_AddCommand ("showip", CL_ShowIP_f );
+#endif
 	Cmd_AddCommand ("fs_openedList", CL_OpenedPK3List_f );
 	Cmd_AddCommand ("fs_referencedList", CL_ReferencedPK3List_f );
 	Cmd_AddCommand ("model", CL_SetModel_f );
@@ -4032,7 +4173,7 @@ void CL_Init( void ) {
 	Cmd_AddCommand ("serverinfo", CL_Serverinfo_f );
 	Cmd_AddCommand ("systeminfo", CL_Systeminfo_f );
 
-#ifdef USE_CURL
+#if defined(USE_CURL) || defined(__WASM__)
 	Cmd_AddCommand( "download", CL_Download_f );
 	Cmd_AddCommand( "dlmap", CL_Download_f );
 #endif
@@ -4111,7 +4252,7 @@ void CL_Shutdown( const char *finalmsg, qboolean quit ) {
 	Cmd_RemoveCommand ("systeminfo");
 	Cmd_RemoveCommand ("modelist");
 
-#ifdef USE_CURL
+#if defined(USE_CURL) || defined(__WASM__)
 	Com_DL_Cleanup( &download );
 
 	Cmd_RemoveCommand( "download" );
@@ -4491,6 +4632,42 @@ static void CL_LocalServers_f( void ) {
 	}
 	Com_Memset( &to, 0, sizeof( to ) );
 
+
+#ifdef USE_MASTER_LAN
+	// emulate localhost
+	NET_StringToAdr( va("127.0.0.1:%i", BigShort(PORT_SERVER)), &to, NA_UNSPEC );
+	to.type = NA_IP;
+	//cls.numlocalservers = -1;
+	for ( i = 0; i < MAX_MASTER_SERVERS; i++ ) {
+		if(cls.numGlobalServerAddresses >= MAX_GLOBAL_SERVERS) {
+			break;
+		}
+		netadr_t *addr = &cls.globalServerAddresses[cls.numGlobalServerAddresses];
+		if(!cl_master[i]->string[0]) {
+			continue;
+		}
+		if(!NET_StringToAdr( cl_master[i]->string, addr, NA_UNSPEC )) {
+			continue;
+		}
+
+		// only add localhost if its in the list of cl_master
+		if (NET_CompareAdr(&to, addr)) {
+			//for(j = 0; j < cls.numlocalservers; j++) {
+			//	if ( NET_CompareAdr( addr, &cls.localServers[j].adr ) ) {
+			//		break;
+			//	}
+			//}
+		} else 
+
+		if (addr->port != BigShort((short)PORT_SERVER)) {
+			Com_Printf( "Requesting servers from %s (%s)...\n", cl_master[i]->string, NET_AdrToStringwPort(addr) );
+			NET_OutOfBandPrint( NS_CLIENT, addr, "getservers 68 " );
+			NET_OutOfBandPrint( NS_CLIENT, addr, "getservers 72 " );
+		}
+	}
+#endif
+
+#ifndef __WASM__
 	// The 'xxx' in the message is a challenge that will be echoed back
 	// by the server.  We don't care about that here, but master servers
 	// can use that to prevent spoofed server responses from invalid ip
@@ -4513,6 +4690,7 @@ static void CL_LocalServers_f( void ) {
 #endif
 		}
 	}
+#endif
 }
 
 
@@ -5003,6 +5181,7 @@ static void CL_ServerStatus_f( void ) {
 }
 
 
+#ifndef __WASM__
 /*
 ==================
 CL_ShowIP_f
@@ -5011,8 +5190,10 @@ CL_ShowIP_f
 static void CL_ShowIP_f( void ) {
 	Sys_ShowIP();
 }
+#endif
 
 
+// TODO: something else for server and dedicated, perhaps download from 
 #ifdef USE_CURL
 
 qboolean CL_Download( const char *cmd, const char *pakname, qboolean autoDownload )
@@ -5058,8 +5239,10 @@ qboolean CL_Download( const char *cmd, const char *pakname, qboolean autoDownloa
 
 	return Com_DL_Begin( &download, pakname, cl_dlURL->string, autoDownload );
 }
+#endif // USE_CURL
 
 
+#if defined(USE_CURL) || defined(__WASM__)
 /*
 ==================
 CL_Download_f

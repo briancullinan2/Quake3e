@@ -484,6 +484,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\..\server\sv_bsp_mini.c"
+				>
+			</File>
+			<File
 				RelativePath="..\..\server\sv_client.c"
 				>
 			</File>

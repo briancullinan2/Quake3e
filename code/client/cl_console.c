@@ -984,9 +984,14 @@ void Con_Bottom( void )
 
 void Con_Close( void )
 {
-	if ( !com_cl_running->integer )
+	if ( !com_cl_running || !com_cl_running->integer )
 		return;
 
+	if(!uivm && !cgvm && cls.state == CA_DISCONNECTED) {
+		con.finalFrac = 1.0;
+		Key_SetCatcher( Key_GetCatcher( ) | KEYCATCH_CONSOLE );
+		return; // don't try to hide console because we don't have a VM to display
+	}
 	Field_Clear( &g_consoleField );
 	Con_ClearNotify();
 	Key_SetCatcher( Key_GetCatcher( ) & ~KEYCATCH_CONSOLE );

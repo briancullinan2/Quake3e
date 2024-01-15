@@ -88,7 +88,7 @@ static float ***setup_tone_curves(float curveatt_dB[P_BANDS],float binHz,int n,
   float ath[EHMER_MAX];
   float workc[P_BANDS][P_LEVELS][EHMER_MAX];
   float athc[P_LEVELS][EHMER_MAX];
-  float *brute_buffer=alloca(n*sizeof(*brute_buffer));
+  float *brute_buffer=malloc(n*sizeof(*brute_buffer));
 
   float ***ret=_ogg_malloc(sizeof(*ret)*P_BANDS);
 
@@ -448,8 +448,8 @@ static void seed_loop(vorbis_look_psy *p,
 }
 
 static void seed_chase(float *seeds, int linesper, long n){
-  long  *posstack=alloca(n*sizeof(*posstack));
-  float *ampstack=alloca(n*sizeof(*ampstack));
+  long  *posstack=malloc(n*sizeof(*posstack));
+  float *ampstack=malloc(n*sizeof(*ampstack));
   long   stack=0;
   long   pos=0;
   long   i;
@@ -546,11 +546,11 @@ static void bark_noise_hybridmp(int n,const long *b,
                                 const float offset,
                                 const int fixed){
 
-  float *N=alloca(n*sizeof(*N));
-  float *X=alloca(n*sizeof(*N));
-  float *XX=alloca(n*sizeof(*N));
-  float *Y=alloca(n*sizeof(*N));
-  float *XY=alloca(n*sizeof(*N));
+  float *N=malloc(n*sizeof(*N));
+  float *X=malloc(n*sizeof(*N));
+  float *XX=malloc(n*sizeof(*N));
+  float *Y=malloc(n*sizeof(*N));
+  float *XY=malloc(n*sizeof(*N));
 
   float tN, tX, tXX, tY, tXY;
   int i;
@@ -704,7 +704,7 @@ void _vp_noisemask(vorbis_look_psy *p,
                    float *logmask){
 
   int i,n=p->n;
-  float *work=alloca(n*sizeof(*work));
+  float *work=malloc(n*sizeof(*work));
 
   bark_noise_hybridmp(n,p->bark,logmdct,logmask,
                       140.,-1);
@@ -755,7 +755,7 @@ void _vp_tonemask(vorbis_look_psy *p,
 
   int i,n=p->n;
 
-  float *seed=alloca(sizeof(*seed)*p->total_octave_lines);
+  float *seed=malloc(sizeof(*seed)*p->total_octave_lines);
   float att=local_specmax+p->vi->ath_adjatt;
   for(i=0;i<p->total_octave_lines;i++)seed[i]=NEGINF;
 
@@ -937,7 +937,7 @@ static void flag_lossless(int limit, float prepoint, float postpoint, float *mdc
 static float noise_normalize(vorbis_look_psy *p, int limit, float *r, float *q, float *f, int *flags, float acc, int i, int n, int *out){
 
   vorbis_info_psy *vi=p->vi;
-  float **sort = alloca(n*sizeof(*sort));
+  float **sort = malloc(n*sizeof(*sort));
   int j,count=0;
   int start = (vi->normal_p ? vi->normal_start-i : n);
   if(start>n)start=n;
@@ -1031,31 +1031,31 @@ void _vp_couple_quantize_normalize(int blobno,
   /* inout passes in the ifloor, passes back quantized result */
 
   /* unquantized energy (negative indicates amplitude has negative sign) */
-  float **raw = alloca(ch*sizeof(*raw));
+  float **raw = malloc(ch*sizeof(*raw));
 
   /* dual pupose; quantized energy (if flag set), othersize fabs(raw) */
-  float **quant = alloca(ch*sizeof(*quant));
+  float **quant = malloc(ch*sizeof(*quant));
 
   /* floor energy */
-  float **floor = alloca(ch*sizeof(*floor));
+  float **floor = malloc(ch*sizeof(*floor));
 
   /* flags indicating raw/quantized status of elements in raw vector */
-  int   **flag  = alloca(ch*sizeof(*flag));
+  int   **flag  = malloc(ch*sizeof(*flag));
 
   /* non-zero flag working vector */
-  int    *nz    = alloca(ch*sizeof(*nz));
+  int    *nz    = malloc(ch*sizeof(*nz));
 
   /* energy surplus/defecit tracking */
-  float  *acc   = alloca((ch+vi->coupling_steps)*sizeof(*acc));
+  float  *acc   = malloc((ch+vi->coupling_steps)*sizeof(*acc));
 
   /* The threshold of a stereo is changed with the size of n */
   if(n > 1000)
     postpoint=stereo_threshholds_limited[g->coupling_postpointamp[blobno]];
 
-  raw[0]   = alloca(ch*partition*sizeof(**raw));
-  quant[0] = alloca(ch*partition*sizeof(**quant));
-  floor[0] = alloca(ch*partition*sizeof(**floor));
-  flag[0]  = alloca(ch*partition*sizeof(**flag));
+  raw[0]   = malloc(ch*partition*sizeof(**raw));
+  quant[0] = malloc(ch*partition*sizeof(**quant));
+  floor[0] = malloc(ch*partition*sizeof(**floor));
+  flag[0]  = malloc(ch*partition*sizeof(**flag));
 
   for(i=1;i<ch;i++){
     raw[i]   = &raw[0][partition*i];
