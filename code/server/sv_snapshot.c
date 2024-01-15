@@ -715,6 +715,72 @@ static void SV_BuildCommonSnapshot( void )
 }
 
 
+static clientPVS_t *SV_BuildClientPVS( client_t *client, int clientSlot, const playerState_t *ps, qboolean buildEntityMask, snapshotEntityNumbers_t		entityNumbers ) 
+{
+	clientSnapshot_t			*frame;
+	svEntity_t	*svEnt;
+	clientPVS_t	*pvs;
+	vec3_t	org;
+	int i;
+
+	frame = &client->frames[ client->netchan.outgoingSequence & PACKET_MASK ];
+
+	pvs = &client_pvs[ clientSlot ];
+
+	if ( pvs->snapshotFrame != svs.snapshotFrame /*|| pvs->clientNum != ps->clientNum*/ ) {
+		pvs->snapshotFrame = svs.snapshotFrame;
+
+		// find the client's viewpoint
+		VectorCopy( ps->origin, org );
+		org[2] += ps->viewheight;
+
+		// bump the counter used to prevent double adding
+		sv.snapshotCounter++;
+
+		// never send client's own entity, because it can
+		// be regenerated from the playerstate
+		svEnt = &sv.svEntities[ ps->clientNum ];
+		svEnt->snapshotCounter = sv.snapshotCounter;
+
+		// add all the entities directly visible to the eye, which
+		// may include portal entities that merge other viewpoints
+		pvs->clientNum = ps->clientNum;
+		pvs->areabytes = 0;
+		memset( pvs->areabits, 0, sizeof ( pvs->areabits ) );
+
+		// empty entities before visibility check
+		pvs->entMaskBuilt = qfalse;
+		pvs->numbers.numSnapshotEntities = 0;
+		pvs->numbers.unordered = qfalse;
+		SV_AddEntitiesVisibleFromPoint( org, frame, &entityNumbers, qfalse );
+		// if there were portals visible, there may be out of order entities
+		// in the list which will need to be resorted for the delta compression
+		// to work correctly.  This also catches the error condition
+		// of an entity being included twice.
+		if ( pvs->numbers.unordered ) {
+			SV_SortEntityNumbers( &pvs->numbers.snapshotEntities[0], pvs->numbers.numSnapshotEntities );
+		}
+
+		// now that all viewpoint's areabits have been OR'd together, invert
+		// all of them to make it a mask vector, which is what the renderer wants
+		for ( i = 0 ; i < MAX_MAP_AREA_BYTES/4 ; i++ ) {
+			((int *)pvs->areabits)[i] = ((int *)pvs->areabits)[i] ^ -1;
+		}
+	}
+
+	if ( buildEntityMask && !pvs->entMaskBuilt ) {
+		pvs->entMaskBuilt = qtrue;
+		memset( pvs->entMask, 0, sizeof ( pvs->entMask ) );
+		for ( i = 0; i < pvs->numbers.numSnapshotEntities ; i++ ) {
+			SET_ABIT( pvs->entMask, svs.currFrame->ents[ pvs->numbers.snapshotEntities[ i ] ]->number );
+		}
+	}
+
+	return pvs;
+}
+
+
+
 #define	SCORE_RECORDER 1
 #define	SCORE_CLIENT   2
 #define SCORE_PERIOD   10000
@@ -816,8 +882,6 @@ static void SV_BuildClientSnapshot( client_t *client ) {
 	if ( frame->multiview ) {
 		clientPVS_t *pvs;
 		psFrame_t *psf;
-		int		clientarea, clientcluster;
-		int		leafnum;
 
 		int slot;
 
@@ -845,11 +909,7 @@ static void SV_BuildClientSnapshot( client_t *client ) {
 				psf->clientSlot = slot;
 
 				// TODO: probably fix this
-				leafnum = CM_PointLeafnum (ps->origin);
-				clientarea = CM_LeafArea (leafnum);
-				clientcluster = CM_LeafCluster (leafnum);
-
-				pvs = CM_ClusterPVS(clientcluster);
+				pvs = SV_BuildClientPVS( client, slot, &psf->ps, qtrue, entityNumbers );
 
 				psf->areabytes = pvs->areabytes;
 				memcpy( psf->areabits, pvs->areabits, sizeof( psf->areabits ) );
