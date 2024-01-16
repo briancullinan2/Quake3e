@@ -5,6 +5,4 @@ output/
 *.user
 cmake-*
 .idea
-node_modules
 .DS_Store
-code/wasm

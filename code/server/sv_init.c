@@ -124,6 +124,18 @@ void SV_SetConfigstring (int index, const char *val) {
 	Z_Free( sv.configstrings[index] );
 	sv.configstrings[index] = CopyString( val );
 
+
+#ifdef USE_MULTIVM_SERVER
+  if(sv.gentitySizes[gvmi] == 0) {
+    // still starting up
+    return;
+  }
+	if(index >= CS_PLAYERS && index < CS_PLAYERS + MAX_CLIENTS) {
+		Com_Printf("SV_SetConfigstring: client configstring %i: %.*s\n", index,
+			(int)strlen(sv.configstrings[index]), sv.configstrings[index]);
+	}
+#endif
+
 	// send it to all the clients if we aren't
 	// spawning a new server
 	if ( sv.state == SS_GAME || sv.restarting ) {
@@ -224,8 +236,11 @@ static void SV_CreateBaseline( void )
 	int				entnum;
 
 
-
+#ifdef USE_MULTIVM_SERVER
+  for ( entnum = 0; entnum < sv.num_entitiesWorlds[gvmi] ; entnum++ )
+#else
 	for ( entnum = 0; entnum < sv.num_entities ; entnum++ )
+#endif
 	{
 		ent = SV_GentityNum( entnum );
 		if ( !ent->r.linked ) {
@@ -560,12 +575,28 @@ void SV_SpawnServer( const char *mapname, qboolean killBots ) {
 	FS_Restart( sv.checksumFeed );
 
 	Sys_SetStatus( "Loading map %s", mapname );
+
+#ifndef USE_MULTIVM_SERVER
 	CM_LoadMap( va( "maps/%s.bsp", mapname ), qfalse, &checksum );
+#else
+	gameWorlds[gvmi] = CM_LoadMap( va( "maps/%s.bsp", mapname ), qfalse, &checksum );
+#endif
+
 
 	// set serverinfo visible name
 	Cvar_Set( "mapname", mapname );
+#ifdef USE_MULTIVM_SERVER
+  Cvar_Get( va("mapname_%i", gvmi), mapname, CVAR_TAGGED_SPECIFIC );
+  Cvar_Set( va("mapname_%i", gvmi), mapname );
+#endif
+
 
 	Cvar_Set( "sv_mapChecksum", va( "%i",checksum ) );
+#ifdef USE_MULTIVM_SERVER
+  Cvar_Set( va("sv_mapChecksum_%i", gvmi), va( "%i", checksum ) );
+  Cvar_Get( va("sv_mapChecksum_%i", gvmi), "", CVAR_TAGGED_SPECIFIC );
+#endif
+
 
 	// serverid should be different each time
 	sv.serverId = com_frameTime;
@@ -585,7 +616,11 @@ void SV_SpawnServer( const char *mapname, qboolean killBots ) {
 	//sv.time = sv.time ? sv.time : 8;
 
 	// load and spawn all other entities
+#ifdef USE_MULTIVM_SERVER
+	SV_InitGameProgs(qfalse);
+#else
 	SV_InitGameProgs();
+#endif
 
 	// don't allow a map_restart if game is modified
 	sv_gametype->modified = qfalse;
@@ -604,6 +639,12 @@ void SV_SpawnServer( const char *mapname, qboolean killBots ) {
 	SV_CreateBaseline();
 
 	for ( i = 0; i < sv_maxclients->integer; i++ ) {
+#ifdef USE_MULTIVM_SERVER
+		// also clear the entity type because this is how multiworld 
+		//   figures out of a client has been there before to send gamestates
+		SV_SetConfigstring(CS_PLAYERS + i, "");
+#endif
+
 		// send the new gamestate to all connected clients
 		if ( svs.clients[i].state >= CS_CONNECTED ) {
 			const char *denied;
@@ -689,7 +730,16 @@ void SV_SpawnServer( const char *mapname, qboolean killBots ) {
 
 		pakslen = strlen( p ) + 9; // + strlen( "\\sv_paks\\" )
 		freespace = SV_RemainingGameState();
+#ifdef USE_MULTIVM_SERVER
+    infolen = strlen( Cvar_InfoString_Big( CVAR_SYSTEMINFO, &infoTruncated, gvmi ) );
+#else
+#ifdef USE_MULTIVM_CLIENT
+		infolen = strlen( Cvar_InfoString_Big( CVAR_SYSTEMINFO, &infoTruncated, 0 ) );
+#else
 		infolen = strlen( Cvar_InfoString_Big( CVAR_SYSTEMINFO, &infoTruncated ) );
+#endif
+#endif
+
 
 		if ( infoTruncated ) {
 			Com_Printf( S_COLOR_YELLOW "WARNING: truncated systeminfo!\n" );
@@ -710,12 +760,30 @@ void SV_SpawnServer( const char *mapname, qboolean killBots ) {
 		}
 	}
 
+
+#ifdef USE_MULTIVM_SERVER
+	SV_SetConfigstring( CS_SYSTEMINFO, Cvar_InfoString_Big( CVAR_SYSTEMINFO, NULL, gvmi ) );
+	cvar_modifiedFlags &= ~CVAR_SYSTEMINFO;
+
+	SV_SetConfigstring( CS_SERVERINFO, Cvar_InfoString( CVAR_SERVERINFO, NULL, gvmi ) );
+	cvar_modifiedFlags &= ~CVAR_SERVERINFO;
+#else
+#ifdef USE_MULTIVM_CLIENT
+	SV_SetConfigstring( CS_SYSTEMINFO, Cvar_InfoString_Big( CVAR_SYSTEMINFO, NULL, 0 ) );
+	cvar_modifiedFlags &= ~CVAR_SYSTEMINFO;
+
+	SV_SetConfigstring( CS_SERVERINFO, Cvar_InfoString( CVAR_SERVERINFO, NULL, 0 ) );
+	cvar_modifiedFlags &= ~CVAR_SERVERINFO;
+#else
 	// save systeminfo and serverinfo strings
 	SV_SetConfigstring( CS_SYSTEMINFO, Cvar_InfoString_Big( CVAR_SYSTEMINFO, NULL ) );
 	cvar_modifiedFlags &= ~CVAR_SYSTEMINFO;
 
 	SV_SetConfigstring( CS_SERVERINFO, Cvar_InfoString( CVAR_SERVERINFO, NULL ) );
 	cvar_modifiedFlags &= ~CVAR_SERVERINFO;
+#endif
+#endif
+
 
 	// any media configstring setting now should issue a warning
 	// and any configstring changes should be reliably transmitted
@@ -757,7 +825,13 @@ void SV_Init( void )
 	Cvar_SetDescription( sv_gametype, "Set the gametype to mod." );
 	Cvar_Get ("sv_keywords", "", CVAR_SERVERINFO);
 	//Cvar_Get ("protocol", va("%i", PROTOCOL_VERSION), CVAR_SERVERINFO | CVAR_ROM);
+
+#ifdef USE_MULTIVM_SERVER
+	sv_mapname = Cvar_Get ("mapname", "nomap", CVAR_SERVERINFO | CVAR_ROM | CVAR_TAGGED_ORIGINAL);
+#else
 	sv_mapname = Cvar_Get ("mapname", "nomap", CVAR_SERVERINFO | CVAR_ROM);
+#endif
+
 	Cvar_SetDescription( sv_mapname, "Display the name of the current map being used on a server." );
 	sv_privateClients = Cvar_Get( "sv_privateClients", "0", CVAR_SERVERINFO );
 	Cvar_CheckRange( sv_privateClients, "0", va( "%i", MAX_CLIENTS-1 ), CV_INTEGER );
@@ -780,7 +854,7 @@ void SV_Init( void )
 
 #ifdef USE_MV
 	Cvar_Get( "mvproto", va( "%i", MV_PROTOCOL_VERSION ), CVAR_SERVERINFO | CVAR_ROM );
-	sv_autoRecord = Cvar_Get( "sv_mvAutoRecord", "0", CVAR_ARCHIVE | CVAR_SERVERINFO );
+	sv_mvAutoRecord = Cvar_Get( "sv_mvAutoRecord", "0", CVAR_ARCHIVE | CVAR_SERVERINFO );
 	sv_demoFlags = Cvar_Get( "sv_mvFlags", "3", CVAR_ARCHIVE );
 	sv_mvClients = Cvar_Get( "sv_mvClients", "8", CVAR_ARCHIVE | CVAR_LATCH );
 	Cvar_CheckRange( sv_mvClients, "0", NULL, CV_INTEGER );
@@ -796,6 +870,20 @@ void SV_Init( void )
 	SV_LoadRecordCache();
 #endif
 #endif
+#ifdef USE_MULTIVM_SERVER
+	sv_mvWorld = Cvar_Get("sv_mvWorld", "1", CVAR_ARCHIVE | CVAR_SERVERINFO | CVAR_TAGGED_ORIGINAL);
+	Cvar_CheckRange( sv_mvWorld, "0", "1", CV_INTEGER );
+	sv_mvSyncPS = Cvar_Get("sv_mvSyncPS", "0", CVAR_ARCHIVE);
+	Cvar_CheckRange( sv_mvSyncPS, "0", "1", CV_INTEGER );
+	sv_mvSyncXYZ = Cvar_Get("sv_mvSyncXYZ", "0", CVAR_ARCHIVE);
+	Cvar_CheckRange( sv_mvSyncXYZ, "0", "1", CV_INTEGER );
+	sv_mvSyncMove = Cvar_Get("sv_mvSyncMove", "0", CVAR_ARCHIVE);
+	Cvar_CheckRange( sv_mvSyncMove, "0", "1", CV_INTEGER );
+	sv_mvOmnipresent = Cvar_Get("sv_mvOmnipresent", "0", CVAR_ARCHIVE | CVAR_SERVERINFO);
+	Cvar_CheckRange( sv_mvOmnipresent, "-1", "1", CV_INTEGER );
+#endif
+
+
 	sv_minRate = Cvar_Get( "sv_minRate", "0", CVAR_ARCHIVE_ND | CVAR_SERVERINFO );
 	Cvar_SetDescription( sv_minRate, "Minimum server bandwidth (in bit per second) a client can use." );
 	sv_maxRate = Cvar_Get( "sv_maxRate", "0", CVAR_ARCHIVE_ND | CVAR_SERVERINFO );
@@ -822,8 +910,16 @@ void SV_Init( void )
 	Cvar_SetDescription( sv_rconPassword, "Password for remote server commands." );
 	sv_privatePassword = Cvar_Get ("sv_privatePassword", "", CVAR_TEMP );
 	Cvar_SetDescription( sv_privatePassword, "Set password for private clients to login with." );
-	sv_fps = Cvar_Get ("sv_fps", "20", CVAR_TEMP );
+
+#ifdef USE_MULTIVM_SERVER
+	sv_fps = Cvar_Get ("sv_fps", "40", CVAR_TEMP | CVAR_SYSTEMINFO );
+	Cvar_CheckRange( sv_fps, "10", "200", CV_INTEGER );
+#else
+	sv_fps = Cvar_Get ("sv_fps", "20", CVAR_TEMP 
+		| (Cvar_VariableIntegerValue("r_headless") ? CVAR_PROTECTED : 0) );
 	Cvar_CheckRange( sv_fps, "10", "125", CV_INTEGER );
+#endif
+
 	Cvar_SetDescription( sv_fps, "Set the max frames per second the server sends the client." );
 	sv_timeout = Cvar_Get( "sv_timeout", "200", CVAR_TEMP );
 	Cvar_CheckRange( sv_timeout, "4", NULL, CV_INTEGER );
@@ -831,7 +927,13 @@ void SV_Init( void )
 	sv_zombietime = Cvar_Get( "sv_zombietime", "2", CVAR_TEMP );
 	Cvar_CheckRange( sv_zombietime, "1", NULL, CV_INTEGER );
 	Cvar_SetDescription( sv_zombietime, "Seconds to sink messages after disconnect." );
+
+#ifdef USE_MULTIVM_SERVER
+	Cvar_Get ("nextmap", "", CVAR_TEMP | CVAR_SERVERINFO );
+#else
 	Cvar_Get ("nextmap", "", CVAR_TEMP );
+#endif
+
 
 	sv_allowDownload = Cvar_Get ("sv_allowDownload", "1", CVAR_SERVERINFO);
 	Cvar_SetDescription( sv_allowDownload, "Toggle the ability for clients to download files maps etc. from server." );
@@ -854,6 +956,11 @@ void SV_Init( void )
 	sv_killserver = Cvar_Get( "sv_killserver", "0", 0 );
 	Cvar_SetDescription( sv_killserver, "Internal flag to manage server state." );
 	sv_mapChecksum = Cvar_Get( "sv_mapChecksum", "", CVAR_ROM );
+
+#ifdef USE_MULTIVM_SERVER
+  sv_mapChecksum->flags |= CVAR_TAGGED_ORIGINAL;
+#endif
+
 	Cvar_SetDescription( sv_mapChecksum, "Allows check for client server map to match." );
 	sv_lanForceRate = Cvar_Get( "sv_lanForceRate", "1", CVAR_ARCHIVE_ND );
 	Cvar_SetDescription( sv_lanForceRate, "Forces LAN clients to the maximum rate instead of accepting client setting." );

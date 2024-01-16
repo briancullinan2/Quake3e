@@ -31,6 +31,22 @@ static cvar_t		*cl_graphheight;
 static cvar_t		*cl_graphscale;
 static cvar_t		*cl_graphshift;
 
+#ifdef USE_MULTIVM_CLIENT
+float clientScreens[MAX_NUM_VMS][4] = {
+	{0,0,0,0},    {-1,-1,-1,-1},
+	{-1,-1,-1,-1},{-1,-1,-1,-1},
+	{-1,-1,-1,-1},{-1,-1,-1,-1},
+	{-1,-1,-1,-1},{-1,-1,-1,-1},
+	{-1,-1,-1,-1},{-1,-1,-1,-1}
+};
+
+refdef_t views[MAX_NUM_VMS];
+qboolean viewsUpdated[MAX_NUM_VMS] = {
+  qtrue, qtrue, qtrue, qtrue, qtrue,
+  qtrue, qtrue, qtrue, qtrue, qtrue
+};
+#endif
+
 /*
 ================
 SCR_DrawNamedPic
@@ -510,6 +526,262 @@ void SCR_Done( void ) {
 }
 
 
+#define	MAX_LAGOMETER_PING	900
+#define	MAX_LAGOMETER_RANGE	300
+#define	LAG_SAMPLES		128
+
+
+typedef struct {
+	int		frameSamples[LAG_SAMPLES];
+	int		frameCount;
+	int		snapshotFlags[LAG_SAMPLES];
+	int		snapshotSamples[LAG_SAMPLES];
+	int		snapshotCount;
+} lagometer_t;
+
+lagometer_t		lagometer;
+
+void CL_AddLagometerSnapshotInfo(clSnapshot_t *snapshot) {
+  if ( !snapshot ) {
+		lagometer.snapshotSamples[ lagometer.snapshotCount & ( LAG_SAMPLES - 1) ] = -1;
+		lagometer.snapshotCount++;
+		return;
+	}
+
+	// add this snapshot's info
+	lagometer.snapshotSamples[ lagometer.snapshotCount & ( LAG_SAMPLES - 1) ] = snapshot->ping;
+	lagometer.snapshotFlags[ lagometer.snapshotCount & ( LAG_SAMPLES - 1) ] = snapshot->snapFlags;
+	lagometer.snapshotCount++;
+}
+
+static void CL_CalculatePing( int ms ) {
+	int count, i, v;
+  int			offset;
+#ifdef USE_MULTIVM_CLIENT
+  int igs = clc.currentView;
+#endif
+	cls.meanPing = 0;
+
+	for ( i = 0, count = 0; i < LAG_SAMPLES; i++ ) {
+		v = lagometer.snapshotSamples[i];
+		if ( v >= 0 ) {
+			cls.meanPing += v;
+			count++;
+		}
+	}
+
+	if ( count ) {
+		cls.meanPing /= count;
+	}
+
+#ifdef USE_MULTIVM_CLIENT
+	offset = cl.serverTimes[clientGames[0]] - cl.snapWorlds[igs].serverTime;
+#else
+	offset = cl.serverTime - cl.snap.serverTime;
+#endif
+	lagometer.frameSamples[ lagometer.frameCount & ( LAG_SAMPLES - 1) ] = offset;
+	lagometer.frameCount++;
+}
+
+/*
+==============
+CG_DrawLagometer
+==============
+*/
+static void SCR_DrawLagometer( void ) {
+	int		a, x, y, i;
+	float	v;
+	float	ax, ay, aw, ah, mid, range;
+	int		color;
+	float	vscale;
+
+	//
+	// draw the graph
+	//
+#ifdef MISSIONPACK
+	x = 640 + 1 - 48;
+	y = 480 + 1 - 144;
+#else
+	x = 640 + 1 - 48;
+	y = 480 + 1 - 48;
+#endif
+
+	re.SetColor( NULL );
+  ax = x;
+  ay = y;
+  aw = 48;
+  ah = 48;
+
+  SCR_AdjustFrom640(&ax, &ay, &aw, &ah);
+
+  re.DrawStretchPic( 
+    ax, 
+    ay, 
+    aw, 
+    ah, 
+    0, 0, 1, 1, 
+    cls.lagometerShader );
+
+	color = -1;
+	range = ah / 3;
+	mid = ay + range;
+	vscale = range / MAX_LAGOMETER_RANGE;
+
+	// draw the frame interpoalte / extrapolate graph
+	for ( a = 0 ; a < aw ; a++ ) {
+		i = ( lagometer.frameCount - 1 - a ) & (LAG_SAMPLES - 1);
+		v = lagometer.frameSamples[i];
+		v *= vscale;
+		if ( v > 0 ) {
+			if ( color != 1 ) {
+				color = 1;
+				re.SetColor( g_color_table[ColorIndex(COLOR_YELLOW)] );
+			}
+			if ( v > range ) {
+				v = range;
+			}
+			re.DrawStretchPic ( ax + aw - a, mid - v, 1, v, 0, 0, 0, 0, cls.whiteShader );
+		} else if ( v < 0 ) {
+			if ( color != 2 ) {
+				color = 2;
+				re.SetColor( g_color_table[ColorIndex(COLOR_BLUE)] );
+			}
+			v = -v;
+			if ( v > range ) {
+				v = range;
+			}
+			re.DrawStretchPic( ax + aw - a, mid, 1, v, 0, 0, 0, 0, cls.whiteShader );
+		}
+	}
+
+	// draw the snapshot latency / drop graph
+	range = ah / 2;
+	vscale = range / MAX_LAGOMETER_PING;
+
+	for ( a = 0 ; a < aw ; a++ ) {
+		i = ( lagometer.snapshotCount - 1 - a ) & (LAG_SAMPLES - 1);
+		v = lagometer.snapshotSamples[i];
+		if ( v > 0 ) {
+			if ( lagometer.snapshotFlags[i] & SNAPFLAG_RATE_DELAYED ) {
+				if ( color != 5 ) {
+					color = 5;	// YELLOW for rate delay
+					re.SetColor( g_color_table[ColorIndex(COLOR_YELLOW)] );
+				}
+			} else {
+				if ( color != 3 ) {
+					color = 3;
+					re.SetColor( g_color_table[ColorIndex(COLOR_GREEN)] );
+				}
+			}
+			v = v * vscale;
+			if ( v > range ) {
+				v = range;
+			}
+			re.DrawStretchPic( ax + aw - a, ay + ah - v, 1, v, 0, 0, 0, 0, cls.whiteShader );
+		} else if ( v < 0 ) {
+			if ( color != 4 ) {
+				color = 4;		// RED for dropped snapshots
+				re.SetColor( g_color_table[ColorIndex(COLOR_RED)] );
+			}
+			re.DrawStretchPic( ax + aw - a, ay + ah - range, 1, range, 0, 0, 0, 0, cls.whiteShader );
+		}
+	}
+
+	re.SetColor( NULL );
+
+	if ( cl_nopredict->integer || cls.synchronousClients ) {
+    SCR_DrawSmallStringExt( 
+      cls.glconfig.vidWidth-1 - 3 * smallchar_width, 
+      ay,
+      "snc",
+      g_color_table[ ColorIndex( COLOR_WHITE ) ],
+      qtrue, qfalse );
+	}
+
+	if ( !clc.demoplaying ) {
+    SCR_DrawSmallStringExt( 
+      ax+1, 
+      ay,
+      va( "%ims", cls.meanPing ),
+      g_color_table[ ColorIndex( COLOR_WHITE ) ],
+      qtrue, qfalse );
+	}
+
+	//CG_DrawDisconnect();
+}
+
+
+#define	FPS_FRAMES	4
+static void SCR_DrawFPS( int t ) {
+	const char	*s;
+	static int	previousTimes[FPS_FRAMES];
+	static int	index;
+	int		i, total;
+	int		fps;
+	static	int	previous;
+	int		frameTime;
+
+  if(!cl_drawFPS->integer) {
+    return;
+  }
+
+	// don't use serverTime, because that will be drifting to
+	// correct for internet lag changes, timescales, timedemos, etc
+	frameTime = t - previous;
+	previous = t;
+
+	previousTimes[index % FPS_FRAMES] = frameTime;
+	index++;
+	if ( index > FPS_FRAMES ) {
+		// average multiple frames together to smooth changes out a bit
+		total = 0;
+		for ( i = 0 ; i < FPS_FRAMES ; i++ ) {
+			total += previousTimes[i];
+		}
+		if ( !total ) {
+			total = 1;
+		}
+		fps = 1000 * FPS_FRAMES / total;
+
+		s = va( "%ifps", fps );
+		SCR_DrawStringExt( 
+      640 - 4 - strlen(s) * BIGCHAR_WIDTH, 
+      2,
+      BIGCHAR_WIDTH, 
+      s,
+      g_color_table[ ColorIndex( COLOR_WHITE ) ],
+      qtrue, qfalse );
+	}
+}
+
+
+#ifdef USE_MULTIVM_CLIENT
+// draw a box around the current view where keypresses and mouse input is being sent
+void SCR_DrawCurrentView( void ) {
+	float	yf, wf;
+	float xadjust = 0;
+	wf = SCREEN_WIDTH;
+	yf = SCREEN_HEIGHT;
+	SCR_AdjustFrom640( &xadjust, &yf, &wf, NULL );
+	re.SetColor( g_color_table[ ColorIndex( COLOR_RED ) ] );
+	
+	// TODO: duh re.SetDvrFrame(clientScreens[cgvmi][0], clientScreens[cgvmi][1], clientScreens[cgvmi][2], clientScreens[cgvmi][3]);
+	// TODO: draw a box around the edge of the screen but SetDvrFrame right before so its just the edge of the box
+  // top
+	re.DrawStretchPic( clientScreens[cgvmi][0] * wf, clientScreens[cgvmi][1] * yf, clientScreens[cgvmi][2] * wf, 2, 0, 0, 1, 1, cls.whiteShader );
+	// right
+	re.DrawStretchPic( clientScreens[cgvmi][2] * wf - 2, 0, 2, clientScreens[cgvmi][3] * yf, 0, 0, 1, 1, cls.whiteShader );
+	// bottom 
+	re.DrawStretchPic( clientScreens[cgvmi][0] * wf, clientScreens[cgvmi][3] * yf - 2, clientScreens[cgvmi][2] * wf, 2, 0, 0, 1, 1, cls.whiteShader );
+	// left
+	re.DrawStretchPic( clientScreens[cgvmi][0] * wf, clientScreens[cgvmi][1] * yf, 2, clientScreens[cgvmi][3] * yf, 0, 0, 1, 1, cls.whiteShader);
+}
+
+static int lastSubWorld[MAX_NUM_VMS] = {0,0,0,0,0,0,0,0,0,0};
+
+#endif
+
+
 //=======================================================
 
 /*
@@ -616,8 +888,8 @@ void SCR_UpdateScreen( void ) {
 	if ( !scr_initialized )
 		return; // not initialized yet
 
+	int ms = Sys_Milliseconds();
 	if ( framecount == cls.framecount ) {
-		int ms = Sys_Milliseconds();
 		if ( next_frametime && ms - next_frametime < 0 ) {
 			re.ThrottleBackend();
 		} else {
@@ -637,6 +909,56 @@ void SCR_UpdateScreen( void ) {
 	// that case.
 	if ( uivm )
 	{
+#ifdef USE_MULTIVM_CLIENT
+		qboolean first = qtrue;
+		re.SetDvrFrame(clientScreens[cgvmi][0], clientScreens[cgvmi][1], clientScreens[cgvmi][2], clientScreens[cgvmi][3]);
+
+
+		for(int i = 0; i < MAX_NUM_VMS; i++) {
+			cgvmi = i;
+			uivmi = i;
+			if(!cgvm && !uivm) continue;
+
+			// if we just switched from a VM, skip it for a few frames so it never times out
+			// otherwise there is a time going backwards error
+			//if(ms - cls.lastVidRestart <= 5) {
+			//	continue;
+			//}
+
+			// TODO: fix sounds that leak through
+			// skip if we haven't received a snapshot in a while
+			if(cl.serverTimes[0] - cl.snapWorlds[clientGames[cgvmi]].serverTime > 1000
+				&& clientScreens[cgvmi][0] == -1) continue;
+			// skip if we are in world mode, multiworld renderer calls screen refresh
+			//   when the portal is visible
+			if(clc.sv_mvWorld && clientScreens[cgvmi][0] == -1) {
+				// limit secondary screens to 60 FPS using buffers
+				if(ms - lastSubWorld[cgvmi] < 13) continue;
+				lastSubWorld[cgvmi] = ms;
+				// tired renderer :(
+				clientScreens[cgvmi][0] =
+				clientScreens[cgvmi][1] =
+				clientScreens[cgvmi][2] =
+				clientScreens[cgvmi][3] = 0;
+			}
+
+
+			if(first && clientScreens[cgvmi][0] > -1) {
+				CL_CalculatePing(ms);
+				first = qfalse;
+			}
+
+			CM_SwitchMap(clientMaps[cgvmi]);
+#ifdef USE_LAZY_MEMORY
+			if(!re.SwitchWorld) {
+				Com_Error(ERR_FATAL, "WARNING: Renderer compiled without multiworld support!");
+			} else {
+				re.SwitchWorld(worldMaps[cgvmi]);
+				re.SetDvrFrame(clientScreens[cgvmi][0], clientScreens[cgvmi][1], clientScreens[cgvmi][2], clientScreens[cgvmi][3]);
+			}
+#endif
+#endif
+
 		// XXX
 		int in_anaglyphMode = Cvar_VariableIntegerValue("r_anaglyphMode");
 		// if running in stereo, we need to draw the frame twice
@@ -645,6 +967,44 @@ void SCR_UpdateScreen( void ) {
 			SCR_DrawScreenField( STEREO_RIGHT );
 		} else {
 			SCR_DrawScreenField( STEREO_CENTER );
+		}
+
+
+#ifdef USE_MULTIVM_CLIENT
+		}
+
+		if(clientScreens[cgvmi][0] == 0
+			&& clientScreens[cgvmi][1] == 0
+			&& clientScreens[cgvmi][2] == 0
+			&& clientScreens[cgvmi][3] == 0
+		) {
+			clientScreens[cgvmi][0] =
+			clientScreens[cgvmi][1] =
+			clientScreens[cgvmi][2] =
+			clientScreens[cgvmi][3] = -1;
+		}
+
+		cgvmi = clc.currentView;
+		uivmi = 0;
+		CM_SwitchMap(clientMaps[cgvmi]);
+#ifdef USE_LAZY_MEMORY
+		re.SwitchWorld(worldMaps[cgvmi]);
+		re.SetDvrFrame(0, 0, 1, 1);
+#endif
+
+		if(cl_mvHighlight && cl_mvHighlight->integer)
+			SCR_DrawCurrentView();
+
+#endif
+
+
+		//SCR_DrawFPS(ms);
+		//if(cl_lagometer->integer && cls.state == CA_ACTIVE && !clc.demoplaying)
+		//	SCR_DrawLagometer();
+
+		// debug graph can be drawn on top of anything
+		if ( cl_debuggraph->integer || cl_timegraph->integer || cl_debugMove->integer ) {
+			SCR_DrawDebugGraph ();
 		}
 
 		if ( com_speeds->integer ) {

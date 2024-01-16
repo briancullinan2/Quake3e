@@ -125,6 +125,8 @@ void MSG_ReadDeltaPlayerstate( msg_t *msg, const playerState_t *from, playerStat
 void MSG_ReportChangeVectors_f( void );
 
 //============================================================================
+
+//============================================================================
 // PureMultiView protocol
 
 #ifdef USE_MV
@@ -193,7 +195,6 @@ int LZSS_Expand( lzctx_t *ctx, msg_t *msg, byte *out, int maxsize, int charbits 
 int LZSS_Compress( lzctx_t *ctx, msg_t *msg, const byte *in, int length, int charbits );
 int LZSS_CompressToStream( lzctx_t *ctx, lzstream_t *stream, const byte *in, int length );
 void MSG_WriteLZStream( msg_t *msg, lzstream_t *stream );
-int		MSG_ReadBits( msg_t *msg, int bits );
 
 #endif // USE_MV
 
@@ -222,7 +223,13 @@ NET
 
 #define	MAX_PACKET_USERCMDS		32		// max number of usercmd_t in a packet
 
+
+#ifdef USE_MV
+#define	MAX_SNAPSHOT_ENTITIES	MAX_GENTITIES
+#else
 #define	MAX_SNAPSHOT_ENTITIES	256
+#endif
+
 
 #define	PORT_ANY			-1
 
@@ -261,6 +268,13 @@ typedef struct {
 	uint16_t	port;
 #ifdef USE_IPV6
 	uint32_t	scope_id;	// Needed for IPv6 link-local addresses
+#endif
+	char name[256];
+	char protocol[10];
+#ifdef USE_MULTIVM_SERVER
+  // the socket the connection came in on, 
+  //   so we know which world to join based on port number
+  int  netWorld; 
 #endif
 } netadr_t;
 
@@ -403,12 +417,15 @@ enum svc_ops_e {
 	// new commands, supported only by ioquake3 protocol but not legacy
 	svc_voipSpeex,     // not wrapped in USE_VOIP, so this value is reserved.
 	svc_voipOpus,      //
-
+	
 #ifdef USE_MV
 	svc_multiview = 16, // 1.32e multiview extension
 #ifdef USE_MV_ZCMD
 	svc_zcmd = 17,      // LZ-compressed version of svc_serverCommand
 #endif
+#endif
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
+	svc_mvWorld = 18, // 1.32e multiview extension
 #endif
 };
 
@@ -423,6 +440,11 @@ enum clc_ops_e {
 	clc_moveNoDelta,		// [[usercmd_t]
 	clc_clientCommand,		// [string] message
 	clc_EOF,
+
+#if defined(USE_MULTIVM_SERVER) || defined(USE_MULTIVM_CLIENT)
+	clc_mvMove,
+	clc_mvMoveNoDelta,
+#endif
 
 	// new commands, supported only by ioquake3 protocol but not legacy
 	clc_voipSpeex,   // not wrapped in USE_VOIP, so this value is reserved.
@@ -695,11 +717,22 @@ void 	Cvar_WriteVariables( fileHandle_t f );
 
 void	Cvar_Init( void );
 
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
+void Cbuf_ExecuteTagged( cbufExec_t exec_when, const char *text, int tag );
+
+
+const char *Cvar_InfoString      ( int bit, qboolean *truncated, int tagged );
+const char *Cvar_InfoString_Big  ( int bit, qboolean *truncated, int tagged );
+      void	Cvar_InfoStringBuffer( int bit, char *buff, int buffsize, int tagged );
+#else
+
 const char *Cvar_InfoString( int bit, qboolean *truncated );
 const char *Cvar_InfoString_Big( int bit, qboolean *truncated );
 // returns an info string containing all the cvars that have the given bit set
 // in their flags ( CVAR_USERINFO, CVAR_SERVERINFO, CVAR_SYSTEMINFO, etc )
 void	Cvar_InfoStringBuffer( int bit, char *buff, int buffsize );
+#endif
+
 void	Cvar_CheckRange( cvar_t *cv, const char *minVal, const char *maxVal, cvarValidator_t type );
 void	Cvar_SetDescription( cvar_t *var, const char *var_description );
 
@@ -778,7 +811,11 @@ qboolean FS_Initialized( void );
 void	FS_InitFilesystem ( void );
 void	FS_Shutdown( qboolean closemfp );
 
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
+qboolean	FS_ConditionalRestart( int checksumFeed, qboolean clientRestart, int igvm );
+#else
 qboolean	FS_ConditionalRestart( int checksumFeed, qboolean clientRestart );
+#endif
 
 void	FS_Restart( int checksumFeed );
 // shutdown and restart the filesystem so changes to fs_gamedir can take effect
@@ -827,12 +864,6 @@ void FS_BypassPure( void );
 void FS_RestorePure( void );
 
 int FS_Home_FOpenFileRead( const char *filename, fileHandle_t *file );
-
-#ifdef USE_MV
-char **FS_Home_ListFilteredFiles( const char *path, const char *extension, const char *filter, int *numfiles );
-int	FS_Home_FileSize( const char *name );
-#endif
-
 
 qboolean FS_FileIsInPAK( const char *filename, int *pChecksum, char *pakName );
 // returns qtrue if a file is in the PAK file, otherwise qfalse
@@ -1271,7 +1302,14 @@ void Key_WriteBindings( fileHandle_t f );
 void S_ClearSoundBuffer( void );
 // call before filesystem access
 
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MV)
+int		MSG_ReadBits( msg_t *msg, int bits );
+#endif
+#ifdef USE_MULTIVM_CLIENT
+void CL_SystemInfoChanged( qboolean onlyGame, int igs );
+#else
 void CL_SystemInfoChanged( qboolean onlyGame );
+#endif
 qboolean CL_GameSwitch( void );
 
 // AVI files have the start of pixel lines 4 byte-aligned

@@ -44,7 +44,12 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "be_interface.h"
 #include "be_aas_def.h"
 
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
+aas_t aasWorlds[MAX_NUM_VMS];
+int   aasgvm = 0;
+#else
 aas_t aasworld;
+#endif
 
 libvar_t *saveroutingcache;
 

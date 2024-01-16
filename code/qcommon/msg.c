@@ -152,10 +152,10 @@ void MSG_WriteBits( msg_t *msg, int value, int bits ) {
 }
 
 
-#ifdef USE_MV
-int MSG_ReadBits( msg_t *msg, int bits )
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER) || defined(USE_MV)
+int MSG_ReadBits( msg_t *msg, int bits ) 
 #else
-static int MSG_ReadBits( msg_t *msg, int bits )
+static int MSG_ReadBits( msg_t *msg, int bits ) 
 #endif
 {
 	int		value;
@@ -682,7 +682,6 @@ typedef struct {
 #endif
 } netField_t;
 
-
 #ifdef USE_MV
 int MSG_entMergeMask = 0;
 #endif
@@ -747,69 +746,7 @@ static const netField_t entityStateFields[] =
 	{ NETF(frame), 16 }
 };
 
-#else
-
-static const netField_t entityStateFields[] =
-{
-{ NETF(pos.trTime), 32 },
-{ NETF(pos.trBase[0]), 0 },
-{ NETF(pos.trBase[1]), 0 },
-{ NETF(pos.trDelta[0]), 0 },
-{ NETF(pos.trDelta[1]), 0 },
-{ NETF(pos.trBase[2]), 0 },
-{ NETF(apos.trBase[1]), 0 },
-{ NETF(pos.trDelta[2]), 0 },
-{ NETF(apos.trBase[0]), 0 },
-{ NETF(event), 10 },
-{ NETF(angles2[1]), 0 },
-{ NETF(eType), 8 },
-{ NETF(torsoAnim), 8 },
-{ NETF(eventParm), 8 },
-{ NETF(legsAnim), 8 },
-{ NETF(groundEntityNum), GENTITYNUM_BITS },
-{ NETF(pos.trType), 8 },
-{ NETF(eFlags), 19 },
-{ NETF(otherEntityNum), GENTITYNUM_BITS },
-{ NETF(weapon), 8 },
-{ NETF(clientNum), 8 },
-{ NETF(angles[1]), 0 },
-{ NETF(pos.trDuration), 32 },
-{ NETF(apos.trType), 8 },
-{ NETF(origin[0]), 0 },
-{ NETF(origin[1]), 0 },
-{ NETF(origin[2]), 0 },
-{ NETF(solid), 24 },
-{ NETF(powerups), MAX_POWERUPS },
-{ NETF(modelindex), 8 },
-{ NETF(otherEntityNum2), GENTITYNUM_BITS },
-{ NETF(loopSound), 8 },
-{ NETF(generic1), 8 },
-{ NETF(origin2[2]), 0 },
-{ NETF(origin2[0]), 0 },
-{ NETF(origin2[1]), 0 },
-{ NETF(modelindex2), 8 },
-{ NETF(angles[0]), 0 },
-{ NETF(time), 32 },
-{ NETF(apos.trTime), 32 },
-{ NETF(apos.trDuration), 32 },
-{ NETF(apos.trBase[2]), 0 },
-{ NETF(apos.trDelta[0]), 0 },
-{ NETF(apos.trDelta[1]), 0 },
-{ NETF(apos.trDelta[2]), 0 },
-{ NETF(time2), 32 },
-{ NETF(angles[2]), 0 },
-{ NETF(angles2[0]), 0 },
-{ NETF(angles2[2]), 0 },
-{ NETF(constantLight), 32 },
-{ NETF(frame), 16 }
-};
-
-#endif
-
-
-#ifdef USE_MV
- 
-#include "../game/bg_public.h"
+//#include "../game/bg_public.h"
 
 int MSG_PlayerStateToEntityStateXMask( const playerState_t *ps, const entityState_t *s, qboolean snap ) {
 	int		i;
@@ -823,6 +760,7 @@ int MSG_PlayerStateToEntityStateXMask( const playerState_t *ps, const entityStat
 	if ( s->pos.trTime != ps->commandTime ) // CPMA
 		mask |= SM_TRTIME;
 
+/*
 	if ( ps->pm_type == PM_INTERMISSION || ps->pm_type == PM_SPECTATOR ) {
 		if ( s->eType != ET_INVISIBLE ) {
 			//Com_DPrintf( S_COLOR_YELLOW "E#0.1\n" );
@@ -839,6 +777,7 @@ int MSG_PlayerStateToEntityStateXMask( const playerState_t *ps, const entityStat
 			mask |= SM_BASE;
 		}
 	}
+*/
 
 	// !CPMA: SM_TRTYPE
 	if ( s->pos.trType != TR_INTERPOLATE ) {
@@ -890,16 +829,22 @@ int MSG_PlayerStateToEntityStateXMask( const playerState_t *ps, const entityStat
 	}
 
 	// EFLAGS
+#ifdef DEBUG
+#define	EF_DEAD				0x00000001		// don't draw a foe marker over players with EF_DEAD
+#define	STAT_HEALTH		0x00000000
+
 	tmp = ps->eFlags;
 	if ( ps->stats[STAT_HEALTH] <= 0 ) {
 		tmp |= EF_DEAD;
 	} else {
 		tmp &= ~EF_DEAD;
 	}
+	// safety check
 	if ( s->eFlags != tmp ) {
 		Com_Printf( S_COLOR_YELLOW "E#8: s->eFlags %i != %i health=%i\n", s->eFlags, tmp, ps->stats[ STAT_HEALTH ] );
 		mask |= SM_EFLAGS;
 	}
+#endif
 
 	if ( s->loopSound != ps->loopSound || s->generic1 != ps->generic1 ) {
 		//Com_DPrintf( S_COLOR_YELLOW "E#9\n" );
@@ -936,6 +881,7 @@ void MSG_PlayerStateToEntityState( playerState_t *ps, entityState_t *s, qboolean
 
 	if ( sm & SM_BASE ) 
 	{
+/*
 		if ( ps->pm_type == PM_INTERMISSION || ps->pm_type == PM_SPECTATOR ) {
 			s->eType = ET_INVISIBLE;
 		} else if ( ps->stats[STAT_HEALTH] <= GIB_HEALTH ) {
@@ -943,6 +889,7 @@ void MSG_PlayerStateToEntityState( playerState_t *ps, entityState_t *s, qboolean
 		} else {
 			s->eType = ET_PLAYER;
 		}
+*/
 
 		//s->pos.trType = TR_INTERPOLATE; // -> now set by SM_TRTYPE
 		s->apos.trType = TR_INTERPOLATE;
@@ -1018,10 +965,64 @@ void MSG_PlayerStateToEntityState( playerState_t *ps, entityState_t *s, qboolean
 #endif
 }
 
+#else
+
+static const netField_t entityStateFields[] =
+{
+{ NETF(pos.trTime), 32 },
+{ NETF(pos.trBase[0]), 0 },
+{ NETF(pos.trBase[1]), 0 },
+{ NETF(pos.trDelta[0]), 0 },
+{ NETF(pos.trDelta[1]), 0 },
+{ NETF(pos.trBase[2]), 0 },
+{ NETF(apos.trBase[1]), 0 },
+{ NETF(pos.trDelta[2]), 0 },
+{ NETF(apos.trBase[0]), 0 },
+{ NETF(event), 10 },
+{ NETF(angles2[1]), 0 },
+{ NETF(eType), 8 },
+{ NETF(torsoAnim), 8 },
+{ NETF(eventParm), 8 },
+{ NETF(legsAnim), 8 },
+{ NETF(groundEntityNum), GENTITYNUM_BITS },
+{ NETF(pos.trType), 8 },
+{ NETF(eFlags), 19 },
+{ NETF(otherEntityNum), GENTITYNUM_BITS },
+{ NETF(weapon), 8 },
+{ NETF(clientNum), 8 },
+{ NETF(angles[1]), 0 },
+{ NETF(pos.trDuration), 32 },
+{ NETF(apos.trType), 8 },
+{ NETF(origin[0]), 0 },
+{ NETF(origin[1]), 0 },
+{ NETF(origin[2]), 0 },
+{ NETF(solid), 24 },
+{ NETF(powerups), MAX_POWERUPS },
+{ NETF(modelindex), 8 },
+{ NETF(otherEntityNum2), GENTITYNUM_BITS },
+{ NETF(loopSound), 8 },
+{ NETF(generic1), 8 },
+{ NETF(origin2[2]), 0 },
+{ NETF(origin2[0]), 0 },
+{ NETF(origin2[1]), 0 },
+{ NETF(modelindex2), 8 },
+{ NETF(angles[0]), 0 },
+{ NETF(time), 32 },
+{ NETF(apos.trTime), 32 },
+{ NETF(apos.trDuration), 32 },
+{ NETF(apos.trBase[2]), 0 },
+{ NETF(apos.trDelta[0]), 0 },
+{ NETF(apos.trDelta[1]), 0 },
+{ NETF(apos.trDelta[2]), 0 },
+{ NETF(time2), 32 },
+{ NETF(angles[2]), 0 },
+{ NETF(angles2[0]), 0 },
+{ NETF(angles2[2]), 0 },
+{ NETF(constantLight), 32 },
+{ NETF(frame), 16 }
+};
 
 #endif
-
-
 
 // if (int)f == f and (int)f + ( 1<<(FLOAT_INT_BITS-1) ) < ( 1 << FLOAT_INT_BITS )
 // the float will be sent with FLOAT_INT_BITS, otherwise all 32 bits will be sent
@@ -1107,7 +1108,6 @@ void MSG_WriteDeltaEntity( msg_t *msg, const entityState_t *from, const entitySt
 		fromF = (int *)( (byte *)from + field->offset );
 		toF = (int *)( (byte *)to + field->offset );
 
-
 #ifdef USE_MV
 		if ( *fromF == *toF || ( ( field->mergeMask & MSG_entMergeMask ) && (to->number < MAX_CLIENTS) ) ) {
 			MSG_WriteBits( msg, 0, 1 );	// no change
@@ -1119,7 +1119,6 @@ void MSG_WriteDeltaEntity( msg_t *msg, const entityState_t *from, const entitySt
 			MSG_WriteBits( msg, 0, 1 );	// no change
 			continue;
 		}
-
 #endif
 
 		MSG_WriteBits( msg, 1, 1 );	// changed
@@ -1653,6 +1652,7 @@ void MSG_ReadDeltaPlayerstate( msg_t *msg, const playerState_t *from, playerStat
 }
 
 //===========================================================================
+
 #if defined( USE_MV ) && defined( USE_MV_ZCMD )
 
 // command compression/decompression

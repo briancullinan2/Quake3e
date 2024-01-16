@@ -54,7 +54,13 @@ typedef enum {
 
 // we might not use all MAX_GENTITIES every frame
 // so leave more room for slow-snaps clients etc.
+
+#ifdef USE_MULTIVM_SERVER
+#define NUM_SNAPSHOT_FRAMES (PACKET_BACKUP*4*MAX_NUM_VMS)
+#else
 #define NUM_SNAPSHOT_FRAMES (PACKET_BACKUP*4)
+#endif
+
 
 typedef struct snapshotFrame_s {
 	entityState_t *ents[ MAX_GENTITIES ];
@@ -74,6 +80,29 @@ typedef struct {
 	int				checksumFeedServerId;
 	int				snapshotCounter;	// incremented for each snapshot built
 	int				timeResidual;		// <= 1000 / sv_frame->value
+	int				nextFrameTime;		// when time > nextFrameTime, process world
+
+#ifdef USE_MULTIVM_SERVER
+  int       currentWorld;
+  char		 *configstrings[MAX_NUM_VMS][MAX_CONFIGSTRINGS];
+#define configstrings configstrings[gvmi]
+	svEntity_t		svEntities[MAX_NUM_VMS][MAX_GENTITIES];
+#define svEntities svEntities[gvmi]
+	const char		*entityParsePoint; // TODO: need parse points in case loading 2 at the same time?
+	sharedEntity_t	*gentitiesWorlds[MAX_NUM_VMS];
+	int				gentitySizes[MAX_NUM_VMS];
+//#define gentitySize gentitySizes[gvmi]
+	int				num_entitiesWorlds[MAX_NUM_VMS];
+	playerState_t	*gameClientWorlds[MAX_NUM_VMS];
+#define gameClients gameClientWorlds[gvmi] // these are all just pointers with players join so it's OK to duplicate
+	int				gameClientSizes[MAX_NUM_VMS];
+#define gameClientSize gameClientSizes[gvmi]
+	int				restartTime;
+	int				time; // TODO: keep track of times seperately?
+	byte			baselineUsed[MAX_NUM_VMS][ MAX_GENTITIES ];
+#define baselineUsed baselineUsed[gvmi]
+#else
+
 	char			*configstrings[MAX_CONFIGSTRINGS];
 	svEntity_t		svEntities[MAX_GENTITIES];
 
@@ -91,6 +120,7 @@ typedef struct {
 	int				time;
 
 	byte			baselineUsed[ MAX_GENTITIES ];
+#endif
 } server_t;
 
 typedef struct {
@@ -112,12 +142,17 @@ typedef struct {
 	int				num_psf;				// number of playerStates to send
 	byte			psMask[MAX_CLIENTS/8];	// playerState mask
 #endif
+#ifdef  USE_MULTIVM_SERVER
+	int       world;
+#endif
+
 
 	int				messageSent;		// time the message was transmitted
 	int				messageAcked;		// time the message was acked
 	int				messageSize;		// used to rate drop packets
 
 	int				frameNum;			// from snapshot storage to compare with last valid
+
 #ifdef USE_MV
 	entityState_t	*ents[ MAX_GENTITIES ];
 #else
@@ -125,8 +160,6 @@ typedef struct {
 #endif
 
 } clientSnapshot_t;
-
-
 
 #ifdef USE_MV
 
@@ -143,7 +176,6 @@ typedef struct psFrame_s {
 } psFrame_t;
 
 #endif // USE_MV
-
 
 
 typedef enum {
@@ -197,7 +229,13 @@ typedef struct client_s {
 	int				gamestateMessageNum;	// netchan->outgoingSequence of gamestate
 	int				challenge;
 
+#ifdef USE_MULTIVM_SERVER
+	usercmd_t		lastUsercmds[MAX_NUM_VMS];
+#define lastUsercmd lastUsercmds[gvmi]
+#else
 	usercmd_t		lastUsercmd;
+#endif
+
 	int				lastClientCommand;	// reliable client message sequence
 	char			lastClientCommandString[MAX_STRING_CHARS];
 	sharedEntity_t	*gentity;			// SV_GentityNum(clientnum)
@@ -216,14 +254,29 @@ typedef struct client_s {
 	qboolean		downloadEOF;		// We have sent the EOF block
 	int				downloadSendTime;	// time we last got an ack from the client
 
+
+#ifdef USE_MULTIVM_SERVER
+	int				deltaMessages[MAX_NUM_VMS];		// frame last client usercmd message
+#define deltaMessage deltaMessages[gvmi]
+#else
 	int				deltaMessage;		// frame last client usercmd message
+#endif
+
+
 	int				lastPacketTime;		// svs.time when packet was last received
 	int				lastConnectTime;	// svs.time when connection started
 	int				lastDisconnectTime;
 	int				lastSnapshotTime;	// svs.time of last sent snapshot
 	qboolean		rateDelayed;		// true if nextSnapshotTime was set based on rate instead of snapshotMsec
 	int				timeoutCount;		// must timeout a few frames in a row so debugging doesn't break
+
+
+#ifdef USE_MULTIVM_SERVER
+  clientSnapshot_t	frames[MAX_NUM_VMS][PACKET_BACKUP];	// updates can be delta'd from here
+#else
 	clientSnapshot_t	frames[PACKET_BACKUP];	// updates can be delta'd from here
+#endif
+
 	int				ping;
 	int				rate;				// bytes / second, 0 - unlimited
 	int				snapshotMsec;		// requests a snapshot every snapshotMsec unless rate choked
@@ -253,7 +306,8 @@ typedef struct client_s {
 
 	char			tld[3]; // "XX\0"
 	const char		*country;
- 
+
+
 #ifdef USE_MV
 	struct {
 		int				protocol;
@@ -272,8 +326,15 @@ typedef struct client_s {
 		qboolean		recorder;
 		
 	} multiview;
-	int mvAck;
 #endif // USE_MV
+#ifdef USE_MULTIVM_SERVER
+	int gameWorld;
+	int newWorld;
+#endif
+
+#ifdef USE_MV
+	int mvAck;
+#endif
 
 } client_t;
 
@@ -304,7 +365,13 @@ typedef struct {
 	int			currentSnapshotFrame;	// for initializing empty frames
 	int			lastValidFrame;			// updated with each snapshot built
 	snapshotFrame_t	snapFrames[ NUM_SNAPSHOT_FRAMES ];
+	
+#ifdef USE_MULTIVM_SERVER
+  snapshotFrame_t	*currFrameWorlds[MAX_NUM_VMS]; // current frame that clients can refer
+#define currFrame  currFrameWorlds[gvmi]
+#else
 	snapshotFrame_t	*currFrame; // current frame that clients can refer
+#endif
 
 #ifdef USE_MV	
 	int			numSnapshotPSF;				// sv_democlients->integer*PACKET_BACKUP*MAX_CLIENTS
@@ -333,7 +400,13 @@ typedef struct
 
 extern	serverStatic_t	svs;				// persistant server info across maps
 extern	server_t		sv;					// cleared each map
+#ifndef USE_MULTIVM_SERVER
 extern	vm_t			*gvm;				// game virtual machine
+#else
+extern  int   gvmi;
+extern  vm_t *gvmWorlds[MAX_NUM_VMS];
+extern  int   gameWorlds[MAX_NUM_VMS];
+#endif
 
 extern	cvar_t	*sv_fps;
 extern	cvar_t	*sv_timeout;
@@ -344,7 +417,6 @@ extern	cvar_t	*sv_allowDownload;
 extern	cvar_t	*sv_maxclients;
 extern	cvar_t	*sv_maxclientsPerIP;
 extern	cvar_t	*sv_clientTLD;
-
 
 #ifdef USE_MV
 extern	fileHandle_t	sv_demoFile;
@@ -358,13 +430,20 @@ extern	int		sv_lastClientSeq;
 extern	cvar_t	*sv_mvClients;
 extern	cvar_t	*sv_mvPassword;
 extern	cvar_t	*sv_demoFlags;
-extern	cvar_t	*sv_autoRecord;
+extern	cvar_t	*sv_mvAutoRecord;
 
 extern	cvar_t	*sv_mvFileCount;
 extern	cvar_t	*sv_mvFolderSize;
 
 #endif // USE_MV
-
+#ifdef USE_MULTIVM_SERVER
+#define SV_PlayerPresent(x) ( SV_GentityNum(x)->s.eType >= ET_PLAYER && sv.configstrings[CS_PLAYERS + (int)(x)][0] != '\0' )
+extern  cvar_t  *sv_mvWorld;
+extern  cvar_t  *sv_mvSyncPS;
+extern  cvar_t  *sv_mvSyncXYZ;
+extern  cvar_t  *sv_mvSyncMove;
+extern  cvar_t  *sv_mvOmnipresent;
+#endif
 
 extern	cvar_t	*sv_privateClients;
 extern	cvar_t	*sv_hostname;
@@ -452,17 +531,6 @@ int SV_SendQueuedMessages( void );
 void SV_FreeIP4DB( void );
 void SV_PrintLocations_f( client_t *client );
 
-
-
-#ifdef USE_MV
-void SV_TrackDisconnect( int clientNum );
-void SV_ForwardServerCommands( client_t *recorder /*, const client_t *client */ );
-void SV_MultiViewStopRecord_f( void );
-int SV_FindActiveClient( qboolean checkCommands, int skipClientNum, int minActive );
-void SV_SetTargetClient( int clientNum );
-#endif // USE_MV
-
-
 //
 // sv_ccmds.c
 //
@@ -470,6 +538,25 @@ void SV_Heartbeat_f( void );
 client_t *SV_GetPlayerByHandle( void );
 
 #ifdef USE_MV
+//
+// sv_multiview.c
+//
+#define	SCORE_RECORDER 1
+#define	SCORE_CLIENT   2
+#define SCORE_PERIOD   10000
+
+
+void SV_ChangeMaxClients( void );
+void SV_SpawnServer( const char *mapname, qboolean killBots );
+void SV_CreateBaseline( void );
+void SV_BoundMaxClients( int minimum );
+void SV_SetSnapshotParams( void );
+
+void SV_TrackDisconnect( int clientNum );
+void SV_ForwardServerCommands( client_t *recorder /*, const client_t *client */ );
+void SV_MultiViewStopRecord_f( void );
+int SV_FindActiveClient( qboolean checkCommands, int skipClientNum, int minActive );
+void SV_SetTargetClient( int clientNum );
 void SV_LoadRecordCache( void );
 void SV_SaveRecordCache( void );
 void SV_MultiViewRecord_f( void );
@@ -504,7 +591,28 @@ sharedEntity_t *SV_GentityNum( int num );
 playerState_t *SV_GameClientNum( int num );
 svEntity_t	*SV_SvEntityForGentity( sharedEntity_t *gEnt );
 sharedEntity_t *SV_GEntityForSvEntity( svEntity_t *svEnt );
+
+#ifdef USE_MULTIVM_SERVER
+typedef enum {
+
+	SPAWNORIGIN,
+	SAMEORIGIN,
+	COPYORIGIN,
+	MOVEORIGIN,
+} origin_enum_t;
+void SV_Teleport( client_t *client, int newWorld, origin_enum_t changeOrigin, vec3_t *newOrigin );
+void SV_Tele_f( client_t *client );
+void SV_SendClientGameState( client_t *client );
+void SV_SetClientViewAngle( int clientNum, vec3_t angle );
+#endif
+
+
+#ifdef USE_MULTIVM_SERVER
+void    SV_LoadVM( client_t *cl );
+void		SV_InitGameProgs ( qboolean createNew );
+#else
 void		SV_InitGameProgs ( void );
+#endif
 void		SV_ShutdownGameProgs ( void );
 void		SV_RestartGameProgs( void );
 qboolean	SV_inPVS (const vec3_t p1, const vec3_t p2);
@@ -512,6 +620,10 @@ qboolean	SV_inPVS (const vec3_t p1, const vec3_t p2);
 //
 // sv_bot.c
 //
+#ifdef USE_MULTIVM_SERVER
+void    SV_SetAASgvm( int gvmi );
+#endif
+
 void		SV_BotFrame( int time );
 int			SV_BotAllocateClient(void);
 void		SV_BotFreeClient( int clientNum );

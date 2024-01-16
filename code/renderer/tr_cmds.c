@@ -81,7 +81,13 @@ static void R_IssueRenderCommands( void ) {
 	cmdList = &backEndData->commands;
 
 	// add an end-of-list command
+#ifdef USE_UNLOCKED_CVARS
+	int cmdUsed = cmdList->used % MAX_RENDER_DIVISOR;
+	int cmdSubList = (cmdList->used - cmdUsed) / MAX_RENDER_DIVISOR;
+	*(int *)(cmdList->cmds[ cmdSubList ] + cmdUsed) = RC_END_OF_LIST;
+#else
 	*(int *)(cmdList->cmds + cmdList->used) = RC_END_OF_LIST;
+#endif
 
 	// clear it out, in case this is a sync and not a buffer flip
 	cmdList->used = 0;
@@ -96,7 +102,13 @@ static void R_IssueRenderCommands( void ) {
 	// actually start the commands going
 	if ( !r_skipBackEnd->integer ) {
 		// let it start on the new batch
+#ifdef USE_UNLOCKED_CVARS
+		for(int i = 0; i <= cmdSubList; i++) {
+			RB_ExecuteRenderCommands( cmdList->cmds[i] );
+		}
+#else
 		RB_ExecuteRenderCommands( cmdList->cmds );
+#endif
 	}
 }
 
@@ -130,6 +142,34 @@ static void *R_GetCommandBufferReserved( int bytes, int reservedBytes ) {
 	bytes = PAD(bytes, sizeof(void *));
 
 	// always leave room for the end of list command
+#ifdef USE_UNLOCKED_CVARS
+	if ( cmdList->used + bytes + sizeof( int ) + reservedBytes > r_maxcmds->integer ) {
+		if ( bytes > r_maxcmds->integer - sizeof( int ) ) {
+			ri.Error( ERR_FATAL, "R_GetCommandBuffer: bad size %i", bytes );
+		}
+		// if we run out of room, just start dropping commands
+		return NULL;
+	}
+
+	// expand the commands list when necessary
+	int cmdUsed = cmdList->used % MAX_RENDER_DIVISOR;
+	int cmdSubList = (cmdList->used - cmdUsed) / MAX_RENDER_DIVISOR;
+	if(cmdUsed + bytes >= MAX_RENDER_DIVISOR) {
+		if(!cmdList->cmds[cmdSubList + 1]) {
+			Com_Printf("Expanding the command list one time.\n");
+			cmdList->cmds[cmdSubList + 1] = ri.Hunk_Alloc(sizeof(byte) * MAX_RENDER_DIVISOR, h_low);
+		}
+
+		*(int *)(cmdList->cmds[cmdSubList] + cmdUsed) = RC_END_OF_LIST;
+		cmdList->used = (cmdSubList + 1) * MAX_RENDER_DIVISOR + bytes;
+
+		return cmdList->cmds[cmdSubList + 1];
+	} else {
+		cmdList->used += bytes;
+
+		return cmdList->cmds[cmdSubList] + cmdUsed;
+	}
+#else
 	if ( cmdList->used + bytes + sizeof( int ) + reservedBytes > MAX_RENDER_COMMANDS ) {
 		if ( bytes > MAX_RENDER_COMMANDS - sizeof( int ) ) {
 			ri.Error( ERR_FATAL, "R_GetCommandBuffer: bad size %i", bytes );
@@ -141,6 +181,7 @@ static void *R_GetCommandBufferReserved( int bytes, int reservedBytes ) {
 	cmdList->used += bytes;
 
 	return cmdList->cmds + cmdList->used - bytes;
+#endif
 }
 
 
@@ -175,6 +216,49 @@ void R_AddDrawSurfCmd( drawSurf_t *drawSurfs, int numDrawSurfs ) {
 	cmd->refdef = tr.refdef;
 	cmd->viewParms = tr.viewParms;
 }
+
+
+
+
+
+
+#ifdef USE_MULTIVM_CLIENT
+void R_SetWorld(viewParms_t *oldParms, viewParms_t *newParms) {
+	// first, add a world command to this world to switch command buffers
+	setWorldCommand_t	*cmd1;
+	cmd1 = R_GetCommandBuffer( sizeof( *cmd1 ) );
+	cmd1->commandId = RC_SET_WORLD;
+	cmd1->world = ri.worldMaps[newParms->newWorld];
+
+	// then add a command to the new world to skip the render sequence 
+	//   it switches to at the end of frame so it doesn't render twice
+	rwi = ri.worldMaps[newParms->newWorld];
+	setWorldCommand_t	*cmd2;
+	cmd2 = R_GetCommandBuffer( sizeof( *cmd2 ) );
+	cmd2->commandId = RC_SET_WORLD;
+	cmd2->world = rwi; // same world
+	// update the first setWorldCommand to where to pick up after this skip command
+	cmd1->next = (const void *)(cmd2 + 1);
+
+	// render commands on newWorld command buffer
+	R_RenderView( newParms );
+	// TODO: fix oldParms should come from newWorld?
+	tr.viewParms = *oldParms; // happens in new world, so reset in new world before `rwi` changes
+
+	// then add a command to switch back to original world
+	setWorldCommand_t	*cmd3;
+	cmd3 = R_GetCommandBuffer( sizeof( *cmd3 ) );
+	cmd3->commandId = RC_SET_WORLD;
+	cmd3->world = ri.worldMaps[oldParms->newWorld];
+	cmd3->next = (const void *)(cmd1 + 1);
+	// update the skip command (cmd2) to skip the number of commands this render added
+	cmd2->next = (const void *)(cmd3 + 1);
+
+	rwi = ri.worldMaps[oldParms->newWorld];
+}
+#endif
+
+
 
 
 /*
@@ -224,10 +308,19 @@ void RE_StretchPic( float x, float y, float w, float h,
 	}
 	cmd->commandId = RC_STRETCH_PIC;
 	cmd->shader = R_GetShaderByHandle( hShader );
+
+#ifdef USE_MULTIVM_CLIENT
+	cmd->x = x * dvrXScale + (dvrXOffset * glConfig.vidWidth);
+	cmd->y = y * dvrYScale + (dvrYOffset * glConfig.vidHeight);
+	cmd->w = w * dvrXScale;
+	cmd->h = h * dvrYScale;
+#else
 	cmd->x = x;
 	cmd->y = y;
 	cmd->w = w;
 	cmd->h = h;
+#endif
+
 	cmd->s1 = s1;
 	cmd->t1 = t1;
 	cmd->s2 = s2;
@@ -431,9 +524,22 @@ void RE_EndFrame( int *frontEndMsec, int *backEndMsec ) {
 
 	R_PerformanceCounters();
 
+
+#ifdef USE_MULTIVM_CLIENT
+	for(int i = 0; i < MAX_NUM_VMS; i++) {
+		rwi = i;
+//ri.Printf(PRINT_ALL, "cmds: %i -> %i\n", rwi, backEndData->commands.used);
+		R_IssueRenderCommands();
+
+		R_InitNextFrame();
+	}
+	rwi = 0;
+#else
 	R_IssueRenderCommands();
 
 	R_InitNextFrame();
+#endif
+
 
 	if ( frontEndMsec ) {
 		*frontEndMsec = tr.frontEndMsec;

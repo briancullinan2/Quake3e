@@ -1051,8 +1051,8 @@ Q3OBJ = \
   $(B)/client/snd_codec_wav.o \
   \
   $(B)/client/sv_bot.o \
-  $(B)/client/sv_ccmds.o \
   $(B)/client/sv_demo_mv.o \
+  $(B)/client/sv_ccmds.o \
   $(B)/client/sv_client.o \
   $(B)/client/sv_filter.o \
   $(B)/client/sv_game.o \
@@ -1060,6 +1060,7 @@ Q3OBJ = \
   $(B)/client/sv_main.o \
   $(B)/client/sv_net_chan.o \
   $(B)/client/sv_snapshot.o \
+  $(B)/client/sv_teleport.o \
   $(B)/client/sv_world.o \
   \
   $(B)/client/q_math.o \
@@ -1250,15 +1251,16 @@ $(B)/$(TARGET_RENDV): $(Q3RENDVOBJ)
 
 Q3DOBJ = \
   $(B)/ded/sv_bot.o \
+  $(B)/ded/sv_demo_mv.o \
   $(B)/ded/sv_client.o \
   $(B)/ded/sv_ccmds.o \
-  $(B)/ded/sv_demo_mv.o \
   $(B)/ded/sv_filter.o \
   $(B)/ded/sv_game.o \
   $(B)/ded/sv_init.o \
   $(B)/ded/sv_main.o \
   $(B)/ded/sv_net_chan.o \
   $(B)/ded/sv_snapshot.o \
+  $(B)/ded/sv_teleport.o \
   $(B)/ded/sv_world.o \
   \
   $(B)/ded/cm_load.o \

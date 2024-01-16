@@ -38,12 +38,24 @@ const int demo_protocols[] = { 66, 67, OLD_PROTOCOL_VERSION, NEW_PROTOCOL_VERSIO
 
 #define USE_MULTI_SEGMENT // allocate additional zone segments on demand
 
+
+#ifdef USE_MULTIVM_CLIENT
+#define MIN_COMHUNKMEGS		256
+#define DEF_COMHUNKMEGS		1024
+#else
+#ifdef USE_MULTIVM_SERVER
+#define MIN_COMHUNKMEGS		128
+#define DEF_COMHUNKMEGS		512
+#else
+
 #ifdef DEDICATED
 #define MIN_COMHUNKMEGS		48
 #define DEF_COMHUNKMEGS		56
 #else
 #define MIN_COMHUNKMEGS		64
 #define DEF_COMHUNKMEGS		128
+#endif
+#endif
 #endif
 
 #ifdef USE_MULTI_SEGMENT
@@ -3038,7 +3050,11 @@ void Com_GameRestart( int checksumFeed, qboolean clientRestart )
 #ifndef DEDICATED
 		// Reparse pure paks and update cvars before FS startup
 		if ( CL_GameSwitch() )
+#ifdef USE_MULTIVM_CLIENT
+			CL_SystemInfoChanged( qfalse, 0 );
+#else
 			CL_SystemInfoChanged( qfalse );
+#endif
 #endif
 
 		FS_Restart( checksumFeed );

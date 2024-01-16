@@ -803,6 +803,10 @@ image_t *R_CreateImage( const char *name, const char *name2, byte *pic, int widt
 	hashTable[ hash ] = image;
 
 	tr.images[ tr.numImages++ ] = image;
+#ifdef USE_MULTIVM_CLIENT
+	if(rwi != 0)
+		trWorlds[0].images[ trWorlds[0].numImages++ ] = image;
+#endif
 
 	image->flags = flags;
 	image->width = width;

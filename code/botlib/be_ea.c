@@ -41,7 +41,12 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define MAX_USERMOVE				400
 #define MAX_COMMANDARGUMENTS		10
 
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
+bot_input_t *botinputsWorlds[MAX_NUM_VMS];
+#define      botinputs botinputsWorlds[aasgvm]
+#else
 static bot_input_t *botinputs;
+#endif
 
 //===========================================================================
 //

@@ -57,7 +57,11 @@ typedef struct {
 	qhandle_t (*RegisterSkin)( const char *name );
 	qhandle_t (*RegisterShader)( const char *name );
 	qhandle_t (*RegisterShaderNoMip)( const char *name );
+#ifdef USE_MULTIVM_CLIENT
+	int	(*LoadWorld)( const char *name );
+#else
 	void	(*LoadWorld)( const char *name );
+#endif
 
 	// the vis data is a large enough block of data that we go to the trouble
 	// of sharing it with the clipmodel subsystem
@@ -121,6 +125,16 @@ typedef struct {
 	void	(*VertexLighting)( qboolean allowed );
 	void	(*SyncRender)( void );
 
+#ifdef USE_MULTIVM_CLIENT
+	void  (*SetDvrFrame)( float x, float y, float height, float width );
+#endif
+#if defined(USE_LAZY_MEMORY) || defined(USE_ASYNCHRONOUS)
+	void (*SwitchWorld)(int world);
+	void (*ReloadShaders)( qboolean createNew );
+#endif
+	void ( *AddPolyBufferToScene )( polyBuffer_t* pPolyBuffer );
+	
+  const cplane_t *(*GetFrustum)( void );
 
 } refexport_t;
 
@@ -177,7 +191,11 @@ typedef struct {
 
 	void	(*Cmd_ExecuteText)( cbufExec_t exec_when, const char *text );
 
+#ifdef USE_MULTIVM_CLIENT
+	byte	*(*CM_ClusterPVS)(int cluster, int cmi);
+#else
 	byte	*(*CM_ClusterPVS)(int cluster);
+#endif
 
 	// visualization for debugging collision detection
 	void	(*CM_DrawDebugSurface)( void (*drawPoly)(int color, int numPoints, float *points) );
@@ -226,6 +244,15 @@ typedef struct {
 	void	(*VKimp_Shutdown)( qboolean unloadDLL );
 	void*	(*VK_GetInstanceProcAddr)( VkInstance instance, const char *name );
 	qboolean (*VK_CreateSurface)( VkInstance instance, VkSurfaceKHR *pSurface );
+
+#ifdef USE_MULTIVM_CLIENT
+	int	  *worldMaps;
+#endif
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
+	void	(*Trace)( trace_t *results, const vec3_t start, const vec3_t mins, const vec3_t maxs, const vec3_t end, int passEntityNum, int contentmask, int cmi );
+#else
+	void	(*Trace)( trace_t *results, const vec3_t start, const vec3_t mins, const vec3_t maxs, const vec3_t end, int passEntityNum, int contentmask );
+#endif
 
 } refimport_t;
 

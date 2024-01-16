@@ -22,6 +22,40 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "tr_local.h"
 
+
+#ifdef USE_MULTIVM_CLIENT
+int			r_firstSceneDrawSurfs[MAX_NUM_WORLDS];
+#define r_firstSceneDrawSurf r_firstSceneDrawSurfs[rwi]
+#ifdef USE_PMLIGHT
+int			r_firstSceneLitSurfWorlds[MAX_NUM_WORLDS];
+#define r_firstSceneLitSurf r_firstSceneLitSurfWorlds[rwi]
+#endif
+
+int			r_numdlightWorlds[MAX_NUM_WORLDS];
+#define r_numdlights r_numdlightWorlds[rwi]
+int			r_firstSceneDlights[MAX_NUM_WORLDS];
+#define r_firstSceneDlight r_firstSceneDlights[rwi]
+
+int			r_numentityWorlds[MAX_NUM_WORLDS];
+#define r_numentities r_numentityWorlds[rwi]
+int			r_firstSceneEntities[MAX_NUM_WORLDS];
+#define r_firstSceneEntity r_firstSceneEntities[rwi]
+
+int			r_numpolyWorlds[MAX_NUM_WORLDS];
+#define r_numpolys r_numpolyWorlds[rwi]
+int			r_firstScenePolys[MAX_NUM_WORLDS];
+#define r_firstScenePoly r_firstScenePolys[rwi]
+
+int			r_numpolyvertWorlds[MAX_NUM_WORLDS];
+#define r_numpolyverts r_numpolyvertWorlds[rwi]
+int     r_numindexWorlds[MAX_NUM_WORLDS];
+#define r_numindexes r_numindexWorlds[rwi]
+
+int r_firstScenePolybuffers[MAX_NUM_WORLDS];
+#define r_firstScenePolybuffer r_firstScenePolybuffers[rwi]
+int r_numpolybufferWorlds[MAX_NUM_WORLDS];
+#define r_numpolybuffers r_numpolybufferWorlds[rwi]
+#else
 static int			r_firstSceneDrawSurf;
 #ifdef USE_PMLIGHT
 static int			r_firstSceneLitSurf;
@@ -37,6 +71,11 @@ static int			r_numpolys;
 static int			r_firstScenePoly;
 
 static int			r_numpolyverts;
+static int     r_numindexes;
+
+static int r_firstScenePolybuffer;
+static int r_numpolybuffers;
+#endif
 
 
 /*
@@ -102,10 +141,25 @@ void R_AddPolygonSurfaces( void ) {
 	tr.currentEntityNum = REFENTITYNUM_WORLD;
 	tr.shiftedEntityNum = tr.currentEntityNum << QSORT_REFENTITYNUM_SHIFT;
 
+#ifdef USE_UNLOCKED_CVARS
+	int startList = floor(tr.refdef.firstPoly / MAX_POLYS_DIVISOR);
+	int numLists = floor((tr.refdef.numPolys - tr.refdef.firstPoly) / MAX_POLYS_DIVISOR);
+	int startIndex = tr.refdef.firstPoly % MAX_POLYS_DIVISOR;
+	for( int j = startList; j <= startList + numLists; j++ ) {
+		for ( i = j == startList ? startIndex : 0, 
+			poly = j == startList ? &backEndData->polys[j][startIndex] : &backEndData->polys[j][0];
+			(j * MAX_POLYS_DIVISOR) + i < tr.refdef.numPolys ; i++, poly++ 
+		) {
+			sh = R_GetShaderByHandle( poly->hShader );
+			R_AddDrawSurf( ( void * )poly, sh, poly->fogIndex, 0 );
+		}
+	}
+#else
 	for ( i = 0, poly = tr.refdef.polys; i < tr.refdef.numPolys ; i++, poly++ ) {
 		sh = R_GetShaderByHandle( poly->hShader );
 		R_AddDrawSurf( ( void * )poly, sh, poly->fogIndex, 0 );
 	}
+#endif
 }
 
 /*
@@ -215,7 +269,11 @@ void RE_AddRefEntityToScene( const refEntity_t *ent, qboolean intShaderTime ) {
 		return;
 	}
 	if ( r_numentities >= MAX_REFENTITIES ) {
+#ifdef USE_MULTIVM_CLIENT
+		ri.Printf( PRINT_DEVELOPER, "RE_AddRefEntityToScene (%i): Dropping refEntity, reached MAX_REFENTITIES\n", rwi );
+#else
 		ri.Printf( PRINT_DEVELOPER, "RE_AddRefEntityToScene: Dropping refEntity, reached MAX_REFENTITIES\n" );
+#endif
 		return;
 	}
 	if ( isnan_fp( &ent->origin[0] ) || isnan_fp( &ent->origin[1] ) || isnan_fp( &ent->origin[2] ) ) {
@@ -450,8 +508,21 @@ void RE_RenderScene( const refdef_t *fd ) {
 	tr.refdef.num_dlights = r_numdlights - r_firstSceneDlight;
 	tr.refdef.dlights = &backEndData->dlights[r_firstSceneDlight];
 
+#ifdef USE_UNLOCKED_CVARS
+	tr.refdef.firstPoly = r_firstScenePoly;
+	tr.refdef.numPolys = r_numpolys;
+#else
 	tr.refdef.numPolys = r_numpolys - r_firstScenePoly;
 	tr.refdef.polys = &backEndData->polys[r_firstScenePoly];
+#endif
+
+#ifdef USE_UNLOCKED_CVARS
+	tr.refdef.numPolyBuffers = r_numpolybuffers;
+	tr.refdef.firstPolyBuffer = r_firstScenePolybuffer;
+#else
+	tr.refdef.numPolyBuffers = r_numpolybuffers - r_firstScenePolybuffer;
+	tr.refdef.polybuffers = &backEndData->polybuffers[r_firstScenePolybuffer];
+#endif
 
 	// turn off dynamic lighting globally by clearing all the
 	// dlights if it needs to be disabled
@@ -474,10 +545,18 @@ void RE_RenderScene( const refdef_t *fd ) {
 	// convert to GL's 0-at-the-bottom space
 	//
 	Com_Memset( &parms, 0, sizeof( parms ) );
+
+#ifdef USE_MULTIVM_CLIENT
+	parms.viewportX = tr.refdef.x * dvrXScale + (dvrXOffset * glConfig.vidWidth);
+	parms.viewportY = glConfig.vidHeight - ( (tr.refdef.y * dvrYScale + (dvrYOffset * glConfig.vidHeight)) + (tr.refdef.height * dvrYScale) );
+	parms.viewportWidth = tr.refdef.width * dvrXScale;
+	parms.viewportHeight = tr.refdef.height * dvrYScale;
+#else
 	parms.viewportX = tr.refdef.x;
 	parms.viewportY = glConfig.vidHeight - ( tr.refdef.y + tr.refdef.height );
 	parms.viewportWidth = tr.refdef.width;
 	parms.viewportHeight = tr.refdef.height;
+#endif
 
 	parms.scissorX = parms.viewportX;
 	parms.scissorY = parms.viewportY;
@@ -516,4 +595,106 @@ void RE_RenderScene( const refdef_t *fd ) {
 	r_firstScenePoly = r_numpolys;
 
 	tr.frontEndMsec += ri.Milliseconds() - startTime;
+}
+
+
+
+/*
+=====================
+R_AddPolygonBufferSurfaces
+
+Adds all the scene's polys into this view's drawsurf list
+=====================
+*/
+void R_AddPolygonBufferSurfaces( void ) {
+	int i;
+	shader_t        *sh;
+	srfPolyBuffer_t *polybuffer;
+
+	tr.currentEntityNum = REFENTITYNUM_WORLD;
+	tr.shiftedEntityNum = tr.currentEntityNum << QSORT_REFENTITYNUM_SHIFT;
+
+#ifdef USE_UNLOCKED_CVARS
+	int startList = floor(tr.refdef.firstPolyBuffer / MAX_POLYBUFFERS_DIVISOR);
+	int numLists = floor((tr.refdef.numPolyBuffers - tr.refdef.firstPolyBuffer) / MAX_POLYBUFFERS_DIVISOR);
+	int startIndex = tr.refdef.firstPolyBuffer % MAX_POLYBUFFERS_DIVISOR;
+	for( int j = startList; j <= startList + numLists; j++ ) {
+		for ( i = j == startList ? startIndex : 0, 
+			polybuffer = j == startList ? &backEndData->polybuffers[j][startIndex] : &backEndData->polybuffers[j][0];
+			(j * MAX_POLYBUFFERS_DIVISOR) + i < tr.refdef.numPolyBuffers ; i++, polybuffer++ 
+		) {
+			sh = R_GetShaderByHandle( polybuffer->pPolyBuffer->shader );
+			R_AddDrawSurf( ( void * )polybuffer, sh, polybuffer->fogIndex, 0 );
+		}
+	}
+#else
+	for ( i = 0, polybuffer = tr.refdef.polybuffers; i < tr.refdef.numPolyBuffers ; i++, polybuffer++ ) {
+		sh = R_GetShaderByHandle( polybuffer->pPolyBuffer->shader );
+
+		R_AddDrawSurf( ( void * )polybuffer, sh, polybuffer->fogIndex, 0 );
+	}
+#endif
+}
+
+
+/*
+=====================
+RE_AddPolyBufferToScene
+
+=====================
+*/
+void RE_AddPolyBufferToScene( polyBuffer_t* pPolyBuffer ) {
+	srfPolyBuffer_t*    pPolySurf;
+	int fogIndex;
+	fog_t*              fog;
+	vec3_t bounds[2];
+	int i;
+
+	if ( r_numpolybuffers >= r_maxpolybuffers->integer 
+		|| r_numpolyverts + pPolyBuffer->numVerts >= r_maxpolyverts->integer 
+	) {
+		ri.Printf( PRINT_DEVELOPER, "WARNING: RE_AddPolyBufferToScene: r_numpolybuffers or r_maxpolyverts reached\n");
+		return;
+	}
+
+#ifdef USE_UNLOCKED_CVARS
+	int buffersUsed = r_numpolybuffers % MAX_POLYBUFFERS_DIVISOR;
+	int buffersList = (r_numpolybuffers - buffersUsed) / MAX_POLYBUFFERS_DIVISOR;
+	if(buffersUsed + 1 >= MAX_POLYBUFFERS_DIVISOR) {
+		Com_Printf("Expanding the polybuffers list one time.\n");
+		backEndData->polyVerts[buffersList + 1] = ri.Hunk_Alloc(sizeof(polyBuffer_t) * MAX_POLYBUFFERS_DIVISOR, h_low);
+		r_numpolyverts = (buffersList + 1) * MAX_POLYBUFFERS_DIVISOR;
+		pPolySurf = &backEndData->polybuffers[buffersList + 1][0];
+	} else {
+		pPolySurf = &backEndData->polybuffers[buffersList][buffersUsed];
+	}
+#else
+	pPolySurf = &backEndData->polybuffers[r_numpolybuffers];
+#endif
+	r_numpolybuffers++;
+
+	pPolySurf->surfaceType = SF_POLYBUFFER;
+	pPolySurf->pPolyBuffer = pPolyBuffer;
+
+	VectorCopy( pPolyBuffer->xyz[0], bounds[0] );
+	VectorCopy( pPolyBuffer->xyz[0], bounds[1] );
+	for ( i = 1 ; i < pPolyBuffer->numVerts ; i++ ) {
+		AddPointToBounds( pPolyBuffer->xyz[i], bounds[0], bounds[1] );
+	}
+	for ( fogIndex = 1 ; fogIndex < tr.world->numfogs ; fogIndex++ ) {
+		fog = &tr.world->fogs[fogIndex];
+		if ( bounds[1][0] >= fog->bounds[0][0]
+			 && bounds[1][1] >= fog->bounds[0][1]
+			 && bounds[1][2] >= fog->bounds[0][2]
+			 && bounds[0][0] <= fog->bounds[1][0]
+			 && bounds[0][1] <= fog->bounds[1][1]
+			 && bounds[0][2] <= fog->bounds[1][2] ) {
+			break;
+		}
+	}
+	if ( fogIndex == tr.world->numfogs ) {
+		fogIndex = 0;
+	}
+
+	pPolySurf->fogIndex = fogIndex;
 }

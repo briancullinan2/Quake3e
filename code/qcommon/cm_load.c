@@ -51,7 +51,13 @@ void SetPlaneSignbits( cplane_t *out ) {
 #define	LL(x) x=LittleLong(x)
 
 
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
+clipMap_t cmWorlds[MAX_NUM_VMS];
+int       cmi = 0;
+#else
 clipMap_t	cm;
+#endif
+
 int			c_pointcontents;
 int			c_traces, c_brush_traces, c_patch_traces;
 
@@ -61,12 +67,22 @@ static byte *cmod_base;
 #ifndef BSPC
 cvar_t		*cm_noAreas;
 cvar_t		*cm_noCurves;
+cvar_t    *cm_saveEnts;
 cvar_t		*cm_playerCurveClip;
 #endif
 
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
+static cmodel_t	box_modelWorlds[MAX_NUM_MAPS];
+static cplane_t	*box_planesWorlds[MAX_NUM_MAPS];
+static cbrush_t	*box_brushWorlds[MAX_NUM_MAPS];
+#define box_model box_modelWorlds[cmi]
+#define box_planes box_planesWorlds[cmi]
+#define box_brush box_brushWorlds[cmi]
+#else
 static cmodel_t box_model;
 static cplane_t *box_planes;
 static cbrush_t *box_brush;
+#endif
 
 
 
@@ -468,9 +484,30 @@ CMod_LoadEntityString
 =================
 */
 static void CMod_LoadEntityString( const lump_t *l ) {
+	char entName[MAX_QPATH];
+
 	cm.entityString = Hunk_Alloc( l->filelen, h_high );
 	cm.numEntityChars = l->filelen;
 	Com_Memcpy( cm.entityString, cmod_base + l->fileofs, l->filelen );
+	if(cm_saveEnts && cm_saveEnts->integer && l->fileofs != 0) {
+		FS_WriteFile(entName, cm.entityString, cm.numEntityChars);
+		Com_Printf("Wrote: %s\n", entName);
+	} else {
+		//Com_Printf("Entities: %s\n", cm.entityString);
+	}
+}
+
+
+static void CM_SaveEntities( void ) {
+	char entName[MAX_QPATH];
+	size_t entNameLen = 0;
+	Q_strncpyz(entName, cm.name, sizeof(entName));
+	entNameLen = strlen(entName);
+	entName[entNameLen - 3] = 'e';
+	entName[entNameLen - 2] = 'n';
+	entName[entNameLen - 1] = 't';
+	FS_WriteFile(entName, cm.entityString, cm.numEntityChars);
+	Com_Printf("Wrote: %s\n", entName);
 }
 
 
@@ -568,6 +605,39 @@ static void CMod_LoadPatches( const lump_t *surfs, const lump_t *verts ) {
 //==================================================================
 
 
+
+#if defined(USE_MULTIVM_SERVER) || defined(USE_MULTIVM_CLIENT)
+/*
+==================
+CM_SwitchMap
+==================
+*/
+int CM_SwitchMap( int world ) {
+	int prev = cmi;
+	if(!cmWorlds[world].name[0]) {
+		return 0;
+	}
+	if(world != cmi) {
+		//Com_Printf("Switching maps: %i -> %i\n", cm, world);
+		cmi = world;
+	}
+	return prev;
+}
+
+
+static void CM_MapList_f(void) {
+	int count = 0;
+	Com_Printf ("-----------------------\n");
+	for(int i = 0; i < MAX_NUM_MAPS; i++) {
+		if(!cmWorlds[i].name[0]) break;
+		count++;
+		Com_Printf("%s\n", cmWorlds[i].name);
+	}
+	Com_Printf ("%i total maps\n", count);
+	Com_Printf ("------------------\n");
+}
+#endif
+
 #if 0
 static uint32_t CM_LumpChecksum( const lump_t *lump ) {
 	return LittleLong( Com_BlockChecksum( cmod_base + lump->fileofs, lump->filelen ) );
@@ -601,7 +671,12 @@ CM_LoadMap
 Loads in the map and all submodels
 ==================
 */
-void CM_LoadMap( const char *name, qboolean clientload, int *checksum ) {
+#if defined(USE_MULTIVM_SERVER) || defined(USE_MULTIVM_CLIENT)
+int CM_LoadMap( const char *name, qboolean clientload, int *checksum ) 
+#else
+void CM_LoadMap( const char *name, qboolean clientload, int *checksum ) 
+#endif
+{
 	void			*buf;
 	int				i;
 	dheader_t		header;
@@ -619,8 +694,29 @@ void CM_LoadMap( const char *name, qboolean clientload, int *checksum ) {
 	cm_playerCurveClip = Cvar_Get( "cm_playerCurveClip", "1", CVAR_ARCHIVE_ND | CVAR_CHEAT );
 	Cvar_SetDescription( cm_playerCurveClip, "Collide player against curves." );
 #endif
+#if defined(USE_MULTIVM_SERVER) || defined(USE_MULTIVM_CLIENT)
+	Cmd_AddCommand("cmlist", CM_MapList_f);
+	//Cmd_SetDescription("cmlist", "List the currently loaded clip maps\nUsage: maplist");
+#endif
 
 	Com_DPrintf( "%s( '%s', %i )\n", __func__, name, clientload );
+
+#if defined(USE_MULTIVM_SERVER) || defined(USE_MULTIVM_CLIENT)
+	int				j, empty = -1;
+	for(j = 0; j < MAX_NUM_MAPS; j++) {
+		if ( !strcmp( cmWorlds[j].name, name ) /* && clientload */ ) {
+			*checksum = cmWorlds[j].checksum;
+			CM_SwitchMap(j);
+			Com_DPrintf( "CM_LoadMap( %s, %i ) already loaded\n", name, clientload );
+			return cmi;
+		} else if (cmWorlds[j].name[0] == '\0' && empty == -1) {
+			// fill the next empty clipmap slot
+			empty = j;
+		}
+	}
+	cmi = empty;
+  Com_DPrintf( "%s( '%s', %i )\n", __func__, name, clientload );
+#else
 
 	if ( !strcmp( cm.name, name ) && clientload ) {
 		*checksum = cm.checksum;
@@ -629,6 +725,8 @@ void CM_LoadMap( const char *name, qboolean clientload, int *checksum ) {
 
 	// free old stuff
 	CM_ClearMap();
+
+#endif
 
 #if 0
 	if ( !name[0] ) {
@@ -705,6 +803,10 @@ void CM_LoadMap( const char *name, qboolean clientload, int *checksum ) {
 	if ( !clientload ) {
 		Q_strncpyz( cm.name, name, sizeof( cm.name ) );
 	}
+
+#if defined(USE_MULTIVM_SERVER) || defined(USE_MULTIVM_CLIENT)
+	return cmi;
+#endif
 }
 
 
@@ -714,7 +816,11 @@ CM_ClearMap
 ==================
 */
 void CM_ClearMap( void ) {
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
+  Com_Memset( &cmWorlds, 0, sizeof( cmWorlds ) );
+#else
 	Com_Memset( &cm, 0, sizeof( cm ) );
+#endif
 	CM_ClearLevelPatches();
 }
 
@@ -749,12 +855,21 @@ cmodel_t *CM_ClipHandleToModel( clipHandle_t handle ) {
 CM_InlineModel
 ==================
 */
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
+clipHandle_t CM_InlineModel( int index, int client, int world ) {
+	if ( index < 0 || index >= cm.numSubModels ) {
+		Com_Error (ERR_DROP, "CM_InlineModel: bad number %i in %i (client: %i, world: %i)", index, cmi, client, world);
+	}
+	return index;
+}
+#else
 clipHandle_t CM_InlineModel( int index ) {
 	if ( index < 0 || index >= cm.numSubModels ) {
 		Com_Error (ERR_DROP, "CM_InlineModel: bad number");
 	}
 	return index;
 }
+#endif
 
 
 int CM_NumClusters( void ) {

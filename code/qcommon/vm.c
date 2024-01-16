@@ -1750,6 +1750,7 @@ vm_t *VM_Create( vmIndex_t index, syscall_t systemCalls, dllSyscall_t dllSyscall
 
 	vm = &vmTable[ index ];
 
+#ifndef USE_MULTIVM_CLIENT
 	// see if we already have the VM
 	if ( vm->name ) {
 		if ( vm->index != index ) {
@@ -1758,6 +1759,7 @@ vm_t *VM_Create( vmIndex_t index, syscall_t systemCalls, dllSyscall_t dllSyscall
 		}
 		return vm;
 	}
+#endif
 
 	name = vmName[ index ];
 
