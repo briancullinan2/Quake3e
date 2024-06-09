@@ -88,6 +88,16 @@ void SV_Teleport( client_t *client, int newWorld, origin_enum_t changeOrigin, ve
 			// if this is the first time they are entering a world, send a gamestate
 			client->state = CS_CONNECTED;
 			client->gamestateMessageNum = -1; // send a new gamestate
+
+/*
+			Cvar_Set( "mapname", Cvar_VariableString( va("mapname_%i", client->newWorld) ) );
+			Cvar_Set( "sv_mapChecksum", Cvar_VariableString( va("sv_mapChecksum_%i", client->newWorld) ) );
+			SV_SetConfigstring( CS_SYSTEMINFO, Cvar_InfoString_Big( CVAR_SYSTEMINFO, NULL ) );
+			cvar_modifiedFlags &= ~CVAR_SYSTEMINFO;
+			SV_SetConfigstring( CS_SERVERINFO, Cvar_InfoString( CVAR_SERVERINFO, NULL ) );
+			cvar_modifiedFlags &= ~CVAR_SERVERINFO;
+			SV_CreateBaseline();
+*/
 			SV_SendClientGameState( client );
 			//return; // update location below
 		} else {

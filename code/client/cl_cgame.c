@@ -39,7 +39,7 @@ int clientMaps[MAX_NUM_VMS] = {
 };
 
 int worldMaps[MAX_NUM_VMS] = {
-  -1,-1,-1,-1,-1,-1,-1,-1,-1,-1
+  0,-1,-1,-1,-1,-1,-1,-1,-1,-1
 };
 
 int clientGames[MAX_NUM_VMS] = {
@@ -47,10 +47,14 @@ int clientGames[MAX_NUM_VMS] = {
 };
 
 int clientWorlds[MAX_NUM_VMS] = {
-	-1,-1,-1,-1,-1,-1,-1,-1,-1,-1
+	0,-1,-1,-1,-1,-1,-1,-1,-1,-1
 };
 
 extern refdef_t views[MAX_NUM_VMS];
+#else
+#if USE_MULTIVM_SERVER
+int clientMap;
+#endif
 #endif
 
 vec3_t clientCameras[MAX_NUM_VMS];
@@ -248,12 +252,14 @@ static qboolean CL_GetSnapshot( int snapshotNumber, snapshot_t *snapshot ) {
 						break;
 					}
 				}
+#ifndef USE_MULTIVM_CLIENT
 				if ( i == MAX_CLIENTS ) {
 					if ( !( snapshot->snapFlags & SNAPFLAG_NOT_ACTIVE ) ) {
 						Com_Error( ERR_DROP, "Unable to find any playerState in multiview" );
 						return qfalse;
 					}
 				}
+#endif
 			}
 		}
 		Com_Memcpy( snapshot->areamask, clSnap->clps[ cv ].areamask, sizeof( snapshot->areamask ) );
@@ -575,7 +581,11 @@ static void CL_CM_LoadMap( const char *mapname ) {
 #ifdef USE_MULTIVM_CLIENT
   clientMaps[cgvmi] = CM_LoadMap( mapname, qtrue, &checksum );
 #else
+#if USE_MULTIVM_SERVER
+	clientMap= CM_LoadMap( mapname, qtrue, &checksum );
+#else
 	CM_LoadMap( mapname, qtrue, &checksum );
+#endif
 #endif
 }
 
@@ -856,7 +866,8 @@ static intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 		return 0;
 	case CG_R_LOADWORLDMAP:
 #ifdef USE_MULTIVM_CLIENT
-		worldMaps[cgvmi] = re.LoadWorld( (char *)VMA(1) );
+		worldMaps[cgvmi] = 0;
+		re.LoadWorld( (char *)VMA(1) );
 #else
 		re.LoadWorld( VMA(1) );
 #endif

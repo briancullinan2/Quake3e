@@ -2329,7 +2329,7 @@ static void FixRenderCommandList( int newShader ) {
 	renderCommandList_t	*cmdList = &backEndData->commands;
 
 	if ( cmdList ) {
-#ifdef USE_UNLOCKED_CVARS
+#if 0 //def USE_UNLOCKED_CVARS
 		int cmdUsed = cmdList->used % MAX_RENDER_DIVISOR;
 		int cmdSubList = (cmdList->used - cmdUsed) / MAX_RENDER_DIVISOR;
 		for(int i = 0; i <= cmdSubList; i++) {
@@ -2421,7 +2421,7 @@ static void FixRenderCommandList( int newShader ) {
 				return;
 			}
 		}
-#ifdef USE_UNLOCKED_CVARS
+#if 0 //def USE_UNLOCKED_CVARS
 		}
 #endif
 	}
@@ -2444,7 +2444,7 @@ static void SortNewShader( void ) {
 	float	sort;
 	shader_t	*newShader;
 
-#if 0 // def USE_MULTIVM_CLIENT
+#ifdef USE_MULTIVM_CLIENT
 	newShader = trWorlds[0].shaders[ trWorlds[0].numShaders - 1 ];
 	sort = newShader->sort;
 	for ( i = trWorlds[0].numShaders - 2 ; i >= 0 ; i-- ) {

@@ -1073,9 +1073,7 @@ void SV_ShutdownGameProgs( void ) {
 
 #ifdef USE_MULTIVM_SERVER
 	for(int i = 0; i < MAX_NUM_VMS; i++) {
-		if ( !gvmWorlds[i] ) {
-			continue;
-		}
+		if ( !gvmWorlds[i] ) continue;
 		gvmi = i;
 		CM_SwitchMap(gameWorlds[gvmi]);
 		SV_SetAASgvm(gvmi);

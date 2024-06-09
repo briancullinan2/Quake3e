@@ -2162,10 +2162,8 @@ static void CL_DownloadsComplete( void ) {
 #if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
 	re.InitShaders();
 	S_Shutdown();
-	cls.soundStarted = qtrue;
-	S_Init();
-	cls.soundRegistered = qtrue;
-	S_BeginRegistration();
+	CL_ShutdownVMs();
+	CL_StartHunkUsers();
 #else
 	CL_FlushMemory();
 #endif
@@ -2978,10 +2976,15 @@ A packet has arrived from the main event loop
 */
 void CL_PacketEvent( const netadr_t *from, msg_t *msg ) {
 	int		headerBytes;
-//#ifdef USE_MULTIVM_CLIENT
-//	cgvmi = clc.currentView;
-//	CM_SwitchMap(clientMaps[cgvmi]);
-//#endif
+/*#ifdef USE_MULTIVM_CLIENT
+	cgvmi = clc.currentView;
+	CM_SwitchMap(clientMaps[cgvmi]);
+#else
+#ifdef USE_MULTIVM_SERVER
+	CM_SwitchMap(clientMap);
+#endif
+#endif
+*/
 
 	if ( msg->cursize < 5 ) {
 		Com_DPrintf( "%s: Runt packet\n", NET_AdrToStringwPort( from ) );
@@ -3146,6 +3149,10 @@ void CL_Frame( int msec, int realMsec ) {
 #ifdef USE_MULTIVM_CLIENT
 	cgvmi = clc.currentView;
 	CM_SwitchMap(clientMaps[cgvmi]);
+#else
+#ifdef USE_MULTIVM_SERVER
+	CM_SwitchMap(clientMap);
+#endif
 #endif
 
 #ifdef USE_CURL

@@ -631,6 +631,12 @@ void SV_SpawnServer( const char *mapname, qboolean killBots ) {
 	SV_CreateBaseline();
 
 	for ( i = 0; i < sv_maxclients->integer; i++ ) {
+//#ifdef USE_MULTIVM_SERVER
+		// also clear the entity type because this is how multiworld 
+		//   figures out of a client has been there before to send gamestates
+//		SV_SetConfigstring(CS_PLAYERS + i, "");
+//#endif
+
 		// send the new gamestate to all connected clients
 		if ( svs.clients[i].state >= CS_CONNECTED ) {
 			const char *denied;

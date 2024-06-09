@@ -1982,11 +1982,12 @@ void R_Init( void ) {
 	BASSIGN( backEndData->polyVerts, polyVert_t, r_maxpolyverts->integer, MAX_POLYVERTS_DIVISOR) \
 	BASSIGN( backEndData->polybuffers, srfPolyBuffer_t, r_maxpolybuffers->integer, MAX_POLYBUFFERS_DIVISOR) \
 	BASSIGN( backEndData->commands.cmds, byte, r_maxcmds->integer, MAX_RENDER_DIVISOR)
+	
 	backendSize = sizeof( *backEndData );
 #define BASSIGN(a, t, n, d) \
-	backendSize += sizeof(intptr_t) * (n / d + 1) \
-	backendSize += sizeof(t) * d
-	BACKEND
+	backendSize += sizeof(intptr_t) * ceil(n / d); \
+	backendSize += sizeof(t) * n;
+		BACKEND
 	ptr = ri.Hunk_Alloc(backendSize, h_low);
 #undef BASSIGN
 	backEndData = (backEndData_t *) ptr;
@@ -1996,7 +1997,7 @@ void R_Init( void ) {
 	ptr += sizeof(intptr_t) * (n / d + 1); \
 	a[0] = (t *) ((char *) ptr); \
 	ptr += sizeof(t) * d;
-	BACKEND
+		BACKEND
 #undef BACKEND
 #undef BASSIGN
 
@@ -2012,7 +2013,6 @@ void R_Init( void ) {
 
 #ifdef USE_MULTIVM_CLIENT
 	backendSize = sizeof( *backEndData ) * MAX_NUM_WORLDS;
-	backendSize += sizeof(intptr_t) * MAX_NUM_WORLDS;
 #define BASSIGN(a, t, n) \
 	backendSize += sizeof(t) * n * MAX_NUM_WORLDS;
 	BACKEND
@@ -2023,7 +2023,7 @@ void R_Init( void ) {
 	a = (t *) ((char *) ptr); \
 	ptr += sizeof(t) * n;
 	backEndDatas = (backEndData_t **) ptr;
-	ptr += sizeof(intptr_t) * MAX_NUM_WORLDS;
+	ptr += sizeof(*backEndData) * MAX_NUM_WORLDS;
 	for(rwi = 0; rwi < MAX_NUM_WORLDS; rwi++) {
 		backEndData = (backEndData_t *) ptr;
 		ptr += sizeof( **backEndDatas );
@@ -2035,6 +2035,7 @@ void R_Init( void ) {
 #undef BASSIGN
 
 #else
+
 	backendSize = sizeof( *backEndData );
 #define BASSIGN(a, t, n) \
 	backendSize += sizeof(t) * n;

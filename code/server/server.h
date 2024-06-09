@@ -84,11 +84,12 @@ typedef struct {
 
 #ifdef USE_MULTIVM_SERVER
   int       currentWorld;
-//  char		 *configstrings[MAX_NUM_VMS][MAX_CONFIGSTRINGS];
-//#define configstrings configstrings[gvmi]
-	char			*configstrings[MAX_CONFIGSTRINGS];
+
+  char		 *configstrings[MAX_NUM_VMS][MAX_CONFIGSTRINGS];
+#define configstrings configstrings[gvmi]
 	svEntity_t		svEntities[MAX_NUM_VMS][MAX_GENTITIES];
 #define svEntities svEntities[gvmi]
+
 	const char		*entityParsePoint; // TODO: need parse points in case loading 2 at the same time?
 	sharedEntity_t	*gentitiesWorlds[MAX_NUM_VMS];
 	int				gentitySizes[MAX_NUM_VMS];

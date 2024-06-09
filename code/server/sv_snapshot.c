@@ -1335,7 +1335,7 @@ void SV_SendClientSnapshot( client_t *client ) {
 	msg_t		msg;
 	//int     headerBytes;
 
-#if 0 //def USE_MULTIVM_SERVER
+#ifdef USE_MULTIVM_SERVER
 	qboolean first = qtrue;
 	int igvm;
 
@@ -1376,6 +1376,9 @@ void SV_SendClientSnapshot( client_t *client ) {
 			&& (!SV_PlayerPresent(client - svs.clients) /* || !hasMultiworldInView[igvm] */)
 			&& igvm != client->gameWorld && igvm != client->newWorld) continue;
 
+		if(client->multiview.protocol < 2 
+			&& igvm != client->gameWorld && igvm != client->newWorld) continue;
+
 		// must acknowledge new gamestate in response to their game request
 		//if(client->lastSnapshotTime - svs.time == -9999 && igvm != client->newWorld) continue;
 		//Com_Printf("Sending snapshot %i -> %i, %i, %i\n", (int)(client - svs.clients), igvm, SV_PlayerPresent(client - svs.clients), SV_GentityNum(client - svs.clients)->s.eType);
@@ -1397,7 +1400,7 @@ void SV_SendClientSnapshot( client_t *client ) {
 	}
 #endif
 
-#if 0 //def USE_MULTIVM_SERVER
+#ifdef USE_MULTIVM_SERVER
 	if(first) {
 		first = qfalse;
 		MSG_Init( &msg, msg_buf, MAX_MSGLEN );
@@ -1406,7 +1409,7 @@ void SV_SendClientSnapshot( client_t *client ) {
 		MSG_WriteLong( &msg, client->lastClientCommand );
 	}
 	// switch game data slots (`igs`) on client before processing snapshot
-	if(atoi(Info_ValueForKey( client->userinfo, "mvproto" )) > 1) {
+	if(client->multiview.protocol > 1) {
 		MSG_WriteByte( &msg, svc_mvWorld );
 		MSG_WriteByte( &msg, igvm );
 	}
@@ -1431,15 +1434,15 @@ void SV_SendClientSnapshot( client_t *client ) {
 	// bots need to have their snapshots build, but
 	// the query them directly without needing to be sent
 	if ( client->netchan.remoteAddress.type == NA_BOT ) {
-#if 0 //def USE_MULTIVM_SERVER
+#ifdef USE_MULTIVM_SERVER
 		continue;
 #else
 		return;
 #endif
 	}
 
-#if 0 //def USE_MULTIVM_SERVER
-		if(client->multiview.protocol == 0 || client->mvAck == 0) {
+#ifdef USE_MULTIVM_SERVER
+		if(!first && (client->multiview.protocol == 0 || client->mvAck == 0)) {
 			break;
 		}
 	}

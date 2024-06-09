@@ -81,7 +81,7 @@ static void R_IssueRenderCommands( void ) {
 	cmdList = &backEndData->commands;
 
 	// add an end-of-list command
-#ifdef USE_UNLOCKED_CVARS
+#if 0 //def USE_UNLOCKED_CVARS
 	int cmdUsed = cmdList->used % MAX_RENDER_DIVISOR;
 	int cmdSubList = (cmdList->used - cmdUsed) / MAX_RENDER_DIVISOR;
 	*(int *)(cmdList->cmds[ cmdSubList ] + cmdUsed) = RC_END_OF_LIST;
@@ -102,7 +102,7 @@ static void R_IssueRenderCommands( void ) {
 	// actually start the commands going
 	if ( !r_skipBackEnd->integer ) {
 		// let it start on the new batch
-#ifdef USE_UNLOCKED_CVARS
+#if 0 //def USE_UNLOCKED_CVARS
 		for(int i = 0; i <= cmdSubList; i++) {
 			RB_ExecuteRenderCommands( cmdList->cmds[i] );
 		}
@@ -142,7 +142,7 @@ static void *R_GetCommandBufferReserved( int bytes, int reservedBytes ) {
 	bytes = PAD(bytes, sizeof(void *));
 
 	// always leave room for the end of list command
-#ifdef USE_UNLOCKED_CVARS
+#if 0 //def USE_UNLOCKED_CVARS
 	if ( cmdList->used + bytes + sizeof( int ) + reservedBytes > r_maxcmds->integer ) {
 		if ( bytes > r_maxcmds->integer - sizeof( int ) ) {
 			ri.Error( ERR_FATAL, "R_GetCommandBuffer: bad size %i", bytes );

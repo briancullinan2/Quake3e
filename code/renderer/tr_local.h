@@ -43,6 +43,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "iqm.h"
 #include "qgl.h"
 
+#undef USE_MULTIVM_CLIENT
+
 #define GL_INDEX_TYPE		GL_UNSIGNED_INT
 
 typedef uint32_t glIndex_t;

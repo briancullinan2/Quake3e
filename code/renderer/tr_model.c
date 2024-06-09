@@ -288,6 +288,7 @@ qhandle_t RE_RegisterModel( const char *name ) {
 		return 0;
 	}
 
+
 	//
 	// search the currently loaded models
 	//
@@ -989,7 +990,7 @@ void R_ModelInit( void ) {
 	mod = R_AllocModel();
 	mod->type = MOD_BAD;
 #ifdef USE_MULTIVM_CLIENT
-	for(int i = 0; i < MAX_NUM_WORLDS; i++) {
+	for(int i = 1; i < MAX_NUM_WORLDS; i++) {
 		trWorlds[i].models[0] = mod;
 		trWorlds[i].numModels = 1;
 	}

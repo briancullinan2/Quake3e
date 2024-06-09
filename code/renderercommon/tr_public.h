@@ -22,6 +22,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #ifndef __TR_PUBLIC_H
 #define __TR_PUBLIC_H
 
+
 #include "tr_types.h"
 #include "vulkan/vulkan.h"
 
@@ -58,7 +59,7 @@ typedef struct {
 	qhandle_t (*RegisterShader)( const char *name );
 	qhandle_t (*RegisterShaderNoMip)( const char *name );
 #ifdef USE_MULTIVM_CLIENT
-	int	(*LoadWorld)( const char *name );
+	void	(*LoadWorld)( const char *name );
 #else
 	void	(*LoadWorld)( const char *name );
 #endif

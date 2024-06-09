@@ -280,6 +280,7 @@ static void BotImport_BSPModelMinsMaxsOrigin(int modelnum, vec3_t angles, vec3_t
 
 
 #ifdef USE_MULTIVM_SERVER
+	CM_SwitchMap(gameWorlds[gvmi]);
 	h = CM_InlineModel(modelnum, 5, gvmi);
 #else
 #ifdef USE_MULTIVM_CLIENT
@@ -332,9 +333,11 @@ BotImport_HunkAlloc
 =================
 */
 static void *BotImport_HunkAlloc( int size ) {
+#ifndef USE_MULTIVM_SERVER
 	if( Hunk_CheckMark() ) {
 		Com_Error( ERR_DROP, "%s(): Alloc with marks already set", __func__ );
 	}
+#endif
 	return Hunk_Alloc( size, h_high );
 }
 

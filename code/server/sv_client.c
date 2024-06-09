@@ -1161,8 +1161,8 @@ void SV_SendClientGameState( client_t *client ) {
 	MSG_WriteLong( &msg, client->reliableSequence );
 
 
-#if 0 //def USE_MULTIVM_SERVER
-	if(atoi(Info_ValueForKey( client->userinfo, "mvproto" )) > 1) {
+#ifdef USE_MULTIVM_SERVER
+	if( client->multiview.protocol > 1 ) { //atoi(Info_ValueForKey( client->userinfo, "mvproto" )) > 1) {
 		MSG_WriteByte( &msg, svc_mvWorld );
 		MSG_WriteByte( &msg, gvmi );
 	}
@@ -2097,6 +2097,7 @@ void SV_LoadVM( client_t *cl ) {
 		Sys_SetStatus( "Loading map %s", mapname );
     Cvar_Get( va("mapname_%i", gvmi), mapname, CVAR_TAGGED_SPECIFIC );
     Cvar_Set( va("mapname_%i", gvmi), mapname );
+    Cvar_Set( "mapname", mapname );
 		if(sv_mvWorld->integer) {
 			Cvar_Get( va("sv_mvWorld_%i", gvmi), va("%i", gvmi), CVAR_TAGGED_SPECIFIC );
 			Cvar_Set( va("sv_mvWorld_%i", gvmi), va("%i", gvmi) );
@@ -2104,9 +2105,10 @@ void SV_LoadVM( client_t *cl ) {
 		gameWorlds[gvmi] = CM_LoadMap( va( "maps/%s.bsp", mapname ), qfalse, &checksum );
 		Cvar_Set( va("sv_mapChecksum_%i", gvmi), va( "%i", checksum ) );
     Cvar_Get( va("sv_mapChecksum_%i", gvmi), "", CVAR_TAGGED_SPECIFIC );
+    Cvar_Set( "sv_mapChecksum", va( "%i", checksum ) );
 		FS_RestorePure();
 	}
-  
+
   // settle the new map
 	SV_ClearWorld();
   sv.state = SS_LOADING;
@@ -2114,6 +2116,7 @@ void SV_LoadVM( client_t *cl ) {
 #ifndef __WASM__
 	NET_OpenIP(gvmi);
 #endif
+
 	SV_InitGameProgs(qtrue);
 	// catch up with current VM
 	for ( i = 4; i > 1; i-- )
@@ -2146,7 +2149,7 @@ void SV_LoadVM( client_t *cl ) {
 	VM_Call( gvm, 1, GAME_RUN_FRAME, sv.time );
 	SV_BotFrame( sv.time );
 	SV_RemainingGameState();
-	Com_Printf ("---------------- Finished Starting Map (%i: %s) -------------------\n", gvmi, mapname);
+	Com_Printf ("---------------- Finished Starting Map (%i: %s) -------------------\n", gameWorlds[gvmi], mapname);
 
 	gvmi = 0;
 	CM_SwitchMap(gameWorlds[gvmi]);
@@ -2168,7 +2171,7 @@ void SV_GameCL_f( client_t *client ) {
 	vec3_t newOrigin = {0.0, 0.0, 0.0};
 
 	if(!client) return;
-	if(atoi(Info_ValueForKey( client->userinfo, "mvproto" )) != MV_PROTOCOL_VERSION) {
+	if(client->multiview.protocol != MV_PROTOCOL_VERSION) {
 		if(sv_mvOmnipresent->integer > 0) {
 			NET_OutOfBandPrint( NS_SERVER, &client->netchan.remoteAddress, "print\nSorry, but this server requires multiview %i\n", MV_PROTOCOL_VERSION );
 			Com_DPrintf( "Game comand rejected a regular client.\n" );
@@ -2603,6 +2606,12 @@ void SV_ExecuteClientMessage( client_t *cl, msg_t *msg ) {
 	int	serverId;
 	int reliableAcknowledge;
 
+#ifdef USE_MULTIVM_SERVER
+	gvmi = cl->gameWorld;
+	CM_SwitchMap(gameWorlds[gvmi]);
+	SV_SetAASgvm(gvmi);
+#endif
+
 	MSG_Bitstream( msg );
 
 	serverId = MSG_ReadLong( msg );
@@ -2724,7 +2733,7 @@ void SV_ExecuteClientMessage( client_t *cl, msg_t *msg ) {
 	// read the usercmd_t
 
 #ifdef USE_MULTIVM_SERVER
-	if ( c == clc_mvMove || c == clc_mvMoveNoDelta ) {
+	if ( cl->multiview.protocol > 1 && (c == clc_mvMove || c == clc_mvMoveNoDelta) ) {
 		int igs = MSG_ReadByte( msg );
 		//if(!sv_mvWorld->integer || sv_mvOmnipresent->integer > 0) {
 			gvmi = igs;

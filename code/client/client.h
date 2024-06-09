@@ -700,7 +700,10 @@ extern float clientScreens[MAX_NUM_VMS][4];
 extern int clientWorlds[MAX_NUM_VMS];
 extern int clientGames[MAX_NUM_VMS];
 extern int worldMaps[MAX_NUM_VMS];
-
+#else
+#ifdef USE_MULTIVM_SERVER
+extern int clientMap;
+#endif
 #endif
 
 
