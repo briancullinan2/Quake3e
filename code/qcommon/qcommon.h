@@ -717,22 +717,11 @@ void 	Cvar_WriteVariables( fileHandle_t f );
 
 void	Cvar_Init( void );
 
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
-void Cbuf_ExecuteTagged( cbufExec_t exec_when, const char *text, int tag );
-
-
-const char *Cvar_InfoString      ( int bit, qboolean *truncated, int tagged );
-const char *Cvar_InfoString_Big  ( int bit, qboolean *truncated, int tagged );
-      void	Cvar_InfoStringBuffer( int bit, char *buff, int buffsize, int tagged );
-#else
-
 const char *Cvar_InfoString( int bit, qboolean *truncated );
 const char *Cvar_InfoString_Big( int bit, qboolean *truncated );
 // returns an info string containing all the cvars that have the given bit set
 // in their flags ( CVAR_USERINFO, CVAR_SERVERINFO, CVAR_SYSTEMINFO, etc )
 void	Cvar_InfoStringBuffer( int bit, char *buff, int buffsize );
-#endif
-
 void	Cvar_CheckRange( cvar_t *cv, const char *minVal, const char *maxVal, cvarValidator_t type );
 void	Cvar_SetDescription( cvar_t *var, const char *var_description );
 

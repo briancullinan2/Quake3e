@@ -469,17 +469,11 @@ void SV_SpawnServer( const char *mapname, qboolean killBots ) {
 	CL_MapLoading();
 
 	// make sure all the client stuff is unloaded
-#ifndef USE_LAZY_MEMORY
 	CL_ShutdownAll();
-#else
-	//S_DisableSounds();
-#endif
 #endif
 
-#ifndef USE_LAZY_MEMORY
 	// clear the whole hunk because we're (re)loading the server
 	Hunk_Clear();
-#endif
 
 	// clear collision map data
 	CM_ClearMap();
@@ -645,12 +639,6 @@ void SV_SpawnServer( const char *mapname, qboolean killBots ) {
 	SV_CreateBaseline();
 
 	for ( i = 0; i < sv_maxclients->integer; i++ ) {
-#ifdef USE_MULTIVM_SERVER
-		// also clear the entity type because this is how multiworld 
-		//   figures out of a client has been there before to send gamestates
-		SV_SetConfigstring(CS_PLAYERS + i, "");
-#endif
-
 		// send the new gamestate to all connected clients
 		if ( svs.clients[i].state >= CS_CONNECTED ) {
 			const char *denied;
@@ -737,10 +725,10 @@ void SV_SpawnServer( const char *mapname, qboolean killBots ) {
 		pakslen = strlen( p ) + 9; // + strlen( "\\sv_paks\\" )
 		freespace = SV_RemainingGameState();
 #ifdef USE_MULTIVM_SERVER
-    infolen = strlen( Cvar_InfoString_Big( CVAR_SYSTEMINFO, &infoTruncated, gvmi ) );
+    infolen = strlen( Cvar_InfoString_Big( CVAR_SYSTEMINFO, &infoTruncated ) );
 #else
 #ifdef USE_MULTIVM_CLIENT
-		infolen = strlen( Cvar_InfoString_Big( CVAR_SYSTEMINFO, &infoTruncated, 0 ) );
+		infolen = strlen( Cvar_InfoString_Big( CVAR_SYSTEMINFO, &infoTruncated ) );
 #else
 		infolen = strlen( Cvar_InfoString_Big( CVAR_SYSTEMINFO, &infoTruncated ) );
 #endif
@@ -768,17 +756,17 @@ void SV_SpawnServer( const char *mapname, qboolean killBots ) {
 
 
 #ifdef USE_MULTIVM_SERVER
-	SV_SetConfigstring( CS_SYSTEMINFO, Cvar_InfoString_Big( CVAR_SYSTEMINFO, NULL, gvmi ) );
+	SV_SetConfigstring( CS_SYSTEMINFO, Cvar_InfoString_Big( CVAR_SYSTEMINFO, NULL ) );
 	cvar_modifiedFlags &= ~CVAR_SYSTEMINFO;
 
-	SV_SetConfigstring( CS_SERVERINFO, Cvar_InfoString( CVAR_SERVERINFO, NULL, gvmi ) );
+	SV_SetConfigstring( CS_SERVERINFO, Cvar_InfoString( CVAR_SERVERINFO, NULL ) );
 	cvar_modifiedFlags &= ~CVAR_SERVERINFO;
 #else
 #ifdef USE_MULTIVM_CLIENT
-	SV_SetConfigstring( CS_SYSTEMINFO, Cvar_InfoString_Big( CVAR_SYSTEMINFO, NULL, 0 ) );
+	SV_SetConfigstring( CS_SYSTEMINFO, Cvar_InfoString_Big( CVAR_SYSTEMINFO, NULL ) );
 	cvar_modifiedFlags &= ~CVAR_SYSTEMINFO;
 
-	SV_SetConfigstring( CS_SERVERINFO, Cvar_InfoString( CVAR_SERVERINFO, NULL, 0 ) );
+	SV_SetConfigstring( CS_SERVERINFO, Cvar_InfoString( CVAR_SERVERINFO, NULL ) );
 	cvar_modifiedFlags &= ~CVAR_SERVERINFO;
 #else
 	// save systeminfo and serverinfo strings

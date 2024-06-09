@@ -286,10 +286,10 @@ static void SV_GetServerinfo( char *buffer, int bufferSize ) {
 	if ( sv.state != SS_GAME || !sv.configstrings[ CS_SERVERINFO ] ) {
 
 #ifdef USE_MULTIVM_SERVER
-		Q_strncpyz( buffer, Cvar_InfoString( CVAR_SERVERINFO, NULL, gvmi ), bufferSize );
+		Q_strncpyz( buffer, Cvar_InfoString( CVAR_SERVERINFO, NULL ), bufferSize );
 #else
 #ifdef USE_MULTIVM_CLIENT
-    Q_strncpyz( buffer, Cvar_InfoString( CVAR_SERVERINFO, NULL, 0 ), bufferSize );
+    Q_strncpyz( buffer, Cvar_InfoString( CVAR_SERVERINFO, NULL ), bufferSize );
 #else
     Q_strncpyz( buffer, Cvar_InfoString( CVAR_SERVERINFO, NULL ), bufferSize );
 #endif
@@ -462,7 +462,7 @@ static intptr_t SV_GameSystemCalls( intptr_t *args ) {
 		return 0;
 	case G_SEND_CONSOLE_COMMAND:
 
-#ifdef USE_MULTIVM_SERVER
+#if 0 //def USE_MULTIVM_SERVER
 		Cbuf_ExecuteTagged( args[1], VMA(2), gvmi );
 #else
     Cbuf_ExecuteText( args[1], VMA(2) );

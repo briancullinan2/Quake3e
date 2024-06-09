@@ -1028,10 +1028,10 @@ int SV_RemainingGameState( void )
 			MSG_WriteShort( &msg, start );
 
 #ifdef USE_MULTIVM_SERVER
-			MSG_WriteBigString( &msg, Cvar_InfoString( CVAR_SERVERINFO, NULL, gvmi ) );
+			MSG_WriteBigString( &msg, Cvar_InfoString( CVAR_SERVERINFO, NULL ) );
 #else
 #ifdef USE_MULTIVM_CLIENT
-      MSG_WriteBigString( &msg, Cvar_InfoString( CVAR_SERVERINFO, NULL, 0 ) );
+      MSG_WriteBigString( &msg, Cvar_InfoString( CVAR_SERVERINFO, NULL ) );
 #else
       MSG_WriteBigString( &msg, Cvar_InfoString( CVAR_SERVERINFO, NULL ) );
 #endif
@@ -1044,10 +1044,10 @@ int SV_RemainingGameState( void )
 			MSG_WriteShort( &msg, start );
 
 #ifdef USE_MULTIVM_SERVER
-      MSG_WriteBigString( &msg, Cvar_InfoString_Big( CVAR_SYSTEMINFO, NULL, gvmi ) );
+      MSG_WriteBigString( &msg, Cvar_InfoString_Big( CVAR_SYSTEMINFO, NULL ) );
 #else
 #ifdef USE_MULTIVM_CLIENT
-			MSG_WriteBigString( &msg, Cvar_InfoString_Big( CVAR_SYSTEMINFO, NULL, 0 ) );
+			MSG_WriteBigString( &msg, Cvar_InfoString_Big( CVAR_SYSTEMINFO, NULL ) );
 #else
 			MSG_WriteBigString( &msg, Cvar_InfoString_Big( CVAR_SYSTEMINFO, NULL ) );
 #endif
@@ -2122,10 +2122,10 @@ void SV_LoadVM( client_t *cl ) {
 		SV_BotFrame( sv.time - i * 100 );
 	}
 
-  SV_SetConfigstring( CS_SYSTEMINFO, Cvar_InfoString_Big( CVAR_SYSTEMINFO, NULL, gvmi ) );
+  SV_SetConfigstring( CS_SYSTEMINFO, Cvar_InfoString_Big( CVAR_SYSTEMINFO, NULL ) );
   cvar_modifiedFlags &= ~CVAR_SYSTEMINFO;
 
-  SV_SetConfigstring( CS_SERVERINFO, Cvar_InfoString( CVAR_SERVERINFO, NULL, gvmi ) );
+  SV_SetConfigstring( CS_SERVERINFO, Cvar_InfoString( CVAR_SERVERINFO, NULL ) );
   cvar_modifiedFlags &= ~CVAR_SERVERINFO;
 	
   sv.state = SS_GAME;	

@@ -840,7 +840,7 @@ static intptr_t CL_UISystemCalls( intptr_t *args ) {
 	case UI_CVAR_INFOSTRINGBUFFER:
 		VM_CHECKBOUNDS( uivm, args[2], args[3] );
 #ifdef USE_MULTIVM_CLIENT
-    Cvar_InfoStringBuffer( args[1], VMA(2), args[3], uivmi );
+    Cvar_InfoStringBuffer( args[1], VMA(2), args[3] );
 #else
 		Cvar_InfoStringBuffer( args[1], VMA(2), args[3] );
 #endif
@@ -864,7 +864,7 @@ static intptr_t CL_UISystemCalls( intptr_t *args ) {
 			Com_Printf (S_COLOR_YELLOW "turning EXEC_NOW '%.11s' into EXEC_INSERT\n", (const char*)VMA(2));
 			args[1] = EXEC_INSERT;
 		}
-#ifdef USE_MULTIVM_CLIENT
+#if 0 //def USE_MULTIVM_CLIENT
     Cbuf_ExecuteTagged( args[1], VMA(2), uivmi );
 #else
 		Cbuf_ExecuteText( args[1], VMA(2) );

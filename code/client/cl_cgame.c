@@ -739,7 +739,7 @@ static intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 		return FS_VM_SeekFile( args[1], args[2], args[3], H_CGAME );
 
 	case CG_SENDCONSOLECOMMAND: {
-#ifdef USE_MULTIVM_CLIENT
+#if 0 //def USE_MULTIVM_CLIENT
 		Cbuf_ExecuteTagged( EXEC_APPEND, VMA(1), -1 );
 #else
 		const char *cmd = VMA(1);

@@ -2026,7 +2026,7 @@ static void CL_Clientinfo_f( void ) {
 	Com_Printf( "Server: %s\n", cls.servername );
 	Com_Printf ("User info settings:\n");
 #ifdef USE_MULTIVM_CLIENT
-  Info_Print( Cvar_InfoString( CVAR_USERINFO, NULL, clc.currentView ) );
+  Info_Print( Cvar_InfoString( CVAR_USERINFO, NULL ) );
 #else
 	Info_Print( Cvar_InfoString( CVAR_USERINFO, NULL ) );
 #endif
@@ -2442,7 +2442,7 @@ static void CL_CheckForResend( void ) {
 
 		infoTruncated = qfalse;
 #ifdef USE_MULTIVM_CLIENT
-    Q_strncpyz( info, Cvar_InfoString( CVAR_USERINFO, &infoTruncated, cgvmi ), sizeof( info ) );
+    Q_strncpyz( info, Cvar_InfoString( CVAR_USERINFO, &infoTruncated ), sizeof( info ) );
 #else
 		Q_strncpyz( info, Cvar_InfoString( CVAR_USERINFO, &infoTruncated ), sizeof( info ) );
 #endif
@@ -3114,7 +3114,7 @@ static void CL_CheckUserinfo( void ) {
 		cvar_modifiedFlags &= ~CVAR_USERINFO;
 
 #ifdef USE_MULTIVM_CLIENT
-		info = Cvar_InfoString( CVAR_USERINFO, &infoTruncated, clientGames[cgvmi] );
+		info = Cvar_InfoString( CVAR_USERINFO, &infoTruncated );
 #else
 		info = Cvar_InfoString( CVAR_USERINFO, &infoTruncated );
 #endif

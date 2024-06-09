@@ -1742,11 +1742,7 @@ static void Cvar_Trim_f( void )
 Cvar_InfoString
 =====================
 */
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
-const char *Cvar_InfoString( int bit, qboolean *truncated, int tagged )
-#else
 const char *Cvar_InfoString( int bit, qboolean *truncated )
-#endif
 {
 	static char	info[ MAX_INFO_STRING ];
 	const cvar_t *user_vars[ MAX_CVARS ];
@@ -1773,18 +1769,6 @@ const char *Cvar_InfoString( int bit, qboolean *truncated )
 	{
 		if ( var->name && ( var->flags & bit ) )
 		{
-#if 0 //defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
-      if(var->flags & CVAR_TAGGED_ORIGINAL) {
-        cvar_t *otherVar = Cvar_FindVar(va("%s_%i", var->name, tagged));
-        // this check also prevents e.g. mapname_1_1
-        if(otherVar && otherVar->flags & CVAR_TAGGED_SPECIFIC) { // both names should be tagged because of this test
-          allSet &= Info_SetValueForKey( info, var->name, otherVar->string );
-          continue; // prefer the other vars value
-        }
-      }
-      if(var->flags & CVAR_TAGGED_SPECIFIC)
-        continue;
-#endif
 			// put vm/user-created cvars to the end
 			if ( var->flags & ( CVAR_USER_CREATED | CVAR_VM_CREATED ) )
 			{
@@ -1830,11 +1814,7 @@ Cvar_InfoString_Big
   handles large info strings ( CS_SYSTEMINFO )
 =====================
 */
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
-const char *Cvar_InfoString_Big( int bit, qboolean *truncated, int tagged )
-#else
 const char *Cvar_InfoString_Big( int bit, qboolean *truncated )
-#endif
 {
 	static char	info[BIG_INFO_STRING];
 	const cvar_t *var;
@@ -1846,18 +1826,6 @@ const char *Cvar_InfoString_Big( int bit, qboolean *truncated )
 	for ( var = cvar_vars; var; var = var->next )
 	{
 		if ( var->name && (var->flags & bit) )
-#if 0 //defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
-      if(var->flags & CVAR_TAGGED_ORIGINAL) {
-        cvar_t *otherVar = Cvar_FindVar(va("%s_%i", var->name, tagged));
-				// both names should be tagged because of this test
-        if(otherVar && otherVar->flags & CVAR_TAGGED_SPECIFIC) {
-          allSet &= Info_SetValueForKey_s( info, sizeof( info ), var->name, otherVar->string );
-          continue; // prefer the other vars value
-        }
-      }
-      if(var->flags & CVAR_TAGGED_SPECIFIC)
-        continue;
-#endif
 			allSet &= Info_SetValueForKey_s( info, sizeof( info ), var->name, var->string );
 	}
 
@@ -1875,15 +1843,9 @@ const char *Cvar_InfoString_Big( int bit, qboolean *truncated )
 Cvar_InfoStringBuffer
 =====================
 */
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
-void Cvar_InfoStringBuffer( int bit, char* buff, int buffsize, int tagged ) {
-  Q_strncpyz( buff, Cvar_InfoString( bit, NULL, tagged ), buffsize );
-}
-#else
 void Cvar_InfoStringBuffer( int bit, char* buff, int buffsize ) {
 	Q_strncpyz( buff, Cvar_InfoString( bit, NULL ), buffsize );
 }
-#endif
 
 
 /*
