@@ -1250,7 +1250,7 @@ static qboolean CL_RestoreOldGame( void )
 	{
 		cl_oldGameSet = qfalse;
 		Cvar_Set( "fs_game", cl_oldGame );
-#ifdef USE_MULTIVM_CLIENT
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
 		FS_ConditionalRestart( clc.checksumFeed, qtrue, 0 );
 #else
 		FS_ConditionalRestart( clc.checksumFeed, qtrue );
@@ -1889,7 +1889,7 @@ static void CL_Vid_Restart( refShutdownCode_t shutdownCode ) {
 
 	// reinitialize the filesystem if the game directory or checksum has changed
 	if ( !clc.demoplaying ) // -EC-
-#ifdef USE_MULTIVM_CLIENT
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
 		FS_ConditionalRestart( clc.checksumFeed, qfalse, 0 );
 #else
 		FS_ConditionalRestart( clc.checksumFeed, qfalse );
@@ -2159,7 +2159,16 @@ static void CL_DownloadsComplete( void ) {
 	// if this is a local client then only the client part of the hunk
 	// will be cleared, note that this is done after the hunk mark has been set
 	//if ( !com_sv_running->integer )
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
+	re.InitShaders();
+	S_Shutdown();
+	cls.soundStarted = qtrue;
+	S_Init();
+	cls.soundRegistered = qtrue;
+	S_BeginRegistration();
+#else
 	CL_FlushMemory();
+#endif
 
 	// initialize the CGame
 	cls.cgameStarted = qtrue;
@@ -3543,7 +3552,7 @@ static void CL_SetScaling( float factor, int captureWidth, int captureHeight ) {
 }
 
 
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
+#if defined(USE_MULTIVM_CLIENT)
 byte	*CL_CM_ClusterPVS (int cluster, int cmi)
 {
 	return CM_ClusterPVS(cluster, clientMaps[cgvmi]);
@@ -3555,7 +3564,11 @@ void	CL_CM_Trace( trace_t *results, const vec3_t start, const vec3_t mins, const
 }
 #else
 byte	*CL_CM_ClusterPVS (int cluster) {
+#if defined(USE_MULTIVM_SERVER)
+	return CM_ClusterPVS(cluster, 0);
+#else
 	return CM_ClusterPVS(cluster);
+#endif
 }
 void	CL_CM_Trace( trace_t *results, const vec3_t start, const vec3_t mins, const vec3_t maxs, const vec3_t end, int passEntityNum, int contentmask ) {
 	CM_BoxTrace(results, start, end, mins, maxs, 0, contentmask, qfalse);

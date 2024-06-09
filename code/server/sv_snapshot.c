@@ -1335,7 +1335,7 @@ void SV_SendClientSnapshot( client_t *client ) {
 	msg_t		msg;
 	//int     headerBytes;
 
-#ifdef USE_MULTIVM_SERVER
+#if 0 //def USE_MULTIVM_SERVER
 	qboolean first = qtrue;
 	int igvm;
 
@@ -1397,7 +1397,7 @@ void SV_SendClientSnapshot( client_t *client ) {
 	}
 #endif
 
-#ifdef USE_MULTIVM_SERVER
+#if 0 //def USE_MULTIVM_SERVER
 	if(first) {
 		first = qfalse;
 		MSG_Init( &msg, msg_buf, MAX_MSGLEN );
@@ -1431,14 +1431,14 @@ void SV_SendClientSnapshot( client_t *client ) {
 	// bots need to have their snapshots build, but
 	// the query them directly without needing to be sent
 	if ( client->netchan.remoteAddress.type == NA_BOT ) {
-#ifdef USE_MULTIVM_SERVER
+#if 0 //def USE_MULTIVM_SERVER
 		continue;
 #else
 		return;
 #endif
 	}
 
-#ifdef USE_MULTIVM_SERVER
+#if 0 //def USE_MULTIVM_SERVER
 		if(client->multiview.protocol == 0 || client->mvAck == 0) {
 			break;
 		}

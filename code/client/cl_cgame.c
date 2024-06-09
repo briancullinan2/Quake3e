@@ -47,7 +47,7 @@ int clientGames[MAX_NUM_VMS] = {
 };
 
 int clientWorlds[MAX_NUM_VMS] = {
-	0,-1,-1,-1,-1,-1,-1,-1,-1,-1
+	-1,-1,-1,-1,-1,-1,-1,-1,-1,-1
 };
 
 extern refdef_t views[MAX_NUM_VMS];

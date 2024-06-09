@@ -21,10 +21,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 #include "tr_local.h"
 
-void R_AddPalette(const char *name, int a, int r, int g, int b);
-
-//#define R_FindImageFile(x, z) R_FindImageFile( x, z | (r_paletteMode->integer && shader.lightmapIndex != LIGHTMAP_2D ? IMGFLAG_PALETTE : 0))
-
 // tr_shader.c -- this file deals with the parsing and definition of shaders
 
 static char *s_shaderText;
@@ -2448,7 +2444,7 @@ static void SortNewShader( void ) {
 	float	sort;
 	shader_t	*newShader;
 
-#ifdef USE_MULTIVM_CLIENT
+#if 0 // def USE_MULTIVM_CLIENT
 	newShader = trWorlds[0].shaders[ trWorlds[0].numShaders - 1 ];
 	sort = newShader->sort;
 	for ( i = trWorlds[0].numShaders - 2 ; i >= 0 ; i-- ) {
@@ -3843,7 +3839,22 @@ R_InitShaders
 */
 void R_InitShaders( void ) {
 	ri.Printf( PRINT_ALL, "Initializing Shaders\n" );
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
+  tr.lastRegistrationTime = ri.Milliseconds();
 
+	if(tr.numShaders == 0) {
+		Com_Memset(hashTable, 0, sizeof(hashTable));
+
+		CreateInternalShaders();
+
+		ScanAndLoadShaderFiles();
+
+		CreateExternalShaders();
+	} else {
+		ScanAndLoadShaderFiles();
+	}
+
+#else
 	Com_Memset(hashTable, 0, sizeof(hashTable));
 
 	CreateInternalShaders();
@@ -3851,4 +3862,5 @@ void R_InitShaders( void ) {
 	ScanAndLoadShaderFiles();
 
 	CreateExternalShaders();
+#endif
 }

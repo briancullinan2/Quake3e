@@ -1193,25 +1193,6 @@ static void SV_CheckTimeouts( void ) {
 		if ( cl->state == CS_ZOMBIE && cl->lastPacketTime - zombiepoint < 0 ) {
 			// using the client id cause the cl->name is empty at this point
 			Com_DPrintf( "Going from CS_ZOMBIE to CS_FREE for client %d\n", i );
-
-#ifdef USE_MULTIVM_SERVER
-			int prevGvm = gvmi;
-			for(int igvm = 0; igvm < MAX_NUM_VMS; igvm++) {
-				if(!gvmWorlds[igvm]) continue;
-				gvmi = igvm;
-				CM_SwitchMap(gameWorlds[gvmi]);
-				SV_SetAASgvm(gvmi);
-        // also clear the entity type because this is how multiworld 
-        //   figures out of a client has been there before to send gamestates
-				SV_SetConfigstring(CS_PLAYERS + i, "");
-			}
-			gvmi = prevGvm;
-			CM_SwitchMap(gameWorlds[gvmi]);
-			SV_SetAASgvm(gvmi);
-#endif
-
-
-
 			cl->state = CS_FREE;	// can now be reused
 			continue;
 		}

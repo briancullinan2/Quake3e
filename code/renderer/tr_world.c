@@ -792,7 +792,11 @@ qboolean R_inPVS( const vec3_t p1, const vec3_t p2 ) {
 #ifdef USE_MULTIVM_CLIENT
 	vis = ri.CM_ClusterPVS( leaf->cluster, rwi );
 #else
+#ifdef USE_MULTIVM_SERVER
+	vis = ri.CM_ClusterPVS( leaf->cluster, 0 );
+#else
 	vis = ri.CM_ClusterPVS( leaf->cluster );
+#endif
 #endif
 	leaf = R_PointInLeaf( p2 );
 

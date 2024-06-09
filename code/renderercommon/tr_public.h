@@ -125,6 +125,9 @@ typedef struct {
 	void	(*VertexLighting)( qboolean allowed );
 	void	(*SyncRender)( void );
 
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
+	void	(*InitShaders)( void );
+#endif
 #ifdef USE_MULTIVM_CLIENT
 	void  (*SetDvrFrame)( float x, float y, float height, float width );
 #endif
@@ -191,7 +194,7 @@ typedef struct {
 
 	void	(*Cmd_ExecuteText)( cbufExec_t exec_when, const char *text );
 
-#ifdef USE_MULTIVM_CLIENT
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
 	byte	*(*CM_ClusterPVS)(int cluster, int cmi);
 #else
 	byte	*(*CM_ClusterPVS)(int cluster);

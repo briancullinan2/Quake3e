@@ -20,6 +20,12 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
 // common.c -- misc functions used in client and server
+#ifdef _DEBUG
+#include <execinfo.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#endif
 
 #include "q_shared.h"
 #include "qcommon.h"
@@ -2275,6 +2281,15 @@ The server calls this before shutting down or loading a new map
 =================
 */
 void Hunk_Clear( void ) {
+
+#ifdef _DEBUG
+//	if ( sig == SIGSEGV || sig == SIGILL || sig == SIGBUS )
+	{
+		void *syms[10];
+		const size_t size = backtrace( syms, ARRAY_LEN( syms ) );
+		backtrace_symbols_fd( syms, size, STDERR_FILENO );
+	}
+#endif
 
 #ifndef DEDICATED
 	CL_ShutdownCGame();

@@ -467,7 +467,7 @@ static void CL_ParseSnapshot( msg_t *msg )
 			if ( clientNum == clientWorlds[0] ) // clc.clientNum?
 				commandTime = newSnap.clps[ clientNum ].ps.commandTime;
 #else
-			if ( clientNum == clc.clientView ) // clc.clientNum?
+			if ( clientNum == clc.clientNum ) // clc.clientNum?
 				commandTime = newSnap.clps[ clientNum ].ps.commandTime;
 #endif
 			// entity mask
@@ -854,9 +854,9 @@ static void CL_ParseGamestate( msg_t *msg ) {
 	clc.serverCommandSequence = MSG_ReadLong( msg );
 
 	// parse all the configstrings and baselines
-#ifndef USE_MULTIVM_SERVER
+//#ifndef USE_MULTIVM_SERVER
 	cl.gameState.dataCount = 1;	// leave a 0 at the beginning for uninitialized configstrings
-#endif
+//#endif
 	while ( 1 ) {
 		cmd = MSG_ReadByte( msg );
 
@@ -975,7 +975,11 @@ static void CL_ParseGamestate( msg_t *msg ) {
 #ifdef USE_MULTIVM_CLIENT
 	FS_ConditionalRestart( clc.checksumFeed, gamedirModified, igs );
 #else
+#ifdef USE_MULTIVM_SERVER
+	FS_ConditionalRestart( clc.checksumFeed, gamedirModified, 0 );
+#else
 	FS_ConditionalRestart( clc.checksumFeed, gamedirModified );
+#endif
 #endif
 
 	// restore \cl_reconnectAgrs
@@ -1332,7 +1336,7 @@ void CL_ParseServerMessage( msg_t *msg ) {
 		case svc_gamestate:
 			CL_ParseGamestate( msg );
 			break;
-#ifdef USE_MULTIVM_CLIENT
+#if 0 //def USE_MULTIVM_CLIENT
 		case svc_baseline:
 			{
 				entityState_t	nullstate;

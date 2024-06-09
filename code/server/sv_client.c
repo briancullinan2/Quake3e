@@ -1161,7 +1161,7 @@ void SV_SendClientGameState( client_t *client ) {
 	MSG_WriteLong( &msg, client->reliableSequence );
 
 
-#ifdef USE_MULTIVM_SERVER
+#if 0 //def USE_MULTIVM_SERVER
 	if(atoi(Info_ValueForKey( client->userinfo, "mvproto" )) > 1) {
 		MSG_WriteByte( &msg, svc_mvWorld );
 		MSG_WriteByte( &msg, gvmi );

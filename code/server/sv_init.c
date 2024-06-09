@@ -124,18 +124,6 @@ void SV_SetConfigstring (int index, const char *val) {
 	Z_Free( sv.configstrings[index] );
 	sv.configstrings[index] = CopyString( val );
 
-
-#ifdef USE_MULTIVM_SERVER
-  if(sv.gentitySizes[gvmi] == 0) {
-    // still starting up
-    return;
-  }
-	if(index >= CS_PLAYERS && index < CS_PLAYERS + MAX_CLIENTS) {
-		Com_Printf("SV_SetConfigstring: client configstring %i: %.*s\n", index,
-			(int)strlen(sv.configstrings[index]), sv.configstrings[index]);
-	}
-#endif
-
 	// send it to all the clients if we aren't
 	// spawning a new server
 	if ( sv.state == SS_GAME || sv.restarting ) {
@@ -469,11 +457,15 @@ void SV_SpawnServer( const char *mapname, qboolean killBots ) {
 	CL_MapLoading();
 
 	// make sure all the client stuff is unloaded
+#if !defined(USE_MULTIVM_SERVER) && !defined(USE_MULTIVM_CLIENT)
 	CL_ShutdownAll();
 #endif
+#endif
 
+#if !defined(USE_MULTIVM_SERVER) && !defined(USE_MULTIVM_CLIENT)
 	// clear the whole hunk because we're (re)loading the server
 	Hunk_Clear();
+#endif
 
 	// clear collision map data
 	CM_ClearMap();
