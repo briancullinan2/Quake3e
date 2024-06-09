@@ -2969,10 +2969,10 @@ A packet has arrived from the main event loop
 */
 void CL_PacketEvent( const netadr_t *from, msg_t *msg ) {
 	int		headerBytes;
-#ifdef USE_MULTIVM_CLIENT
-	cgvmi = clc.currentView;
-	CM_SwitchMap(clientMaps[cgvmi]);
-#endif
+//#ifdef USE_MULTIVM_CLIENT
+//	cgvmi = clc.currentView;
+//	CM_SwitchMap(clientMaps[cgvmi]);
+//#endif
 
 	if ( msg->cursize < 5 ) {
 		Com_DPrintf( "%s: Runt packet\n", NET_AdrToStringwPort( from ) );

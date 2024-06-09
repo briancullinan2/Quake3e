@@ -1859,6 +1859,7 @@ void SV_UserinfoChanged( client_t *cl, qboolean updateUserinfo, qboolean runFilt
 	const char *val;
 	const char *ip;
 	int	i;
+	
 
 	if ( cl->netchan.remoteAddress.type == NA_BOT ) {
 		cl->lastSnapshotTime = svs.time - 9999; // generate a snapshot immediately
@@ -1976,6 +1977,7 @@ static void SV_UpdateUserinfo_f( client_t *cl ) {
 	Q_strncpyz( cl->userinfo, info, sizeof( cl->userinfo ) );
 
 	SV_UserinfoChanged( cl, qtrue, qtrue ); // update userinfo, run filter
+
 	// call prog code to allow overrides
 	VM_Call( gvm, 1, GAME_CLIENT_USERINFO_CHANGED, cl - svs.clients );
 }
@@ -2068,7 +2070,7 @@ void NET_OpenIP( int igvm );
 #endif
 
 void SV_LoadVM( client_t *cl ) {
-	char *mapname;
+	const char *mapname;
 	int checksum;
 	int i, previous;
 
@@ -2092,11 +2094,6 @@ void SV_LoadVM( client_t *cl ) {
 		CM_SwitchMap(gameWorlds[gvmi]);
 	} else {
 		FS_BypassPure();
-#ifdef USE_MEMORY_MAPS
-  // TODO: make this asynchronous where the console and server waits for it to compile
-		if(sv_memoryMaps->integer)
-			SV_MakeMap((const char **)&mapname); // make the BSP and then it will load normally	
-#endif
 		Sys_SetStatus( "Loading map %s", mapname );
     Cvar_Get( va("mapname_%i", gvmi), mapname, CVAR_TAGGED_SPECIFIC );
     Cvar_Set( va("mapname_%i", gvmi), mapname );
@@ -2163,8 +2160,9 @@ void SV_LoadVM( client_t *cl ) {
 // The kind of teleports that changes which world we are in
 void SV_GameCL_f( client_t *client ) {
 	int worldC, count = 0, i;
-	char *world, *userOrigin;
-	int clientNum;
+	const char *world;
+	const char *userOrigin;
+	//int clientNum;
 	origin_enum_t changeOrigin;
 	qboolean found = qfalse, tryAgain = qtrue;
 	vec3_t newOrigin = {0.0, 0.0, 0.0};
@@ -2182,7 +2180,7 @@ void SV_GameCL_f( client_t *client ) {
 		client->multiview.protocol = atoi(Info_ValueForKey( client->userinfo, "mvproto" ));;
 		client->multiview.scoreQueryTime = 0;
 	}
-	clientNum = client - svs.clients;
+	//clientNum = client - svs.clients;
 	
 	userOrigin = Cmd_Argv(1);
 	if(userOrigin[0] == '0') {

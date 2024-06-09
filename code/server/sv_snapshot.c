@@ -956,62 +956,6 @@ static void SV_BuildCommonSnapshot( void )
 				continue;
 			}
 
-#ifdef USE_RECENT_EVENTS
-			if(ent->s.clientNum < sv_maxclients->integer
-				&& svs.clients[ent->s.clientNum].state == CS_ACTIVE
-			//	&& svs.clients[ent->s.clientNum].netchan.remoteAddress.type != NA_BOT 
-			) {
-
-				if(ent->s.eType == ET_PLAYER && ent->s.event & EV_EVENT_BITS) {
-					int event = (ent->s.event & ~EV_EVENT_BITS);
-
-//					if(event > 1) // footsteps and none
-//						Com_Printf("event: %i %i\n", event, ent->s.clientNum);
-					if(event >= EV_DEATH1 && event <= EV_DEATH3
-						&& !(numDied[ent->s.clientNum / 8] & (1 << (ent->s.clientNum % 8)))
-					) {
-						char player[1024];
-						client_t *c1 = &svs.clients[ent->s.clientNum];
-						playerState_t *ps1 = SV_GameClientNum( ent->s.clientNum );
-						if(ent->s.eventParm == 1022) {
-							Com_sprintf( player, sizeof( player ), "[[%i,%i,\"%s\"]]", 
-								ps1->persistant[ PERS_SCORE ], c1->ping, c1->name);			
-						} else {
-							client_t *c2 = &svs.clients[ent->s.eventParm];
-							playerState_t *ps2 = SV_GameClientNum( ent->s.eventParm );
-							Com_sprintf( player, sizeof( player ), "[[%i,%i,\"%s\"],[%i,%i,\"%s\"]]", 
-								ps1->persistant[ PERS_SCORE ], c1->ping, c1->name, 
-								ps2->persistant[ PERS_SCORE ], c2->ping, c2->name );
-						}
-            SV_RecentEvent(va(RECENT_TEMPLATE, sv.time, SV_EVENT_CLIENTDIED, player));
-						numDied[ent->s.clientNum / 8] |= 1 << (ent->s.clientNum % 8);
-					}
-				}
-
-				if(ent->s.eType == ET_PLAYER
-					&& (ent->s.event & ~EV_EVENT_BITS) == EV_CHANGE_WEAPON) {
-					char weapon[1024];
-					playerState_t *ps = SV_GameClientNum( ent->s.clientNum );
-					// debounce weapon change event
-					if(numWeapon[ent->s.clientNum] != ps->weapon) {
-						numWeapon[ent->s.clientNum] = ps->weapon;
-						client_t *c = &svs.clients[ent->s.clientNum];
-						memcpy(weapon, va("[%i,\"%s\"]", ps->weapon, c->name), sizeof(weapon));
-            SV_RecentEvent(va(RECENT_TEMPLATE, sv.time, SV_EVENT_CLIENTWEAPON, weapon));
-					}
-				}
-				if(ent->s.eType == ET_PLAYER
-					&& (ent->s.eType & (EF_AWARD_EXCELLENT | EF_AWARD_GAUNTLET
-					| EF_AWARD_CAP | EF_AWARD_IMPRESSIVE | EF_AWARD_DEFEND
-					| EF_AWARD_ASSIST | EF_AWARD_DENIED))) {
-					char award[1024];
-					client_t *c = &svs.clients[ent->s.clientNum];
-					memcpy(award, va("[%i,\"%s\"]", ent->s.eType, c->name), sizeof(award));
-          SV_RecentEvent(va(RECENT_TEMPLATE, sv.time, SV_EVENT_CLIENTAWARD, award));
-				}
-			}
-#endif
-
 			list[ count++ ] = ent;
 			sv.svEntities[ num ].snapshotCounter = -1;
 		}
@@ -1378,10 +1322,6 @@ void SV_SendMessageToClient( msg_t *msg, client_t *client )
 }
 
 
-#ifdef USE_MULTIVM_SERVER
-void SV_SetClientViewAngle( int clientNum, vec3_t angle );
-#endif
-
 /*
 =======================
 SV_SendClientSnapshot
@@ -1393,7 +1333,7 @@ Also called by SV_FinalMessage
 void SV_SendClientSnapshot( client_t *client ) {
 	byte		msg_buf[ MAX_MSGLEN_BUF ];
 	msg_t		msg;
-	int     headerBytes;
+	//int     headerBytes;
 
 #ifdef USE_MULTIVM_SERVER
 	qboolean first = qtrue;
@@ -1462,7 +1402,7 @@ void SV_SendClientSnapshot( client_t *client ) {
 		first = qfalse;
 		MSG_Init( &msg, msg_buf, MAX_MSGLEN );
 		msg.allowoverflow = qtrue;
-		headerBytes = msg.cursize;
+		//headerBytes = msg.cursize;
 		MSG_WriteLong( &msg, client->lastClientCommand );
 	}
 	// switch game data slots (`igs`) on client before processing snapshot
@@ -1473,7 +1413,7 @@ void SV_SendClientSnapshot( client_t *client ) {
 #else
 	MSG_Init( &msg, msg_buf, MAX_MSGLEN );
 	msg.allowoverflow = qtrue;
-	headerBytes = msg.cursize;
+	//headerBytes = msg.cursize;
 
 	// NOTE, MRE: all server->client messages now acknowledge
 	// let the client know which reliable clientCommands we have received
@@ -1487,17 +1427,6 @@ void SV_SendClientSnapshot( client_t *client ) {
 	// and the playerState_t
 	SV_WriteSnapshotToClient( client, &msg );
 
-#ifdef USE_DEMO_CLIENTS
-	if ( client->demorecording ) {
-		msg_t copyMsg;
-		Com_Memcpy(&copyMsg, &msg, sizeof(copyMsg));
- 		SV_WriteDemoMessage( client, &copyMsg, headerBytes );
- 		playerState_t	*ps = SV_GameClientNum( client - svs.clients);
- 		if (ps->pm_type == PM_INTERMISSION) {
- 			SV_StopRecord( client );
- 		}
- 	}
-#endif
 
 	// bots need to have their snapshots build, but
 	// the query them directly without needing to be sent
@@ -1561,12 +1490,6 @@ void SV_SendClientMessages( void )
 		if ( c->state == CS_FREE ) 
 			continue;		// not connected
 
-#ifdef USE_DEMO_SERVER
-    // do not send a packet to a democlient, this will cause the engine to crash
-    if(c->demoClient) // demo clients only exist in networking, not in qagame
-      continue;
-#endif
-
 		if ( *c->downloadName )
 			continue;		// Client is downloading, don't send snapshots
 
@@ -1588,15 +1511,7 @@ void SV_SendClientMessages( void )
 			c->rateDelayed = qtrue;
 			continue;
 		}
-    
-#ifdef USE_RECENT_EVENTS
-    if(c->isRecent) {
-      for(int i = c->recentMessageNum; i < recentI; i++) {
-        NET_OutOfBandPrint( NS_SERVER, &c->netchan.remoteAddress, "recentEvent %s", recentEvents[i % MAX_RECENT_EVENTS] );
-      }
-      c->recentMessageNum = recentI;
-    }
-#endif
+
 
 		// generate and send a new message
 		SV_SendClientSnapshot( c );

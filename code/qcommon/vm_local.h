@@ -235,6 +235,7 @@ extern  int       cgvmi;
 extern  vm_t     *uivm;
 extern  vm_t     *cgvm;
 #endif
+
 #ifdef USE_MULTIVM_SERVER
 extern	vm_t		 *gvmWorlds[MAX_NUM_VMS];	// interface to ui dll or vm
 extern  int       gvmi;

@@ -601,11 +601,11 @@ static void CL_KeyDownEvent( int key, unsigned time )
 			d = 1;
 		//else
 		//	d = -1;
-#ifdef USE_MULTIVM_CLIENT
-		int from = (clientWorlds[clc.currentView] + d + MAX_CLIENTS ) % MAX_CLIENTS;
-#else
+//#ifdef USE_MULTIVM_CLIENT
+//		int from = (clientWorlds[clc.currentView] + d + MAX_CLIENTS ) % MAX_CLIENTS;
+//#else
 		int from = (d + MAX_CLIENTS ) % MAX_CLIENTS;
-#endif
+//#endif
 		for ( id = from, n = 0; n < MAX_CLIENTS; n++, id = ( id + d + MAX_CLIENTS ) % MAX_CLIENTS ) {
 #ifdef USE_MULTIVM_CLIENT
 			if ( cl.snapWorlds[0].clps[ id ].valid ) {

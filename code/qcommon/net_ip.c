@@ -178,7 +178,9 @@ static cvar_t	*net_dropsim;
 
 static sockaddr_t socksRelayAddr;
 
+#ifndef USE_MULTIVM_SERVER
 static SOCKET	ip_socket = INVALID_SOCKET;
+#endif
 static SOCKET	socks_socket = INVALID_SOCKET;
 
 #ifdef USE_IPV6

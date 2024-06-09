@@ -489,7 +489,7 @@ void SV_Tele_f( client_t *client ) {
 SetClientViewAngle
 ==================
 */
-void SV_SetClientViewAngle( int clientNum, vec3_t angle ) {
+void SV_SetClientViewAngle( int clientNum, const vec3_t angle ) {
 	int	i, cmdAngle;
 	playerState_t *ps = SV_GameClientNum( clientNum );
 	//gentity_t *ent = (void *)SV_GentityNum( clientNum ); //->r.s;

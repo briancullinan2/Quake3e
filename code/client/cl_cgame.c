@@ -47,7 +47,7 @@ int clientGames[MAX_NUM_VMS] = {
 };
 
 int clientWorlds[MAX_NUM_VMS] = {
-	-1,-1,-1,-1,-1,-1,-1,-1,-1,-1
+	0,-1,-1,-1,-1,-1,-1,-1,-1,-1
 };
 
 extern refdef_t views[MAX_NUM_VMS];
@@ -773,10 +773,14 @@ static intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 	case CG_CM_NUMINLINEMODELS:
 		return CM_NumInlineModels();
 	case CG_CM_INLINEMODEL:
-#ifdef USE_MULTIVM_CLIENT
+#if defined(USE_MULTIVM_CLIENT)
 		return CM_InlineModel( args[1], 1, cgvmi );
 #else
+#if defined(USE_MULTIVM_SERVER)
+		return CM_InlineModel( args[1], 1, 0 );
+#else
 		return CM_InlineModel( args[1] );
+#endif
 #endif
 	case CG_CM_TEMPBOXMODEL:
 		return CM_TempBoxModel( VMA(1), VMA(2), /*int capsule*/ qfalse );

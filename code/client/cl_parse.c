@@ -374,7 +374,7 @@ static void CL_ParseSnapshot( msg_t *msg )
 			old = NULL;
 		}
 
-#ifdef USE_MULTIVM_CLIENT
+#if 0 //def USE_MULTIVM_CLIENT
 		if ( newSnap.deltaNum <= 0 ) {
 			newSnap.valid = qtrue;
 			old = NULL;
@@ -463,9 +463,13 @@ static void CL_ParseSnapshot( msg_t *msg )
 			MSG_ReadDeltaPlayerstate( msg, oldPs, &newSnap.clps[ clientNum ].ps );
 
 			// spectated (pramary?) playerstate ping
-			//if ( clientNum == clientWorlds[0] ) // clc.clientNum?
-			//	commandTime = newSnap.clps[ clientNum ].ps.commandTime;
-
+#ifdef USE_MULTIVM_CLIENT
+			if ( clientNum == clientWorlds[0] ) // clc.clientNum?
+				commandTime = newSnap.clps[ clientNum ].ps.commandTime;
+#else
+			if ( clientNum == clc.clientView ) // clc.clientNum?
+				commandTime = newSnap.clps[ clientNum ].ps.commandTime;
+#endif
 			// entity mask
 			SHOWNET( msg, "entity mask" );
 #if 1
@@ -494,7 +498,9 @@ static void CL_ParseSnapshot( msg_t *msg )
 			}
 		} // for [all clients]
 
+#ifdef USE_MV
 		commandTime = newSnap.ps.commandTime;
+#endif
 
 		// read packet entities
 		SHOWNET( msg, "packet entities" );
@@ -588,7 +594,11 @@ static void CL_ParseSnapshot( msg_t *msg )
 	// calculate ping time
 	for ( i = 0 ; i < PACKET_BACKUP ; i++ ) {
 		packetNum = ( clc.netchan.outgoingSequence - 1 - i ) & PACKET_MASK;
+#ifdef USE_MV
+		if ( commandTime >= cl.outPackets[ packetNum ].p_serverTime ) {
+#else
 		if ( cl.snap.ps.commandTime - cl.outPackets[packetNum].p_serverTime >= 0 ) {
+#endif
 			cl.snap.ping = cls.realtime - cl.outPackets[ packetNum ].p_realtime;
 			break;
 		}

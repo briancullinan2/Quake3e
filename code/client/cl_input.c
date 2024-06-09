@@ -207,9 +207,7 @@ static float CL_KeyState( kbutton_t *key ) {
 		} else {
 			msec += com_frameTime - key->downtime;
 		}
-#ifndef USE_MULTIVM_CLIENT
 		key->downtime = com_frameTime;
-#endif
 	}
 
 #if 0
@@ -910,11 +908,11 @@ void CL_WritePacket( void ) {
 
 		// write all the commands, including the predicted command
 		for ( i = 0 ; i < count ; i++ ) {
-//#ifdef USE_MULTIVM_CLIENT
-//			j = (i == 0 ? oldCmdNum : cl.clCmdNumbers[igvm]) & CMD_MASK;
-//#else
+#ifdef USE_MULTIVM_CLIENT
+			j = (cl.clCmdNumbers[igvm] - count + i + 1) & CMD_MASK;
+#else
 			j = (cl.cmdNumber - count + i + 1) & CMD_MASK;
-//#endif
+#endif
 			cmd = &cl.cmds[j];
 			MSG_WriteDeltaUsercmdKey (&buf, key, oldcmd, cmd);
 			oldcmd = cmd;

@@ -498,6 +498,9 @@ static void CMod_LoadEntityString( const lump_t *l ) {
 }
 
 
+
+#if 0
+
 static void CM_SaveEntities( void ) {
 	char entName[MAX_QPATH];
 	size_t entNameLen = 0;
@@ -509,6 +512,9 @@ static void CM_SaveEntities( void ) {
 	FS_WriteFile(entName, cm.entityString, cm.numEntityChars);
 	Com_Printf("Wrote: %s\n", entName);
 }
+
+
+#endif
 
 
 /*

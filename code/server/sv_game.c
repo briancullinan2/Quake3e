@@ -1087,6 +1087,7 @@ void SV_ShutdownGameProgs( void ) {
 	}
 #endif
 
+
 	VM_Call( gvm, 1, GAME_SHUTDOWN, qfalse );
 	VM_Free( gvm );
 	gvm = NULL;

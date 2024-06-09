@@ -84,8 +84,9 @@ typedef struct {
 
 #ifdef USE_MULTIVM_SERVER
   int       currentWorld;
-  char		 *configstrings[MAX_NUM_VMS][MAX_CONFIGSTRINGS];
-#define configstrings configstrings[gvmi]
+//  char		 *configstrings[MAX_NUM_VMS][MAX_CONFIGSTRINGS];
+//#define configstrings configstrings[gvmi]
+	char			*configstrings[MAX_CONFIGSTRINGS];
 	svEntity_t		svEntities[MAX_NUM_VMS][MAX_GENTITIES];
 #define svEntities svEntities[gvmi]
 	const char		*entityParsePoint; // TODO: need parse points in case loading 2 at the same time?
@@ -592,7 +593,7 @@ playerState_t *SV_GameClientNum( int num );
 svEntity_t	*SV_SvEntityForGentity( sharedEntity_t *gEnt );
 sharedEntity_t *SV_GEntityForSvEntity( svEntity_t *svEnt );
 
-#ifdef USE_MULTIVM_SERVER
+#if defined(USE_MULTIVM_SERVER) || defined (USE_ENGINE_TELE)
 typedef enum {
 
 	SPAWNORIGIN,
@@ -603,7 +604,7 @@ typedef enum {
 void SV_Teleport( client_t *client, int newWorld, origin_enum_t changeOrigin, vec3_t *newOrigin );
 void SV_Tele_f( client_t *client );
 void SV_SendClientGameState( client_t *client );
-void SV_SetClientViewAngle( int clientNum, vec3_t angle );
+void SV_SetClientViewAngle( int clientNum, const vec3_t angle );
 #endif
 
 

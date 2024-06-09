@@ -469,11 +469,17 @@ void SV_SpawnServer( const char *mapname, qboolean killBots ) {
 	CL_MapLoading();
 
 	// make sure all the client stuff is unloaded
+#ifndef USE_LAZY_MEMORY
 	CL_ShutdownAll();
+#else
+	//S_DisableSounds();
+#endif
 #endif
 
+#ifndef USE_LAZY_MEMORY
 	// clear the whole hunk because we're (re)loading the server
 	Hunk_Clear();
+#endif
 
 	// clear collision map data
 	CM_ClearMap();
@@ -911,8 +917,8 @@ void SV_Init( void )
 	sv_privatePassword = Cvar_Get ("sv_privatePassword", "", CVAR_TEMP );
 	Cvar_SetDescription( sv_privatePassword, "Set password for private clients to login with." );
 
-#ifdef USE_MULTIVM_SERVER
-	sv_fps = Cvar_Get ("sv_fps", "40", CVAR_TEMP | CVAR_SYSTEMINFO );
+#if defined(USE_MULTIVM_SERVER) || defined(USE_MULTIVM_CLIENT)
+	sv_fps = Cvar_Get ("sv_fps", "60", CVAR_TEMP | CVAR_SYSTEMINFO );
 	Cvar_CheckRange( sv_fps, "10", "200", CV_INTEGER );
 #else
 	sv_fps = Cvar_Get ("sv_fps", "20", CVAR_TEMP 

@@ -1773,7 +1773,7 @@ const char *Cvar_InfoString( int bit, qboolean *truncated )
 	{
 		if ( var->name && ( var->flags & bit ) )
 		{
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
+#if 0 //defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
       if(var->flags & CVAR_TAGGED_ORIGINAL) {
         cvar_t *otherVar = Cvar_FindVar(va("%s_%i", var->name, tagged));
         // this check also prevents e.g. mapname_1_1
@@ -1846,7 +1846,7 @@ const char *Cvar_InfoString_Big( int bit, qboolean *truncated )
 	for ( var = cvar_vars; var; var = var->next )
 	{
 		if ( var->name && (var->flags & bit) )
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
+#if 0 //defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
       if(var->flags & CVAR_TAGGED_ORIGINAL) {
         cvar_t *otherVar = Cvar_FindVar(va("%s_%i", var->name, tagged));
 				// both names should be tagged because of this test

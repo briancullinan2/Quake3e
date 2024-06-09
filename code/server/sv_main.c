@@ -1093,11 +1093,6 @@ void SV_PacketEvent( const netadr_t *from, msg_t *msg ) {
 
 
 
-#ifdef USE_MULTIVM_SERVER
-void SV_SetClientViewAngle( int clientNum, vec3_t angle );
-#endif
-
-
 
 /*
 ===================
