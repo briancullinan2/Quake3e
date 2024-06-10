@@ -398,6 +398,7 @@ WASI_INCLUDES  := \
 	--target=wasm32 \
   -Icode/wasm \
 	-I$(WASISDK)/share/wasi-sysroot/include \
+  -I$(WASISDK)/share/wasi-sysroot/include/wasm32-wasi \
   -Icode/wasm/SDL2-2.0.14/include \
   -Icode/libogg/include -Icode/libvorbis/include
 
