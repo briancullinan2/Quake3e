@@ -658,7 +658,9 @@ function CL_Download(cmd, name, auto) {
       remoteURL += '?alt=media'
     }
   }
-  Promise.resolve((async function () {
+
+  let mapname = ''
+  let waitFor = Promise.resolve((async function () {
     try {
       NET.downloadCount++
       let result
@@ -675,10 +677,19 @@ function CL_Download(cmd, name, auto) {
           await Com_DL_Begin(localName + '.pk3', remoteURL + '.pk3')
             .then(responseData => {
               if(responseData && !nameStr.match(/\.pk3$/)) {
-              nameStr += '.pk3'
+                mapname = nameStr
+                nameStr += '.pk3'
               }
               return responseData
-            })])).filter(f => f)[0]
+            }),
+          await Com_DL_Begin(localName + '.bsp', remoteURL + '.bsp')
+          .then(responseData => {
+            if(responseData && !nameStr.match(/\.bsp$/)) {
+              mapname = nameStr
+              nameStr = 'maps/' + nameStr + '.bsp'
+            }
+            return responseData
+          })])).filter(f => f)[0]
       } else {
         // valid from disk
         responseData = result.contents
@@ -696,18 +707,18 @@ function CL_Download(cmd, name, auto) {
       Cvar_Set( stringToAddress('cl_downloadSize'), stringToAddress('0') );
       Cvar_Set( stringToAddress('cl_downloadCount'), stringToAddress('0') );
       Cvar_Set( stringToAddress('cl_downloadTime'), stringToAddress('0') );
-      if (nameStr.match(/\.pk3/i)) {
+      if (nameStr.match(/\.pk3/i) || nameStr.match(/\.bsp/i)) {
         if(cmdStr == 'dlmap') {
           Cbuf_AddText(stringToAddress(` ; fs_restart ; vid_restart ; `))
         } else {
-          Cbuf_AddText(stringToAddress(` ; wait 300 ; fs_restart ; ${cmdStr} ${nameStr.replace('.pk3', '')} ; `))
+          Cbuf_AddText(stringToAddress(` ; wait 100 ; fs_restart ; ${cmdStr} ${mapname} ; `))
         }
       }
     } catch (e) {
 
     }
   })())
-  return 1
+  return waitFor
 }
 
 var NET = {

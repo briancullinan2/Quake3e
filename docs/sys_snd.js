@@ -48,7 +48,10 @@ let SND = {
   S_CodecReadStream: function () {},
   S_CodecLoad: function (name, info) {
     let filenameStr = addressToString(name)
-    if(!filenameStr.endsWith('.ogg')) {
+    if(filenameStr.length == 0) {
+      return 0
+    }
+   if(!filenameStr.endsWith('.ogg')) {
       filenameStr = filenameStr.replace(/\..*?$/, '.ogg')
     }
     let existing = Object.values(soundEffects)
