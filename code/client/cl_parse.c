@@ -972,15 +972,7 @@ static void CL_ParseGamestate( msg_t *msg ) {
 	}
 
 	// reinitialize the filesystem if the game directory has changed
-#ifdef USE_MULTIVM_CLIENT
-	FS_ConditionalRestart( clc.checksumFeed, gamedirModified, igs );
-#else
-#ifdef USE_MULTIVM_SERVER
-	FS_ConditionalRestart( clc.checksumFeed, gamedirModified, 0 );
-#else
 	FS_ConditionalRestart( clc.checksumFeed, gamedirModified );
-#endif
-#endif
 
 	// restore \cl_reconnectAgrs
 	if ( gamedirModified ) {
@@ -1336,7 +1328,7 @@ void CL_ParseServerMessage( msg_t *msg ) {
 		case svc_gamestate:
 			CL_ParseGamestate( msg );
 			break;
-#if 0 //def USE_MULTIVM_CLIENT
+#ifdef USE_MULTIVM_CLIENT
 		case svc_baseline:
 			{
 				entityState_t	nullstate;
@@ -1362,8 +1354,6 @@ void CL_ParseServerMessage( msg_t *msg ) {
 				cl.baselineUsed[ newnum ] = 1;
 			}
 			break;
-#endif
-#ifdef USE_MULTIVM_CLIENT
 		case svc_mvWorld:
 			igs = MSG_ReadByte( msg );
 			break;

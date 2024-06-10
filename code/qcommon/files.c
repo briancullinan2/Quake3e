@@ -5465,15 +5465,10 @@ FS_ConditionalRestart
 restart if necessary
 =================
 */
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
-qboolean FS_ConditionalRestart( int checksumFeed, qboolean clientRestart, int igvm )
-#else
-qboolean FS_ConditionalRestart( int checksumFeed, qboolean clientRestart )
-#endif
-{
+qboolean FS_ConditionalRestart( int checksumFeed, qboolean clientRestart ) {
 	if ( fs_gamedirvar->modified )
 	{
-#ifdef USE_MULTIFS
+#if 0 //def USE_MULTIFS
     if(igvm != 0) {
       // add the game directory instead of replacing them, 
       //   because it will filter automatically using world policy

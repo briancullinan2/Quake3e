@@ -767,7 +767,7 @@ gotnewcl:
 #ifdef USE_MULTIVM_SERVER
 	newcl->netchan.remoteAddress.netWorld = from->netWorld;
   // add new clients to all worlds
-	if(atoi(Info_ValueForKey( userinfo, "mvproto" )) != MV_PROTOCOL_VERSION) {
+	if(atoi(Info_ValueForKey( userinfo, "mvproto" )) < MV_PROTOCOL_VERSION) {
 		if(sv_mvOmnipresent->integer > 0) {
 				NET_OutOfBandPrint( NS_SERVER, from, "print\nSorry, but this server requires multiview %i\n", MV_PROTOCOL_VERSION );
 				Com_DPrintf( "Multiview rejected a regular client.\n" );
@@ -1162,7 +1162,7 @@ void SV_SendClientGameState( client_t *client ) {
 
 
 #ifdef USE_MULTIVM_SERVER
-	if( client->multiview.protocol > 1 ) { //atoi(Info_ValueForKey( client->userinfo, "mvproto" )) > 1) {
+	if( client->multiview.protocol == MV_MULTIWORLD_VERSION ) { //atoi(Info_ValueForKey( client->userinfo, "mvproto" )) > 1) {
 		MSG_WriteByte( &msg, svc_mvWorld );
 		MSG_WriteByte( &msg, gvmi );
 	}
@@ -2171,7 +2171,7 @@ void SV_GameCL_f( client_t *client ) {
 	vec3_t newOrigin = {0.0, 0.0, 0.0};
 
 	if(!client) return;
-	if(client->multiview.protocol != MV_PROTOCOL_VERSION) {
+	if(client->multiview.protocol < MV_PROTOCOL_VERSION) {
 		if(sv_mvOmnipresent->integer > 0) {
 			NET_OutOfBandPrint( NS_SERVER, &client->netchan.remoteAddress, "print\nSorry, but this server requires multiview %i\n", MV_PROTOCOL_VERSION );
 			Com_DPrintf( "Game comand rejected a regular client.\n" );
@@ -2179,10 +2179,11 @@ void SV_GameCL_f( client_t *client ) {
 		} else {
 			// send a new gamestate just like normal, every time they go through a portal they have to load games
 		}
-	} else {
-		client->multiview.protocol = atoi(Info_ValueForKey( client->userinfo, "mvproto" ));;
-		client->multiview.scoreQueryTime = 0;
 	}
+	/* else {
+		//client->multiview.protocol = atoi(Info_ValueForKey( client->userinfo, "mvproto" ));;
+		//client->multiview.scoreQueryTime = 0;
+	} */
 	//clientNum = client - svs.clients;
 	
 	userOrigin = Cmd_Argv(1);
@@ -2525,6 +2526,9 @@ static void SV_UserMove( client_t *cl, msg_t *msg, qboolean delta ) {
 		CM_SwitchMap(gameWorlds[gvmi]);
 		SV_SetAASgvm(gvmi);
 		if(cl->newWorld != cl->gameWorld) {
+			//if(cl->multiview.protocol < 1 && atoi(Info_ValueForKey( cl->userinfo, "mvproto" ))) {
+			//	cl->multiview.protocol = atoi(Info_ValueForKey( cl->userinfo, "mvproto" ));
+			//}
 			// If we don't reset client->lastUsercmd and are restarting during map load,
 			// the client will hang because we'll use the last Usercmd from the previous map,
 			// which is wrong obviously.
@@ -2733,7 +2737,7 @@ void SV_ExecuteClientMessage( client_t *cl, msg_t *msg ) {
 	// read the usercmd_t
 
 #ifdef USE_MULTIVM_SERVER
-	if ( cl->multiview.protocol > 1 && (c == clc_mvMove || c == clc_mvMoveNoDelta) ) {
+	if ( cl->multiview.protocol == MV_MULTIWORLD_VERSION && (c == clc_mvMove || c == clc_mvMoveNoDelta) ) {
 		int igs = MSG_ReadByte( msg );
 		//if(!sv_mvWorld->integer || sv_mvOmnipresent->integer > 0) {
 			gvmi = igs;

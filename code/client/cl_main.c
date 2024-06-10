@@ -1250,11 +1250,7 @@ static qboolean CL_RestoreOldGame( void )
 	{
 		cl_oldGameSet = qfalse;
 		Cvar_Set( "fs_game", cl_oldGame );
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
-		FS_ConditionalRestart( clc.checksumFeed, qtrue, 0 );
-#else
 		FS_ConditionalRestart( clc.checksumFeed, qtrue );
-#endif
 		return qtrue;
 	}
 	return qfalse;
@@ -1889,11 +1885,7 @@ static void CL_Vid_Restart( refShutdownCode_t shutdownCode ) {
 
 	// reinitialize the filesystem if the game directory or checksum has changed
 	if ( !clc.demoplaying ) // -EC-
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
-		FS_ConditionalRestart( clc.checksumFeed, qfalse, 0 );
-#else
 		FS_ConditionalRestart( clc.checksumFeed, qfalse );
-#endif
 
 	cls.soundRegistered = qfalse;
 
@@ -4141,7 +4133,8 @@ void CL_LoadVM_f( void ) {
       else {
         clientWorlds[i] = count;
         clientMaps[i] = count;
-        worldMaps[i] = re.LoadWorld( va("maps/%s.bsp", name) );
+        //worldMaps[i] = 
+				re.LoadWorld( va("maps/%s.bsp", name) );
         Com_Printf("World loaded on %i\n", i);
         break;
       }
@@ -4481,7 +4474,11 @@ void CL_Init( void ) {
 #endif
 
 #ifdef USE_MV
+#ifdef USE_MULTIVM_CLIENT
+	Cvar_Get( "mvproto", va( "%i", MV_MULTIWORLD_VERSION ), CVAR_USERINFO | CVAR_ROM );
+#else
 	Cvar_Get( "mvproto", va( "%i", MV_PROTOCOL_VERSION ), CVAR_USERINFO | CVAR_ROM );
+#endif
 #endif
 #ifdef USE_MULTIVM_CLIENT
   cl_mvHighlight = Cvar_Get("cl_mvHighlight", "1", CVAR_ARCHIVE);

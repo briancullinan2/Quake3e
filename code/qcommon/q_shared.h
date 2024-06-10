@@ -53,7 +53,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 //===========================================================================
 
-// #define USE_MULTIVM_CLIENT 1
+//#define USE_MULTIVM_CLIENT 1
 #define USE_MULTIVM_SERVER 1
 #define USE_MV 1
 
@@ -79,10 +79,10 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
 #undef Q3_VERSION
-#undef MV_PROTOCOL_VERSION
+//#undef MV_PROTOCOL_VERSION
 #define Q3_VERSION            "Q3 1.32e MV"
 #define MV_MULTIWORLD_VERSION 2
-#define MV_PROTOCOL_VERSION MV_MULTIWORLD_VERSION
+//#define MV_PROTOCOL_VERSION MV_MULTIWORLD_VERSION
 #endif
 
 

@@ -860,7 +860,7 @@ void CL_WritePacket( void ) {
 	// all the cmds will make it to the server
 
 
-#ifdef USE_MULTIVM_CLIENT
+#if 0 //def USE_MULTIVM_CLIENT
 	oldPacketNum = (clc.netchan.outgoingSequence - 2) & PACKET_MASK;
 	count = 2;
 #else

@@ -1350,6 +1350,9 @@ void SV_SendClientSnapshot( client_t *client ) {
 		// they must at least be a spectator even to "peer" into this world from another
 		if(sv_mvWorld->integer != 0 && !SV_PlayerPresent(client - svs.clients)
 			&& gvmi != client->gameWorld && gvmi != client->newWorld) continue;
+
+		if(client->multiview.protocol != MV_MULTIWORLD_VERSION 
+			&& (igvm != client->gameWorld || igvm != client->newWorld)) continue;
 		//Com_Printf("Marking PVS: %i -> %i\n", gvmi, SV_PlayerPresent(client - svs.clients));
 		CM_SwitchMap(gameWorlds[gvmi]);
 		SV_MarkClientPortalPVS( SV_GameClientNum(client - svs.clients)->origin, client - svs.clients, 0 );
@@ -1376,8 +1379,8 @@ void SV_SendClientSnapshot( client_t *client ) {
 			&& (!SV_PlayerPresent(client - svs.clients) /* || !hasMultiworldInView[igvm] */)
 			&& igvm != client->gameWorld && igvm != client->newWorld) continue;
 
-		if(client->multiview.protocol < 2 
-			&& igvm != client->gameWorld && igvm != client->newWorld) continue;
+		if(client->multiview.protocol != MV_MULTIWORLD_VERSION 
+			&& (igvm != client->gameWorld || igvm != client->newWorld)) continue;
 
 		// must acknowledge new gamestate in response to their game request
 		//if(client->lastSnapshotTime - svs.time == -9999 && igvm != client->newWorld) continue;
@@ -1409,7 +1412,7 @@ void SV_SendClientSnapshot( client_t *client ) {
 		MSG_WriteLong( &msg, client->lastClientCommand );
 	}
 	// switch game data slots (`igs`) on client before processing snapshot
-	if(client->multiview.protocol > 1) {
+	if(client->multiview.protocol == MV_MULTIWORLD_VERSION) {
 		MSG_WriteByte( &msg, svc_mvWorld );
 		MSG_WriteByte( &msg, igvm );
 	}
@@ -1434,7 +1437,7 @@ void SV_SendClientSnapshot( client_t *client ) {
 	// bots need to have their snapshots build, but
 	// the query them directly without needing to be sent
 	if ( client->netchan.remoteAddress.type == NA_BOT ) {
-#ifdef USE_MULTIVM_SERVER
+#if 0 //def USE_MULTIVM_SERVER
 		continue;
 #else
 		return;

@@ -800,11 +800,7 @@ qboolean FS_Initialized( void );
 void	FS_InitFilesystem ( void );
 void	FS_Shutdown( qboolean closemfp );
 
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
-qboolean	FS_ConditionalRestart( int checksumFeed, qboolean clientRestart, int igvm );
-#else
 qboolean	FS_ConditionalRestart( int checksumFeed, qboolean clientRestart );
-#endif
 
 void	FS_Restart( int checksumFeed );
 // shutdown and restart the filesystem so changes to fs_gamedir can take effect
