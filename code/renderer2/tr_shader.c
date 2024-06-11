@@ -3505,7 +3505,7 @@ static shader_t *FinishShader( void ) {
 	//
 	// if we are in r_vertexLight mode, never use a lightmap texture
 	//
-#ifndef __WASM__
+#if 1 //ndef __WASM__
 	if ( stage > 1 && ( (r_vertexLight->integer && tr.vertexLightingAllowed) || glConfig.hardwareType == GLHW_PERMEDIA2 ) ) {
 		VertexLightingCollapse();
 		hasLightmapStage = qfalse;
