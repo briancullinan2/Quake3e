@@ -38,7 +38,7 @@ function getQueryCommands() {
 		//   but this should work in theory with WebGL
 		'+set', 'r_ext_framebuffer_object', '0',
 		// Cause of FBO bug above?
-		'+set', 'r_overBrightBits', '1',
+		'+set', 'r_overBrightBits', '0`',
 		// this was replaced in QuakeJS, instead of replacing, just change cvar
 		'+set', 'r_drawBuffer', 'GL_NONE',
 		'+set', 'r_ext_texture_filter_anisotropic', '1',
