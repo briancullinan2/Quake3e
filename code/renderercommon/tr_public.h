@@ -120,6 +120,9 @@ typedef struct {
 
 	void	(*VertexLighting)( qboolean allowed );
 	void	(*SyncRender)( void );
+
+	void ( *AddPolyBufferToScene )( polyBuffer_t* pPolyBuffer );
+
 #ifdef __WASM__
 	void	(*InitShaders)( void );
 #endif

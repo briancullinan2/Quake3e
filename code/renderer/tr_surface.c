@@ -1251,6 +1251,32 @@ static void RB_SurfaceGrid( srfGridMesh_t *cv ) {
 }
 
 
+static void RB_SurfacePolyBuffer( srfPolyBuffer_t *surf ) {
+	int		i;
+	int		numv;
+
+	VBO_Flush();
+
+	RB_CHECKOVERFLOW( surf->pPolyBuffer->numVerts, surf->pPolyBuffer->numIndicies );
+
+	tess.surfType = SF_POLYBUFFER;
+
+	numv = tess.numVertexes;
+	for ( i = 0; i < surf->pPolyBuffer->numVerts; i++ ) {
+		VectorCopy( surf->pPolyBuffer->xyz[i], tess.xyz[numv] );
+		tess.texCoords[0][numv][0] = surf->pPolyBuffer->st[i][0];
+		tess.texCoords[0][numv][1] = surf->pPolyBuffer->st[i][1];
+		*(int *)&tess.vertexColors[numv] = *(int *)surf->pPolyBuffer->color[i];
+
+		numv++;
+	}
+
+	for ( i = 0; i < surf->pPolyBuffer->numIndicies; i++ ) {
+		tess.indexes[tess.numIndexes++] = tess.numVertexes + surf->pPolyBuffer->indicies[i];
+	}
+
+	tess.numVertexes = numv;
+}
 /*
 ===========================================================================
 
@@ -1373,5 +1399,6 @@ void (*rb_surfaceTable[SF_NUM_SURFACE_TYPES])( void *) = {
 	(void(*)(void*))RB_MDRSurfaceAnim,		// SF_MDR,
 	(void(*)(void*))RB_IQMSurfaceAnim,		// SF_IQM,
 	(void(*)(void*))RB_SurfaceFlare,		// SF_FLARE,
-	(void(*)(void*))RB_SurfaceEntity		// SF_ENTITY
+	(void(*)(void*))RB_SurfaceEntity,		// SF_ENTITY
+	(void(*)(void*))RB_SurfacePolyBuffer			// SF_POLYBUFFER,
 };
