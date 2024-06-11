@@ -7,7 +7,8 @@
     "doc": "docs"
   },
   "scripts": {
-    "start": "live-server --middleware=/Users/briancullinan/portals/code/wasm/repack.js docs/ "
+    "start": "live-server --middleware=/Users/briancullinan/portals/code/wasm/repack.js docs/ ",
+    "repack": "node /Users/briancullinan/portals/code/wasm/repack.js"
   },
   "repository": {
     "type": "git",

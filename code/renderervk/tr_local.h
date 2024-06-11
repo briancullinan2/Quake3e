@@ -1931,6 +1931,7 @@ typedef enum {
 // the main view, all the 3D icons, etc
 #define	MAX_POLYS		8192
 #define	MAX_POLYVERTS	32768
+#define MAX_POLYBUFFERS	256
 
 // all of the information needed by the back end must be
 // contained in a backEndData_t
