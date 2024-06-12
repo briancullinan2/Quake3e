@@ -84,7 +84,11 @@ int   		s_paintedtime; 		// sample PAIRS
 // MAX_SFX may be larger than MAX_SOUNDS because
 // of custom player sounds
 #define MAX_SFX			4096
+#ifdef __WASM__
+Q_EXPORT sfx_t s_knownSfx[MAX_SFX];
+#else
 static sfx_t s_knownSfx[MAX_SFX];
+#endif
 static int s_numSfx = 0;
 
 #define LOOP_HASH		128
@@ -471,6 +475,11 @@ static void S_SpatializeOrigin( const vec3_t origin, int master_vol, int *left_v
 // Start a sound effect
 // =======================================================================
 
+#ifdef __WASM__
+extern void S_Base_StartSound( const vec3_t origin, int entityNum, int entchannel, sfxHandle_t sfxHandle );
+extern void S_Base_StartLocalSound( sfxHandle_t sfxHandle, int channelNum );
+#else
+
 /*
 ====================
 S_Base_StartSound
@@ -638,6 +647,8 @@ static void S_Base_StartLocalSound( sfxHandle_t sfxHandle, int channelNum ) {
 
 	S_Base_StartSound (NULL, listener_number, channelNum, sfxHandle );
 }
+
+#endif
 
 
 /*
@@ -1119,7 +1130,7 @@ static qboolean S_ScanChannelStarts( void ) {
 		// into the very first sample
 		if ( ch->startSample == START_SAMPLE_IMMEDIATE ) {
 			ch->startSample = s_paintedtime;
-#ifndef __WASM__
+#if 1 //ndef __WASM__
 			newSamples = qtrue;
 #else
 extern void S_PaintChannel( channel_t *ch, const sfx_t *sc, int count, int sampleOffset );
@@ -1519,6 +1530,7 @@ static void S_Base_Shutdown( void ) {
 
 	cls.soundRegistered = qfalse;
 }
+
 
 
 /*

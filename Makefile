@@ -429,7 +429,7 @@ OPTIMIZE        = -O3 -ffast-math
 SHLIBEXT = wasm
 SHLIBCFLAGS = -fvisibility=hidden $(OPTIMIZE)
 SHLIBLDFLAGS = -Wl,--no-entry $(LDFLAGS) \
-  -Wl,--export=malloc  \
+  -Wl,--export=malloc -Wl,--export=s_knownSfx \
 	-Wl,--export=stderr -Wl,--export=stdout \
   -Wl,--allow-undefined-file=code/wasm/wasm.syms
 
@@ -444,7 +444,7 @@ CLIENT_LDFLAGS  = $(LDFLAGS) code/wasm/stack_ops.S \
   -Wl,--export=Key_ClearStates,--export=Key_GetCatcher \
   -Wl,--export=Key_SetCatcher,--export=CL_PacketEvent \
   -Wl,--export=CL_Try_LoadJPG,--export=CL_Fail_LoadJPG \
-  -Wl,--export=s_soundStarted,--export=s_soundMuted \
+  -Wl,--export=s_soundStarted,--export=s_soundMuted,--export=s_knownSfx \
   -Wl,--export=stackRestore,--export=stackSave,--export=stackAlloc \
   -Wl,--export=dma,--export=S_SoundInfo,--export=Cbuf_ExecuteText \
   -Wl,--export=Cbuf_AddText,--export=gw_minimized \

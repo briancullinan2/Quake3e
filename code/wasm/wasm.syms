@@ -70,6 +70,10 @@ SNDDMA_BeginPainting
 SNDDMA_Submit
 SNDDMA_GetDMAPos
 
+S_Base_StartSound
+S_Base_StartLocalSound
+
+
 S_CodecCloseStream
 S_CodecOpenStream
 S_CodecReadStream
