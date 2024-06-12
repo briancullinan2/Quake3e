@@ -7,7 +7,59 @@ let soundEffects = {}
 
 // So that we don't keep retrying missing sounds
 const REMOTE_SOUNDS = {}
+function S_CodecLoad (name, info) {
+  let filenameStr = addressToString(name)
+  if(filenameStr.length == 0) {
+    return 0
+  }
+ if(!filenameStr.endsWith('.ogg')) {
+    filenameStr = filenameStr.replace(/\..*?$/, '.ogg')
+  }
+  let existing = Object.values(soundEffects)
+  for(let i = 0; i < existing.length; i++) {
+    if(existing[i][0].name == filenameStr) {
+      //soundEffects[filenameStr] = existing[i]
+      return 1
+    }
+  }
 
+  let buf = Z_Malloc(8) // pointer to pointer
+  HEAPU32[buf >> 2] = 0
+  
+  if ((length = FS_ReadFile(stringToAddress(filenameStr), buf)) > 0 && HEAPU32[buf >> 2] > 0) {
+    let thisAudio = document.createElement('AUDIO')
+    thisAudio.addEventListener('load', function () {
+      debugger
+    })
+    let audioView = Array.from(HEAPU8.slice(HEAPU32[buf >> 2], HEAPU32[buf >> 2] + length))
+    let utfEncoded = audioView.map(function (c) { return String.fromCharCode(c) }).join('')
+    thisAudio.src = 'data:audio/ogg;base64,' + btoa(utfEncoded)
+    thisAudio.name = filenameStr
+    console.log('loading audio:' + filenameStr)
+    //thisAudio.address = name - 28
+    soundEffects[filenameStr] = [thisAudio]
+    HEAPU32[(info >> 2) + 4] = length
+    FS_FreeFile(HEAPU32[buf >> 2])
+    Z_Free(buf)
+    return 1
+  }
+
+  // TODO: try alternative download paths
+  if(typeof REMOTE_SOUNDS[filenameStr] == 'undefined') {
+    REMOTE_SOUNDS[filenameStr] = true
+
+    let gamedir = addressToString(FS_GetCurrentGameDir())
+    let remoteFile = 'pak0.pk3dir/' + filenameStr
+    Promise.resolve(Com_DL_Begin(gamedir + '/' + remoteFile, '/' + gamedir + '/' + remoteFile + '?alt')
+        .then(function (responseData) {
+          Com_DL_Perform(gamedir + '/' + remoteFile, remoteFile, responseData)
+        }))
+  }
+
+
+  Z_Free(buf)
+  return 0
+}
 
 let SND = {
   SNDDMA_Init: function () {
@@ -24,6 +76,9 @@ let SND = {
     //HEAPU32[(dma >> 2) + 7] = Z_Malloc(16384 * 200)
     HEAPU32[(dma >> 2) + 8] = Z_Malloc(AUDIO_DRIVER.length + 1)
     stringToAddress(AUDIO_DRIVER, HEAPU32[(dma >> 2) + 7])
+    if(!listener) {
+      InitListener()
+    }
     return 1
   },
   SNDDMA_Shutdown: function () {
@@ -46,71 +101,158 @@ let SND = {
   S_CodecCloseStream: function () {},
   S_CodecOpenStream: function () {},
   S_CodecReadStream: function () {},
-  S_CodecLoad: function (name, info) {
-    let filenameStr = addressToString(name)
-    if(filenameStr.length == 0) {
-      return 0
-    }
-   if(!filenameStr.endsWith('.ogg')) {
-      filenameStr = filenameStr.replace(/\..*?$/, '.ogg')
-    }
-    let existing = Object.values(soundEffects)
-    for(let i = 0; i < existing.length; i++) {
-      if(existing[i][0].name == filenameStr) {
-        soundEffects[name] = existing[i]
-        return 1
-      }
-    }
-
-    let buf = Z_Malloc(8) // pointer to pointer
-    HEAPU32[buf >> 2] = 0
-    
-    if ((length = FS_ReadFile(stringToAddress(filenameStr), buf)) > 0 && HEAPU32[buf >> 2] > 0) {
-      let thisAudio = document.createElement('AUDIO')
-      thisAudio.addEventListener('load', function () {
-        debugger
-      })
-      let audioView = Array.from(HEAPU8.slice(HEAPU32[buf >> 2], HEAPU32[buf >> 2] + length))
-      let utfEncoded = audioView.map(function (c) { return String.fromCharCode(c) }).join('')
-      thisAudio.src = 'data:audio/ogg;base64,' + btoa(utfEncoded)
-      thisAudio.name = filenameStr
-      console.log('loading audio:' + filenameStr)
-      //thisAudio.address = name - 28
-      soundEffects[name] = [thisAudio]
-      HEAPU32[(info >> 2) + 4] = length
-      FS_FreeFile(HEAPU32[buf >> 2])
-      Z_Free(buf)
-      return 1
-    }
-
-    // TODO: try alternative download paths
-    if(typeof REMOTE_SOUNDS[filenameStr] == 'undefined') {
-      REMOTE_SOUNDS[filenameStr] = true
-
-      let gamedir = addressToString(FS_GetCurrentGameDir())
-      let remoteFile = 'pak0.pk3dir/' + filenameStr
-      Promise.resolve(Com_DL_Begin(gamedir + '/' + remoteFile, '/' + gamedir + '/' + remoteFile + '?alt')
-          .then(function (responseData) {
-            Com_DL_Perform(gamedir + '/' + remoteFile, remoteFile, responseData)
-          }))
-    }
-
-
-    Z_Free(buf)
-    return 0
-  },
+  S_CodecLoad: S_CodecLoad,
   S_CodecInit: function () {},
   S_CodecShutdown: function () {},
-  S_PaintChannel: S_PaintChannel,
+  S_Base_StartSound: S_Base_StartSound,
+  S_Base_StartLocalSound: S_Base_StartLocalSound,
+}
+
+let audioCtx
+let listener 
+function InitListener() {
+  audioCtx = new AudioContext()
+  listener = audioCtx.listener;
+
+  // Let's set the position of our listener based on where our boombox is.
+  const posX = window.innerWidth / 2;
+  const posY = window.innerHeight / 2;
+  const posZ = 300;
+
+  if (listener.positionX) {
+    // Standard way
+    listener.positionX.value = posX;
+    listener.positionY.value = posY;
+    listener.positionZ.value = posZ - 5;
+  } else {
+    // Deprecated way; still needed (July 2022)
+    listener.setPosition(posX, posY, posZ - 5);
+  }
+
+  if (listener.forwardX) {
+    // Standard way
+    listener.forwardX.value = 0;
+    listener.forwardY.value = 0;
+    listener.forwardZ.value = -1;
+    listener.upX.value = 0;
+    listener.upY.value = 1;
+    listener.upZ.value = 0;
+  } else {
+    // Deprecated way; still needed (July 2022)
+    listener.setOrientation(0, 0, -1, 0, 1, 0);
+  }
 }
 
 
-function S_PaintChannel(ch, sfx) {
+let soundTracks = {}
+function FindTrack(name) {
+  if(!soundEffects[name]) {
+    return
+  }
+  if(!soundTracks[name]) {
+    soundTracks[name] = []
+  }
+  let now = Date.now()
+  let i
+  for(i = 0; i < soundTracks[name].length; i++) {
+    // check for existing sound elements available for playing
+    if(!soundTracks[name][i].mediaElement.lastPlayed
+      || soundTracks[name][i].mediaElement.lastPlayed + soundTracks[name][i].duration < now) {
+      return soundTracks[name][i]
+    }
+    // prevent the sound from starting again within less than 100ms
+    if(now - soundTracks[name][i].mediaElement.lastPlayed < 25) {
+      return
+    }
+  }
+
+  if(i >= 4) { 
+    console.log('Warning adding too many tracks: ' + addressToString(name))
+    return
+  }
+
+  if(!listener) {
+    InitListener()
+  }
+
+  let audioSrc = FindSound(name)
+  if(audioSrc.track) {
+    return audioSrc.track
+  }
+  let track = new MediaElementAudioSourceNode(audioCtx, {
+    mediaElement: audioSrc,
+  })
+  audioSrc.track = track
+  const posX = window.innerWidth / 2;
+  const posY = window.innerHeight / 2;
+  const posZ = 300 - 5;
+  let panner = new PannerNode(audioCtx, {
+    panningModel: "HRTF",
+    distanceModel: "linear",
+    positionX: posX,
+    positionY: posY,
+    positionZ: posZ,
+    orientationX: 0.0,
+    orientationY: 0.0,
+    orientationZ: -1.0,
+    refDistance: 1,
+    maxDistance: 20_000,
+    rolloffFactor: 10,
+    coneInnerAngle: 40,
+    coneOuterAngle: 50,
+    coneOuterGain: 0.4,
+  })
+  track
+  //        .connect(gainNode)
+  //        .connect(stereoPanner)
+          .connect(panner)
+          .connect(audioCtx.destination);
+  soundTracks[name].push(track)
+  return track
+}
+
+
+//let channels = []
+
+function S_Base_StartLocalSound(sfx, channel) {
   if(HEAPU32[first_click >> 2]) {
     return
   }
-  let name = sfx+28
+  let name = addressToString(s_knownSfx + sfx * 100 + 28).replace(/\..*?$/, '.ogg')
+
+  let sound = FindSound(name)
+  if(sound) {
+    sound.lastPlayed = Date.now()
+    sound.play()
+  }
+
+}
+
+function S_Base_StartSound(origin, entityNum, entchannel, sfx) {
+  if(HEAPU32[first_click >> 2]) {
+    return
+  }
+  let name = addressToString(s_knownSfx + sfx * 100 + 28).replace(/\..*?$/, '.ogg')
   //let name = sfx-72
+
+  /*
+  let now = Date.now()
+  for(i = 0; i < channels.length; i++) {
+    if(!channels[i].lastPlayed || channels[i].lastPlayed + soundEffects[name][0].duration < now) {
+      break;
+    }
+  }
+  */
+
+  let track = FindTrack(name)
+  if(track) {
+    track.mediaElement.lastPlayed = Date.now()
+    track.mediaElement.play()
+  }
+}
+
+
+function FindSound(name) {
   if(!soundEffects[name]) {
     return
   }
@@ -119,12 +261,10 @@ function S_PaintChannel(ch, sfx) {
     // check for existing sound elements available for playing
     if(!soundEffects[name][i].lastPlayed
       || soundEffects[name][i].lastPlayed + soundEffects[name][i].duration < now) {
-      soundEffects[name][i].lastPlayed = now
-      soundEffects[name][i].play()
-      return
+      return soundEffects[name][i]
     }
     // prevent the sound from starting again within less than 100ms
-    if(now - soundEffects[name][i].lastPlayed < 100) {
+    if(now - soundEffects[name][i].lastPlayed < 25) {
       return
     }
   }
@@ -135,6 +275,6 @@ function S_PaintChannel(ch, sfx) {
   }
   let newInstance = soundEffects[name][0].cloneNode()
   soundEffects[name].push(newInstance)
-  newInstance.lastPlayed = Date.now()
-  newInstance.play()
+  return newInstance
 }
+
