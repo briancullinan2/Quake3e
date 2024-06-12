@@ -24,7 +24,7 @@ const SUPPORTED_FORMATS = [
 ]
 
 // include icons because menu uses it to load, not a lazy check unforntunatly
-const FILE_TYPES = new RegExp('(' + SUPPORTED_FORMATS.join('|') + ')$|menu\/|gfx\/2d\/|players\/[^\/]*?\/icon.*\.tga', 'ig')
+const FILE_TYPES = new RegExp('(' + SUPPORTED_FORMATS.join('|') + ')$|menu\/|gfx\/2d\/|players\/[^\/]*?\/icon.*\.tga|_tracemap\.tga', 'ig')
 
 let lockFunc = false
 let lockPromise
@@ -203,7 +203,7 @@ async function generatePalette(pk3File) {
     var m
 
     while((m = (MATCH_PALETTE).exec(existingPalette)) !== null) {
-      palette[path.join(pk3Path, m[1])] = m[2]
+      palette[m[1]] = m[2]
     }
     existingPalette = existingPalette.replace(/palettes\/.*?\n*\{[\s\S]*?\}\n*/ig, '')
   }
@@ -217,7 +217,7 @@ async function generatePalette(pk3File) {
 
     console.log(Math.round(image_i / imageFiles.length * 100, 2), imageFiles[image_i])
 
-    if(imageFiles[image_i].indexOf('.png') == -1 && imageFiles[image_i].indexOf('.jpg')) {
+    if(imageFiles[image_i].indexOf('.png') == -1 && imageFiles[image_i].indexOf('.jpg') == -1) {
       await convertImages(path.join('/', pk3File, 'pak0.pk3dir', imageFiles[image_i].replace(path.extname(imageFiles[image_i]), '.png')))
       await convertImages(path.join('/', pk3File, 'pak0.pk3dir', imageFiles[image_i].replace(path.extname(imageFiles[image_i]), '.jpg')))
     }
@@ -259,8 +259,8 @@ module.exports = checkForRepack
 
 
 if(require.main === module && process.argv[1] == __filename) {
-  generatePalette('baseef')
-  .then(() => compareZip('baseef/pak0.pk3'))
+  generatePalette('demoq3')
+  .then(() => compareZip('demoq3/pak0.pk3'))
   .then(result => {
     console.log(result)
   })
