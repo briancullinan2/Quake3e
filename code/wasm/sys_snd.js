@@ -38,13 +38,15 @@ function S_CodecLoad (name, info) {
     console.log('loading audio:' + filenameStr)
     //thisAudio.address = name - 28
     soundEffects[filenameStr] = [thisAudio]
-    HEAPU32[(info >> 2) + 4] = length
+    if(info) {
+      HEAPU32[(info >> 2) + 4] = length
+    }
     FS_FreeFile(HEAPU32[buf >> 2])
     Z_Free(buf)
     return 1
   }
 
-  // TODO: try alternative download paths
+  // TODO: try alternative download paths and make file available for next time?
   if(typeof REMOTE_SOUNDS[filenameStr] == 'undefined') {
     REMOTE_SOUNDS[filenameStr] = true
 
@@ -102,11 +104,59 @@ let SND = {
   S_CodecOpenStream: function () {},
   S_CodecReadStream: function () {},
   S_CodecLoad: S_CodecLoad,
+  S_LoadSound: S_CodecLoad,
   S_CodecInit: function () {},
   S_CodecShutdown: function () {},
   S_Base_StartSound: S_Base_StartSound,
   S_Base_StartLocalSound: S_Base_StartLocalSound,
+  S_Base_AddLoopingSound: S_Base_AddLoopingSound,
+  S_Base_AddRealLoopingSound: S_Base_AddLoopingSound,
+  S_Base_StopLoopingSound: S_Base_StopLoopingSound,
+  
+  S_Base_ClearLoopingSounds: S_Base_ClearLoopingSounds,
+  S_Base_ClearSoundBuffer: S_Base_ClearLoopingSounds,
+  S_Base_StopAllSounds: S_Base_ClearLoopingSounds,
+
+  S_Base_StopBackgroundTrack: S_Base_StopBackgroundTrack,
+  S_RawSamples: S_RawSamples,
+  S_Base_Respatialize: S_Base_Respatialize,
+  S_Base_UpdateEntityPosition: S_Base_UpdateEntityPosition,
+  S_Base_Update: S_Base_Update,
+  S_Base_RawSamples: S_Base_RawSamples,
+  S_Base_StartBackgroundTrack: S_Base_StartBackgroundTrack,
 }
+
+
+function S_Base_StartBackgroundTrack() {
+
+}
+
+
+function S_Base_Update() {
+
+}
+
+
+function S_Base_StopBackgroundTrack() {
+
+}
+
+
+function S_RawSamples() {
+
+}
+
+
+function S_Base_Respatialize(entityNum, head, axis, inwater) {
+  listener.setPosition(HEAPF32[(head >> 2) + 0], HEAPF32[(head >> 2) + 1], HEAPF32[(head >> 2) + 2])
+  listener.setOrientation(HEAPF32[(axis >> 2) + 0], HEAPF32[(axis >> 2) + 1], HEAPF32[(axis >> 2) + 2], 0, 1, 0)
+}
+
+
+function S_Base_RawSamples() {
+
+}
+
 
 let audioCtx
 let listener 
@@ -146,6 +196,12 @@ function InitListener() {
 
 let soundTracks = {}
 function FindTrack(name) {
+  if(name.length == 0) {
+    return
+  }
+  if(!soundEffects[name]) {
+    S_CodecLoad(stringToAddress(name))
+  }
   if(!soundEffects[name]) {
     return
   }
@@ -161,7 +217,7 @@ function FindTrack(name) {
       return soundTracks[name][i]
     }
     // prevent the sound from starting again within less than 100ms
-    if(now - soundTracks[name][i].mediaElement.lastPlayed < 25) {
+    if(now - soundTracks[name][i].mediaElement.lastPlayed < 10) {
       return
     }
   }
@@ -202,6 +258,7 @@ function FindTrack(name) {
     coneOuterAngle: 50,
     coneOuterGain: 0.4,
   })
+  track.panner = panner
   track
   //        .connect(gainNode)
   //        .connect(stereoPanner)
@@ -215,18 +272,12 @@ function FindTrack(name) {
 //let channels = []
 
 function S_Base_StartLocalSound(sfx, channel) {
-  if(HEAPU32[first_click >> 2]) {
-    return
-  }
-  let name = addressToString(s_knownSfx + sfx * 100 + 28).replace(/\..*?$/, '.ogg')
-
-  let sound = FindSound(name)
-  if(sound) {
-    sound.lastPlayed = Date.now()
-    sound.play()
-  }
+  return S_Base_StartSound(0, null, channel, sfx)
 
 }
+
+
+const entities = {}
 
 function S_Base_StartSound(origin, entityNum, entchannel, sfx) {
   if(HEAPU32[first_click >> 2]) {
@@ -243,16 +294,96 @@ function S_Base_StartSound(origin, entityNum, entchannel, sfx) {
     }
   }
   */
+  if(origin == 0) {
+    let sound = FindSound(name)
+    if(sound) {
+      sound.lastPlayed = Date.now()
+      sound.play()
+    }
+    // TODO: reset track panner location
+    return
+  } else {
+    entities[entityNum] = [HEAPF32[(origin >> 2) + 0], HEAPF32[(origin >> 2) + 1], HEAPF32[(origin >> 2) + 2]]
+  }
 
   let track = FindTrack(name)
   if(track) {
     track.mediaElement.lastPlayed = Date.now()
     track.mediaElement.play()
+    track.panner.setPosition(entities[entityNum][0], entities[entityNum][1], entities[entityNum][2])
+  }
+    // TODO: reset track panner location
+}
+
+
+const looping = []
+
+function S_Base_AddLoopingSound(entityNum, origin, velocity, sfx) {
+  if(HEAPU32[first_click >> 2]) {
+    return
+  }
+
+  let name = addressToString(s_knownSfx + sfx * 100 + 28).replace(/\..*?$/, '.ogg')
+  // TODO: basically the same thing as above but add an event handler
+  let track = FindTrack(name)
+  if(origin) {
+    entities[entityNum] = [HEAPF32[(origin >> 2) + 0], HEAPF32[(origin >> 2) + 1], HEAPF32[(origin >> 2) + 2]]
+  }
+  if(track) {
+    track.mediaElement.lastPlayed = Date.now()
+    track.mediaElement.play()
+    track.mediaElement.onEnded = () => {
+      track.mediaElement.play()
+    }
+    if(looping[entityNum] && looping[entityNum] != track) {
+      //looping[entityNum].mediaElement.pause()
+      looping[entityNum].mediaElement.onEnded = null
+      looping[entityNum] = null
+    }
+    looping[entityNum] = track
+    if(origin) {
+      track.panner.setPosition(entities[entityNum][0], entities[entityNum][1], entities[entityNum][2])
+    }
+    //audioElement.addEventListener('ended', )
   }
 }
 
 
+function S_Base_UpdateEntityPosition(entityNum, origin) {
+  if(origin) {
+    entities[entityNum] = [HEAPF32[(origin >> 2) + 0], HEAPF32[(origin >> 2) + 1], HEAPF32[(origin >> 2) + 2]]
+  }
+}
+
+
+function S_Base_StopLoopingSound(entityNum) {
+  if(looping[entityNum]) {
+    looping[entityNum].mediaElement.pause()
+    looping[entityNum].mediaElement.onEnded = null
+    looping[entityNum] = null
+  }
+}
+
+
+function S_Base_ClearLoopingSounds() {
+  for(let i = 0; i < looping.length; i++) {
+    if(looping[i]) {
+      looping[i].mediaElement.pause()
+      looping[i].mediaElement.onEnded = null
+      looping[i] = null
+    }
+  }
+}
+
+
+
 function FindSound(name) {
+  if(name.length == 0) {
+    return
+  }
+  if(!soundEffects[name]) {
+    S_CodecLoad(stringToAddress(name))
+  }
   if(!soundEffects[name]) {
     return
   }
@@ -264,7 +395,7 @@ function FindSound(name) {
       return soundEffects[name][i]
     }
     // prevent the sound from starting again within less than 100ms
-    if(now - soundEffects[name][i].lastPlayed < 25) {
+    if(now - soundEffects[name][i].lastPlayed < 10) {
       return
     }
   }
