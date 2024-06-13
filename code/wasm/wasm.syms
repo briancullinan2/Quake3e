@@ -72,6 +72,21 @@ SNDDMA_GetDMAPos
 
 S_Base_StartSound
 S_Base_StartLocalSound
+S_Base_AddRealLoopingSound
+S_Base_AddLoopingSound
+S_LoadSound
+S_Base_StopLoopingSound
+S_Base_ClearLoopingSounds
+S_Base_StopBackgroundTrack
+S_Base_StartBackgroundTrack
+S_RawSamples
+S_Base_RawSamples
+S_Base_Respatialize
+S_Base_Update
+S_Base_ClearSoundBuffer
+S_Base_StopAllSounds
+S_Base_UpdateEntityPosition
+
 
 
 S_CodecCloseStream
