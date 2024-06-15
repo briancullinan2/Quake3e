@@ -148,8 +148,8 @@ function S_RawSamples() {
 
 
 function S_Base_Respatialize(entityNum, head, axis, inwater) {
-  listener.setPosition(HEAPF32[(head >> 2) + 0], HEAPF32[(head >> 2) + 1], HEAPF32[(head >> 2) + 2])
-  listener.setOrientation(HEAPF32[(axis >> 2) + 0], HEAPF32[(axis >> 2) + 1], HEAPF32[(axis >> 2) + 2], 0, 1, 0)
+  //listener.setPosition(HEAPF32[(head >> 2) + 0], HEAPF32[(head >> 2) + 1], HEAPF32[(head >> 2) + 2])
+  //listener.setOrientation(HEAPF32[(axis >> 2) + 0], HEAPF32[(axis >> 2) + 1], HEAPF32[(axis >> 2) + 2], 0, 1, 0)
 }
 
 
@@ -310,9 +310,7 @@ function S_Base_StartSound(origin, entityNum, entchannel, sfx) {
   if(track) {
     track.mediaElement.lastPlayed = Date.now()
     track.mediaElement.play()
-    if(origin) {
-      track.panner.setPosition(entities[entityNum][0], entities[entityNum][1], entities[entityNum][2])
-    }
+    track.panner.setPosition(entities[entityNum][0], entities[entityNum][1], entities[entityNum][2])
   }
     // TODO: reset track panner location
 }
@@ -344,7 +342,7 @@ function S_Base_AddLoopingSound(entityNum, origin, velocity, sfx) {
     }
     looping[entityNum] = track
     if(origin) {
-      track.panner.setPosition(entities[entityNum][0], entities[entityNum][1], entities[entityNum][2])
+      //track.panner.setPosition(entities[entityNum][0], entities[entityNum][1], entities[entityNum][2])
     }
     //audioElement.addEventListener('ended', )
   }
@@ -354,6 +352,9 @@ function S_Base_AddLoopingSound(entityNum, origin, velocity, sfx) {
 function S_Base_UpdateEntityPosition(entityNum, origin) {
   if(origin) {
     entities[entityNum] = [HEAPF32[(origin >> 2) + 0], HEAPF32[(origin >> 2) + 1], HEAPF32[(origin >> 2) + 2]]
+    if(looping[entityNum]) {
+      //looping[entityNum].panner.setPosition(entities[entityNum][0], entities[entityNum][1], entities[entityNum][2])
+    }
   }
 }
 

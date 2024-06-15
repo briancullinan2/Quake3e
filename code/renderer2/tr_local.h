@@ -810,6 +810,13 @@ typedef struct {
 } fog_t;
 
 typedef enum {
+	PV_NONE = 0,
+	PV_PORTAL, // this view is through a portal
+	PV_MIRROR, // portal + inverted face culling
+	PV_COUNT
+} portalView_t;
+
+typedef enum {
 	VPF_NONE            = 0x00,
 	VPF_NOVIEWMODEL     = 0x01,
 	VPF_SHADOWMAP       = 0x02,
@@ -825,6 +832,8 @@ typedef struct {
 	orientationr_t	or;
 	orientationr_t	world;
 	vec3_t		pvsOrigin;			// may be different than or.origin for portals
+	portalView_t portalView;
+  int       portalEntity;
 	qboolean	isPortal;			// true if this view is through a portal
 	qboolean	isMirror;			// the portal is a mirror, invert the face culling
 	viewParmFlags_t flags;

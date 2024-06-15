@@ -1,0 +1,98 @@
+
+                                       .
+           dMP dMP dMP  .aMMMb   dMP iK   dMMMMMP dMP   dMP
+          dMP dMP dMP  dMP"dMP  dMPiK"   dMP       dMP dMP
+         dMP dMP dMP  dMMMMMP  dMPK.    dMMMP       "MdMP
+        dMP.dMP.dMP  dMP dMP  dMP ik.  dMP           dMP
+        VMMMPVMMP"  dMP dMP  dMP   ik dMMMMMP       dMP
+
+
+
+
+Winternacht & Sommergewitter by Wakey
+
+FFA maps for Quake 3 Arena, War§ow, World of Padman and OpenArena
+
+     [] About []
+:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+Title: Winternacht & Sommergewitter
+
+File: seasons1.pk3
+BSPs: winter.bsp, summer.bsp
+
+Author: Wakey (Robin Pengelstorfer)
+Email address: wakey@gmx.net
+Website:       http://chili.planetquake.gamespy.com
+
+Tools used: GTKRadiant v1.2.10 & 1.4, Q3map2 2.5.16, Q3map2Toolz, Milkshape 3D v1.7.1, Picture Publisher 8
+
+
+Description: Winternacht & Sommergewitter are little FFA styled maps for 2-5 players. 
+They are my first ever released maps, and are no attempt to create seriously competion or tourney maps,
+but to create some of the most beautiful and atmospheric maps for Quake 3 using all the goodness of Q3map2.
+
+
+
+     [] System requirements []
+:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+Because of the lots of details and eycandy seen in the maps the r_speeds are extremely rough, 
+although the maps are already optimised for speed.
+You can gain speed with lowering the texture detail and setting r_subdivisions to 8 or 16.
+A graphics card with 64mb of ram should be at least the minimum to play it.
+
+
+
+     [] How to play []
+:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+For Quake 3:    Copy the .pk3 file into your baseq3 directory
+For Open Arena: Copy the .pk3 file into your baseoa directory
+For War§ow:     Copy the .pk3 file into your basewsw directory
+For WoP:        Copy the .pk3 file into your wop directory
+and you are ready to rock!
+
+Type "\map winter" or "\map summer" into the console or choose the map through the skirmish menu.
+
+
+
+     [] Stuff []
+:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+New textures: many textures are made by myself, and many taken from BerneyBoy's PhotoRealistic Texture Pack: 
+http://www.planetquake.com/berneyboy/
+
+also some Terrain textures by Sock, taken from his terrain tutorial.
+
+To see wich texture are made from who take a look into the seasons_files.txt.
+
+
+
+     [] Thanks to.... []
+:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+all the people from quake.de
+the people from mapping-tutorials.de
+
+Berneyboy (for his great texturepack)
+Ydnar     (for q3map2 of course)
+Sock   (for his great terrain tutorial and Pyramid of the Magician)
+Cardigan  (for Estatica, maybe the best q3 map out there)
+
+and Id Software for Q3 of course ;D
+
+
+ 
+     [] Copyright / Permissions []
+:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+
+You may not include or distribute this map in any sort
+of commercial product without my permission.  You are
+allowed to share, host and distribute this level via
+internet. Any forms of modifications without my
+permission are prohibited.
+If want to use any of my textures (take a look at seasons_files.txt) in one of your maps, 
+you may do this, as long correct credits are given 
+(it would be also nice if you would inform me via email ;) ).
