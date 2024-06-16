@@ -27,9 +27,10 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 extern	botlib_export_t	*botlib_export;
 
-//extern qboolean loadCamera(const char *name);
-//extern void startCamera(int time);
-//extern qboolean getCameraInfo(int time, vec3_t *origin, vec3_t *angles);
+extern qboolean loadCamera(const char *name);
+extern void startCamera(int camNum, int time);
+extern qboolean getCameraInfo(int camNum, int time, vec3_t *origin, vec3_t *angles, float *fov);
+extern void stopCamera(int camNum);
 
 /*
 ====================
@@ -346,6 +347,7 @@ rescan:
 		// close the console
 		Con_Close();
 		// take a special screenshot next frame
+		VM_Call( uivm, 1, UI_SET_ACTIVE_MENU, UIMENU_NONE );
 		Cbuf_AddText( "wait ; wait ; wait ; wait ; screenshot levelshot\n" );
 		return qtrue;
 	}
@@ -463,6 +465,17 @@ static intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 		Com_Printf( "%s", (const char*)VMA(1) );
 		return 0;
 	case CG_ERROR:
+#ifdef __WASM__
+		// BECAUSE WE CONVERT FILE TYPES TO .PNG, CLASSIC
+		//   GAME FAILS WHEN THE SKIN FILE CHECKS FOR 
+		//   A DEFAULT_ICON.TGA. NO OPTION TO CHANGE 
+		//   IMAGE TYPES BECAUSE TGA IS HARD-CODED.
+		// IGNORE THIS ERROR AND HOPE CGAME DOESN'T
+		//   REACT POORLY.
+		if(Q_stristr((const char*)VMA(1), "DEFAULT_MODEL")) {
+			return 0;
+		}
+#endif
 		Com_Error( ERR_DROP, "%s", (const char*)VMA(1) );
 		return 0;
 	case CG_MILLISECONDS:
@@ -613,6 +626,9 @@ static intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 	case CG_R_ADDPOLYSTOSCENE:
 		re.AddPolyToScene( args[1], args[2], VMA(3), args[4] );
 		return 0;
+	case CG_R_ADDPOLYBUFFERTOSCENE:
+		re.AddPolyBufferToScene( VMA( 1 ) );
+		break;
 	case CG_R_LIGHTFORPOINT:
 		return re.LightForPoint( VMA(1), VMA(2), VMA(3), VMA(4) );
 	case CG_R_ADDLIGHTTOSCENE:
@@ -745,17 +761,20 @@ static intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 		re.RemapShader( VMA(1), VMA(2), VMA(3) );
 		return 0;
 
-/*
 	case CG_LOADCAMERA:
 		return loadCamera(VMA(1));
 
 	case CG_STARTCAMERA:
-		startCamera(args[1]);
+		startCamera(args[1], args[2]);
 		return 0;
 
 	case CG_GETCAMERAINFO:
-		return getCameraInfo(args[1], VMA(2), VMA(3));
-*/
+		return getCameraInfo(args[1], args[2], VMA(3), VMA(4), VMA(5));
+
+	case CG_STOPCAMERA:
+		stopCamera(args[1]);
+		return 0;
+
 	case CG_GET_ENTITY_TOKEN:
 		VM_CHECKBOUNDS( cgvm, args[1], args[2] );
 		return re.GetEntityToken( VMA(1), args[2] );
@@ -853,7 +872,12 @@ void CL_InitCGame( void ) {
 
 	cgvm = VM_Create( VM_CGAME, CL_CgameSystemCalls, CL_DllSyscall, interpret );
 	if ( !cgvm ) {
+#ifndef __WASM__
 		Com_Error( ERR_DROP, "VM_Create on cgame failed" );
+#else
+		cls.cgameStarted = qfalse;
+		return;
+#endif
 	}
 	cls.state = CA_LOADING;
 

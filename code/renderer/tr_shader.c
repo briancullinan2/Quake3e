@@ -1896,7 +1896,7 @@ static qboolean ParseShader( const char **text )
 			shader.noPicMip = 1;
 			continue;
 		}
-		else if ( !Q_stricmp( token, "novlcollapse" ) && s_extendedShader )
+		else if ( !Q_stricmp( token, "novlcollapse" ) /* && s_extendedShader */ )
 		{
 			shader.noVLcollapse = 1;
 			continue;

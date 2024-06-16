@@ -62,6 +62,8 @@ static byte *cmod_base;
 cvar_t		*cm_noAreas;
 cvar_t		*cm_noCurves;
 cvar_t		*cm_playerCurveClip;
+cvar_t    *cm_saveEnts;
+cvar_t    *cm_entityString;
 #endif
 
 static cmodel_t box_model;
@@ -467,10 +469,54 @@ static void CMod_LoadBrushSides( const lump_t *l )
 CMod_LoadEntityString
 =================
 */
-static void CMod_LoadEntityString( const lump_t *l ) {
+static void CMod_LoadEntityString( lump_t *l, const char *name ) {
+	fileHandle_t h;
+	char entName[MAX_QPATH];
+	size_t entNameLen = 0;
+	int entFileLen = 0;
+	if (cm_entityString->string[0] != '\0') {
+		cm.entityString = cm_entityString->string;
+		cm.numEntityChars = strlen(cm_entityString->string);
+	} else if(name[0] != '\0' && l->fileofs != 0) { // don't do memory loading
+		Q_strncpyz(entName, name, sizeof(entName));
+		entNameLen = strlen(entName);
+		entName[entNameLen - 3] = 'e';
+		entName[entNameLen - 2] = 'n';
+		entName[entNameLen - 1] = 't';
+		entFileLen = FS_FOpenFileRead( entName, &h, qtrue );
+		if (h && entFileLen > 0)
+		{
+			cm.entityString = (char *)Hunk_Alloc(entFileLen + 1, h_high );
+			cm.numEntityChars = entFileLen + 1;
+			FS_Read( cm.entityString, entFileLen, h );
+			FS_FCloseFile(h);
+			cm.entityString[entFileLen] = '\0';
+			Com_Printf( S_COLOR_CYAN "Loaded entities from %s\n", entName );
+			return;
+		}
+	}
 	cm.entityString = Hunk_Alloc( l->filelen, h_high );
 	cm.numEntityChars = l->filelen;
 	Com_Memcpy( cm.entityString, cmod_base + l->fileofs, l->filelen );
+	if(cm_saveEnts && cm_saveEnts->integer && l->fileofs != 0) {
+		FS_WriteFile(entName, cm.entityString, cm.numEntityChars);
+		Com_Printf("Wrote: %s\n", entName);
+	} else {
+		//Com_Printf("Entities: %s\n", cm.entityString);
+	}
+}
+
+
+static void CM_SaveEntities() {
+	char entName[MAX_QPATH];
+	size_t entNameLen = 0;
+	Q_strncpyz(entName, cm.name, sizeof(entName));
+	entNameLen = strlen(entName);
+	entName[entNameLen - 3] = 'e';
+	entName[entNameLen - 2] = 'n';
+	entName[entNameLen - 1] = 't';
+	FS_WriteFile(entName, cm.entityString, cm.numEntityChars);
+	Com_Printf("Wrote: %s\n", entName);
 }
 
 
@@ -618,6 +664,9 @@ void CM_LoadMap( const char *name, qboolean clientload, int *checksum ) {
 	Cvar_SetDescription( cm_noCurves, "Do not collide against curves." );
 	cm_playerCurveClip = Cvar_Get( "cm_playerCurveClip", "1", CVAR_ARCHIVE_ND | CVAR_CHEAT );
 	Cvar_SetDescription( cm_playerCurveClip, "Collide player against curves." );
+	cm_saveEnts = Cvar_Get ("cm_saveEnts", "0", CVAR_TEMP);
+	cm_entityString = Cvar_Get ("cm_entityString", "", CVAR_TEMP);
+	Cmd_AddCommand("saveents", CM_SaveEntities);
 #endif
 
 	Com_DPrintf( "%s( '%s', %i )\n", __func__, name, clientload );
@@ -688,7 +737,7 @@ void CM_LoadMap( const char *name, qboolean clientload, int *checksum ) {
 	CMod_LoadBrushes (&header.lumps[LUMP_BRUSHES]);
 	CMod_LoadSubmodels (&header.lumps[LUMP_MODELS]);
 	CMod_LoadNodes (&header.lumps[LUMP_NODES]);
-	CMod_LoadEntityString (&header.lumps[LUMP_ENTITIES]);
+	CMod_LoadEntityString (&header.lumps[LUMP_ENTITIES], name);
 	CMod_LoadVisibility( &header.lumps[LUMP_VISIBILITY] );
 	CMod_LoadPatches( &header.lumps[LUMP_SURFACES], &header.lumps[LUMP_DRAWVERTS] );
 

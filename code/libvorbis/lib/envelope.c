@@ -101,7 +101,7 @@ static int _ve_amp(envelope_lookup *ve,
      itself (for low power signals) */
 
   float minV=ve->minenergy;
-  float *vec=alloca(n*sizeof(*vec));
+  float *vec=malloc(n*sizeof(*vec));
 
   /* stretch is used to gradually lengthen the number of windows
      considered prevoius-to-potential-trigger */
@@ -278,7 +278,7 @@ long _ve_envelope_search(vorbis_dsp_state *v){
 
 #if 0
           if(j>ve->curmark){
-            float *marker=alloca(v->pcm_current*sizeof(*marker));
+            float *marker=malloc(v->pcm_current*sizeof(*marker));
             int l,m;
             memset(marker,0,sizeof(*marker)*v->pcm_current);
             fprintf(stderr,"mark! seq=%d, cursor:%fs time:%fs\n",

@@ -526,6 +526,13 @@ static void SCR_DrawScreenField( stereoFrame_t stereoFrame ) {
 
 	uiFullscreen = (uivm && VM_Call( uivm, 0, UI_IS_FULLSCREEN ));
 
+
+	if(cl_birdsEye->integer || sv_birdsEye->integer) {
+		re.SetColor( g_color_table[ ColorIndex( COLOR_BLACK ) ] );
+		re.DrawStretchPic( 0, 0, cls.glconfig.vidWidth, cls.glconfig.vidHeight, 0, 0, 0, 0, cls.whiteShader );
+		re.SetColor( NULL );
+	}
+
 	// wide aspect ratio screens need to have the sides cleared
 	// unless they are displaying game renderings
 	if ( uiFullscreen || cls.state < CA_LOADING ) {
@@ -600,6 +607,11 @@ static void SCR_DrawScreenField( stereoFrame_t stereoFrame ) {
 }
 
 
+
+#ifndef __WASM__
+extern cvar_t *r_headless;
+#endif
+
 /*
 ==================
 SCR_UpdateScreen
@@ -631,11 +643,22 @@ void SCR_UpdateScreen( void ) {
 	if ( ++recursive > 2 ) {
 		Com_Error( ERR_FATAL, "SCR_UpdateScreen: recursively called" );
 	}
+#ifdef USE_SDL
+#ifndef __WASM__
+	// don't draw frames out of sequence in headless mode, only the frames requested
+	//   TODO: might prevent loading screens from being rendered in demo files?
+	if(r_headless->integer && recursive > 1) {
+		return;
+	}
+#endif
+#endif
 	recursive = 1;
 
 	// If there is no VM, there are also no rendering commands issued. Stop the renderer in
 	// that case.
+#ifndef __WASM__
 	if ( uivm )
+#endif
 	{
 		// XXX
 		int in_anaglyphMode = Cvar_VariableIntegerValue("r_anaglyphMode");
