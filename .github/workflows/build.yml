@@ -338,7 +338,6 @@ jobs:
     steps:
       - name: Download Artifacts
         uses: actions/download-artifact@v4
-
       - name: Create binary archives
         run: |
           7z a -r quake3e-linux-x86.zip            ./linux-x86/*
