@@ -280,11 +280,7 @@ static void SV_MapRestart_f( void ) {
 
 	// check for changes in variables that can't just be restarted
 	// check for maxclients change
-#ifdef USE_MV
-	if ( sv_maxclients->modified || sv_gametype->modified || sv_pure->modified || sv_mvClients->modified )
-#else
 	if ( sv_maxclients->modified || sv_gametype->modified || sv_pure->modified )
-#endif	
 	{
 		char	mapname[MAX_QPATH];
 
@@ -292,10 +288,6 @@ static void SV_MapRestart_f( void ) {
 		// restart the map the slow way
 		Q_strncpyz( mapname, Cvar_VariableString( "mapname" ), sizeof( mapname ) );
 
-
-#ifdef USE_MV
-		SV_MultiViewStopRecord_f(); // as an alternative: save/restore recorder state and continue recording?
-#endif
 		SV_SpawnServer( mapname, qfalse );
 		return;
 	}
@@ -1662,16 +1654,6 @@ void SV_AddOperatorCommands( void ) {
 	Cmd_AddCommand( "filter", SV_AddFilter_f );
 	Cmd_AddCommand( "filtercmd", SV_AddFilterCmd_f );
 
-
-
-#ifdef USE_MV
-	Cmd_AddCommand( "mvrecord", SV_MultiViewRecord_f );
-	//Cmd_SetDescription( "mvrecord", "Start a multiview recording\nUsage: mvrecord <filename>" );
-	Cmd_AddCommand( "mvstoprecord", SV_MultiViewStopRecord_f );
-	//Cmd_SetDescription( "mvstoprecord", "Stop a multiview recording\nUsage: mvstoprecord" );
-	Cmd_AddCommand( "mvstop", SV_MultiViewStopRecord_f );
-	//Cmd_SetDescription( "mvstop", "Stop a multiview recording\nUsage: mvstop" );
-#endif
 
 #ifdef USE_MULTIVM_SERVER
 	Cmd_AddCommand ("game", SV_Game_f);

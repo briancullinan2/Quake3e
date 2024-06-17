@@ -177,11 +177,6 @@ static void CL_InitGLimp_Cvars( void );
 
 static void CL_NextDemo( void );
 
-#ifdef USE_MV
-void CL_Multiview_f( void );
-void CL_MultiviewFollow_f( void );
-#endif
-
 /*
 ===============
 CL_CDDialog
@@ -4579,14 +4574,8 @@ void CL_Init( void ) {
   }
 #endif
 
-#ifdef USE_MV
 #ifdef USE_MULTIVM_CLIENT
 	Cvar_Get( "mvproto", va( "%i", MV_MULTIWORLD_VERSION ), CVAR_USERINFO | CVAR_ROM );
-#else
-	Cvar_Get( "mvproto", va( "%i", MV_PROTOCOL_VERSION ), CVAR_USERINFO | CVAR_ROM );
-#endif
-#endif
-#ifdef USE_MULTIVM_CLIENT
   cl_mvHighlight = Cvar_Get("cl_mvHighlight", "1", CVAR_ARCHIVE);
   Cvar_CheckRange( cl_mvHighlight, "0", "1", CV_INTEGER );
 #endif
@@ -4730,15 +4719,6 @@ void CL_Init( void ) {
 	Cmd_AddCommand( "modelist", CL_ModeList_f );
 
 
-#ifdef USE_MV
-	Cmd_AddCommand( "mvjoin", CL_Multiview_f );
-	//Cmd_SetDescription("mvjoin", "Join multiview to allow viewing of other players\nUsage: mvjoin");
-	Cmd_AddCommand( "mvleave", CL_Multiview_f );
-	//Cmd_SetDescription("mvleave", "Leave multiview and stop showing other players\nUsage: mvleave");
-	Cmd_AddCommand( "mvfollow", CL_MultiviewFollow_f );
-	//Cmd_SetDescription("mvfollow", "Follow a specific player in multiview\nUsage: mvfollow <playernumber>");
-#endif
-
 #ifdef USE_MULTIVM_CLIENT
 	Cmd_AddCommand( "load", CL_LoadVM_f );
 	//Cmd_SetDescription("load", "Load extra VMs for showing multiple players or maps\nUsage: load [ui|cgame|game]");
@@ -4836,11 +4816,6 @@ void CL_Shutdown( const char *finalmsg, qboolean quit ) {
 #endif
 
 
-#ifdef USE_MV
-	Cmd_RemoveCommand( "mvjoin" );
-	Cmd_RemoveCommand( "mvleave" );
-	Cmd_RemoveCommand( "mvfollow" );
-#endif
 #ifdef USE_MULTIVM_CLIENT
 	Cmd_RemoveCommand( "load" );
 #endif
@@ -5855,57 +5830,3 @@ static void CL_Download_f( void )
 	CL_Download( Cmd_Argv( 0 ), Cmd_Argv( 1 ), qfalse );
 }
 #endif // USE_CURL
-
-#ifdef USE_MV
-
-void CL_Multiview_f( void ) {
-#ifdef USE_MULTIVM_CLIENT
-	int igs = clc.currentView;
-#endif
-
-	if ( cls.state != CA_ACTIVE || !cls.servername[0] || clc.demoplaying ) {
-		Com_Printf( "Not connected.\n" );
-		return;
-	}
-
-	if ( atoi( Info_ValueForKey( cl.gameState.stringData + cl.gameState.stringOffsets[ CS_SERVERINFO ], "mvproto" ) ) != MV_PROTOCOL_VERSION ) {
-		Com_Printf( S_COLOR_YELLOW "Remote server does not support this function.\n" );
-		return;
-	}
-
-	CL_AddReliableCommand( Cmd_Argv( 0 ), qfalse );
-}
-
-
-void CL_MultiviewFollow_f( void ) {
-	int clientNum;
-#ifdef USE_MULTIVM_CLIENT
-	int igs = clc.currentView;
-#endif
-
-#ifdef USE_MULTIVM_CLIENT
-	if ( !cl.snapWorlds[igs].multiview ) 
-#else
-	if ( !cl.snap.multiview ) 
-#endif
-	{
-		Com_Printf("Not a multiview snapshot.\n");
-		return;
-	}
-
-	clientNum = atoi( Cmd_Argv( 1 ) );
-
-	if ( (unsigned)clientNum >= MAX_CLIENTS ) {
-		Com_Printf("Multiview client out of range.\n");
-		return;
-	}
-
-#ifdef USE_MULTIVM_CLIENT
-	if ( GET_ABIT( cl.snapWorlds[igs].clientMask, clientNum ) )
-		clientWorlds[clc.currentView] = clientNum;
-#endif
-	else 
-		Com_Printf("Multiview client not available.\n");
-}
-
-#endif // USE_MV

@@ -806,9 +806,9 @@ gotnewcl:
 #ifdef USE_MULTIVM_SERVER
 	newcl->netchan.remoteAddress.netWorld = from->netWorld;
   // add new clients to all worlds
-	if(atoi(Info_ValueForKey( userinfo, "mvproto" )) < MV_PROTOCOL_VERSION) {
+	if(atoi(Info_ValueForKey( userinfo, "mvproto" )) < MV_MULTIWORLD_VERSION) {
 		if(sv_mvOmnipresent->integer > 0) {
-				NET_OutOfBandPrint( NS_SERVER, from, "print\nSorry, but this server requires multiview %i\n", MV_PROTOCOL_VERSION );
+				NET_OutOfBandPrint( NS_SERVER, from, "print\nSorry, but this server requires multiview %i\n", MV_MULTIWORLD_VERSION );
 				Com_DPrintf( "Multiview rejected a regular client.\n" );
 				return;
 		}
@@ -860,13 +860,6 @@ gotnewcl:
 	if ( sv_clientTLD->integer ) {
 		SV_InjectLocation( newcl->tld, newcl->country );
 	}
-
-#ifdef USE_MV
-#ifdef USE_MV_ZCMD
-	newcl->multiview.z.deltaSeq = 0; // reset on DirectConnect();
-#endif
-	newcl->multiview.recorder = qfalse;
-#endif
 
 	// send the connect packet to the client
 	if ( longstr /*&& !compat*/ ) {
@@ -950,10 +943,6 @@ void SV_DropClient( client_t *drop, const char *reason ) {
 
 	// Free all allocated data on the client structure
 	SV_FreeClient( drop );
-
-#ifdef USE_MV
-	SV_TrackDisconnect( drop - svs.clients );
-#endif
 
 	// tell everyone why they got dropped
 	if ( reason ) {
@@ -1192,15 +1181,6 @@ void SV_SendClientGameState( client_t *client ) {
 	// with a gamestate and it sets the clc.serverCommandSequence at
 	// the client side
 	SV_UpdateServerCommandsToClient( client, &msg );
-
-#ifdef USE_MV
-#ifdef USE_MV_ZCMD
-	// reset command compressor and score timer
-	//client->multiview.encoderInited = qfalse;
-	client->multiview.z.deltaSeq = 0; // force encoder reset on gamestate change
-#endif
-	client->multiview.scoreQueryTime = 0;
-#endif
 
 	// send the gamestate
 	MSG_WriteByte( &msg, svc_gamestate );
@@ -2128,6 +2108,7 @@ void SV_PrintLocations_f( client_t *client ) {
 
 
 #ifdef USE_MULTIVM_SERVER
+void SV_CreateBaseline( void );
 #ifndef __WASM__
 void NET_OpenIP( int igvm );
 #endif
@@ -2234,9 +2215,9 @@ void SV_GameCL_f( client_t *client ) {
 	vec3_t newOrigin = {0.0, 0.0, 0.0};
 
 	if(!client) return;
-	if(client->multiview.protocol < MV_PROTOCOL_VERSION) {
+	if(client->multiview.protocol < MV_MULTIWORLD_VERSION) {
 		if(sv_mvOmnipresent->integer > 0) {
-			NET_OutOfBandPrint( NS_SERVER, &client->netchan.remoteAddress, "print\nSorry, but this server requires multiview %i\n", MV_PROTOCOL_VERSION );
+			NET_OutOfBandPrint( NS_SERVER, &client->netchan.remoteAddress, "print\nSorry, but this server requires multiworld %i\n", MV_MULTIWORLD_VERSION );
 			Com_DPrintf( "Game comand rejected a regular client.\n" );
 			return;
 		} else {
@@ -2320,10 +2301,6 @@ static const ucmd_t ucmds[] = {
 	{"load", SV_LoadVM},
 	{"game", SV_GameCL_f},
 #endif
-#ifdef USE_MV
-	{"mvjoin", SV_MultiView_f},
-	{"mvleave", SV_MultiView_f},
-#endif
 
 	{NULL, NULL}
 };
@@ -2406,11 +2383,6 @@ qboolean SV_ExecuteClientCommand( client_t *cl, const char *s ) {
 			else
 				Cmd_Args_Sanitize( "\n\r" );
 			VM_Call( gvm, 1, GAME_CLIENT_COMMAND, cl - svs.clients );
-
-#ifdef USE_MV
-			cl->multiview.lastSentTime = svs.time;
-#endif
-
 		}
 	}
 
@@ -2465,15 +2437,6 @@ static qboolean SV_ClientCommand( client_t *cl, msg_t *msg ) {
 		return qfalse;
 	}
 #endif
-
-
-#ifdef USE_MV
-	if ( !cl->multiview.recorder && sv_demoFile != FS_INVALID_HANDLE && sv_demoClientID == (cl - svs.clients) ) {
-		// forward changes to recorder slot
-		svs.clients[ sv_maxclients->integer ].lastClientCommand++;
-	}
-#endif
-
 
 	cl->lastClientCommand = seq;
 	Q_strncpyz( cl->lastClientCommandString, s, sizeof( cl->lastClientCommandString ) );

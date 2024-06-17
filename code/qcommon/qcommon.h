@@ -126,78 +126,6 @@ void MSG_ReportChangeVectors_f( void );
 
 //============================================================================
 
-//============================================================================
-// PureMultiView protocol
-
-#ifdef USE_MV
-
-typedef enum {
-	SM_BASE = 1,
-	SM_EFLAGS = 2,
-	SM_TRTIME = 4,	 // CPMA
-	SM_TRTYPE = 8,	 // !CPMA
-	SM_TRDELTA = 16, // CPMA: snapped pos.trDelta values
-	SM_ALL = SM_BASE | SM_EFLAGS | SM_TRTIME | SM_TRTYPE | SM_TRDELTA,
-	SM_BITS = 5,
-} skip_mask;
-
-extern int MSG_entMergeMask;
-
-int MSG_PlayerStateToEntityStateXMask( const playerState_t *ps, const entityState_t *s, qboolean snap );
-void MSG_PlayerStateToEntityState( playerState_t *ps, entityState_t *s, qboolean snap, skip_mask sm );
-
-// command compression
-
-#define INDEX_BITS		12	// dictionary index size
-#define LENGTH_BITS		4	// match length bits
-#define LENGTH_MASK		((1<<LENGTH_BITS)-1)	
-#define LENGTH_MASK1	(0xFF & ~LENGTH_MASK)
-#define LZ_WINDOW_SIZE	(1 << INDEX_BITS)
-
-#define RAW_LOOK_AHEAD_SIZE (1 << LENGTH_BITS) // max match length
-#define LZ_MIN_MATCH 3 // minimal match length for efficient encoding
-#define LOOK_AHEAD_SIZE (RAW_LOOK_AHEAD_SIZE + LZ_MIN_MATCH - 1)
-
-#define DICT_SIZE LZ_WINDOW_SIZE
-#define HTAB_SIZE 2048
-
-#define SEARCH_OPTIMIZE
-
-typedef struct lz_ctx_s 
-{
-#ifdef SEARCH_OPTIMIZE
-	byte window[ PAD(LZ_WINDOW_SIZE + LOOK_AHEAD_SIZE, 4) ];
-#else
-	byte window[ LZ_WINDOW_SIZE ];
-#endif
-	int current_pos;
-	// hash context
-	short int htable[ HTAB_SIZE ];
-	short int htlast[ HTAB_SIZE ];
-	short int hlist[ DICT_SIZE ];
-	short int hvals[ DICT_SIZE ];
-} lzctx_t;
-
-typedef struct lzstream_s {
-	int		count;
-	byte	type[(MAX_STRING_CHARS/8)+4]; // bitarray: 0 - match pair, 1 - literal
-	byte	cmd[MAX_STRING_CHARS+1];
-
-	int		zdelta;	      // 0 - reset encoder, 1..7 - control sequences
-	int		zcharbits;    // 0 or 1
-	int		zcommandSize; // 0..3
-	int		zcommandNum;  // client->reliableSequence
-} lzstream_t;
-
-void LZSS_InitContext( lzctx_t *ctx ); 
-void LZSS_SeekEOS( msg_t *msg, int charbits );
-int LZSS_Expand( lzctx_t *ctx, msg_t *msg, byte *out, int maxsize, int charbits );
-int LZSS_Compress( lzctx_t *ctx, msg_t *msg, const byte *in, int length, int charbits );
-int LZSS_CompressToStream( lzctx_t *ctx, lzstream_t *stream, const byte *in, int length );
-void MSG_WriteLZStream( msg_t *msg, lzstream_t *stream );
-
-#endif // USE_MV
-
 /*
 ==============================================================
 
@@ -224,7 +152,7 @@ NET
 #define	MAX_PACKET_USERCMDS		32		// max number of usercmd_t in a packet
 
 
-#ifdef USE_MV
+#ifdef USE_MULTIVM_CLIENT
 #define	MAX_SNAPSHOT_ENTITIES	MAX_GENTITIES
 #else
 #define	MAX_SNAPSHOT_ENTITIES	256
@@ -424,12 +352,6 @@ enum svc_ops_e {
 	svc_voipSpeex,     // not wrapped in USE_VOIP, so this value is reserved.
 	svc_voipOpus,      //
 	
-#ifdef USE_MV
-	svc_multiview = 16, // 1.32e multiview extension
-#ifdef USE_MV_ZCMD
-	svc_zcmd = 17,      // LZ-compressed version of svc_serverCommand
-#endif
-#endif
 #if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
 	svc_mvWorld = 18, // 1.32e multiview extension
 #endif
@@ -1299,9 +1221,6 @@ void Key_WriteBindings( fileHandle_t f );
 void S_ClearSoundBuffer( void );
 // call before filesystem access
 
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MV)
-int		MSG_ReadBits( msg_t *msg, int bits );
-#endif
 #ifdef USE_MULTIVM_CLIENT
 void CL_SystemInfoChanged( qboolean onlyGame, int igs );
 #else

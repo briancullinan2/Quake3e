@@ -64,19 +64,6 @@ typedef struct {
 											// making the snapshot current
 
 // making the snapshot current
-#ifdef USE_MV
-	struct {
-		int				areabytes;
-		byte			areamask[MAX_MAP_AREA_BYTES]; // portalarea visibility bits
-		byte			entMask[MAX_GENTITIES/8];
-		playerState_t	ps;
-		qboolean		valid;
-	} clps[ MAX_CLIENTS ];
-	qboolean	multiview;
-	int			version;
-	int			mergeMask;
-	byte		clientMask[MAX_CLIENTS/8];
-#endif // USE_MV
 #ifdef USE_MULTIVM_CLIENT
 	int     world;
 #endif
@@ -102,7 +89,7 @@ typedef struct {
 // the parseEntities array must be large enough to hold PACKET_BACKUP frames of
 // entities, so that when a delta compressed message arives from the server
 // it can be un-deltad from the original 
-#ifdef USE_MV
+#ifdef USE_MULTIVM_CLIENT
 #define	MAX_PARSE_ENTITIES	( PACKET_BACKUP * MAX_GENTITIES )
 #else
 #define	MAX_PARSE_ENTITIES	( PACKET_BACKUP * MAX_SNAPSHOT_ENTITIES )
@@ -241,9 +228,6 @@ demo through a file.
 typedef struct {
 
 	int			clientNum;
-#ifdef USE_MV
-	int			zexpectDeltaSeq;			// for compressed server commands
-#endif
 	int			lastPacketSentTime;			// for retransmits during connection
 	int			lastPacketTime;				// for timeouts
 
@@ -625,11 +609,7 @@ void CL_ParseServerMessage( msg_t *msg );
 #ifdef USE_MULTIVM_CLIENT
 void CL_ParseSnapshot( msg_t *msg, int igs );
 #else
-#ifdef USE_MV
-void CL_ParseSnapshot( msg_t *msg, qboolean multiview );
-#else
 static void CL_ParseSnapshot( msg_t *msg );
-#endif
 #endif
 
 //====================================================================

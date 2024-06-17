@@ -54,8 +54,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //===========================================================================
 
 //#define USE_MULTIVM_CLIENT 1
-#define USE_MULTIVM_SERVER 1
-#define USE_MV 1
+//#define USE_MULTIVM_SERVER 1
 
 #if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
 // Cyrax's Multiview is what makes multiworld possible.
@@ -63,19 +62,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define USE_ENGINE_TELE 1
 #define USE_LAZY_MEMORY 1
 //#define USE_LAZY_LOAD 1
-#ifndef USE_MV
-#define USE_MV 1
 #endif
-#endif
-
-#ifdef USE_MV
-#define MV_PROTOCOL_VERSION	1 // multiview protocol version
-#else // not USE_MV
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
-#error "USE_MV must be set in order to use MultiVM/MultiWorld"
-#endif
-#endif // USE_MV
-
 
 #if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
 #undef Q3_VERSION
@@ -1193,9 +1180,6 @@ typedef enum {
 #define	SNAPFLAG_NOT_ACTIVE		2	// snapshot used during connection and for zombies
 #define SNAPFLAG_SERVERCOUNT	4	// toggled every map_restart so transitions can be detected
 
-#ifdef USE_MV
-#define SNAPFLAG_MULTIVIEW		8	// this snapshot built from multiview stream
-#endif
 
 //
 // per-level limits

@@ -139,25 +139,6 @@ static void CL_GetCurrentSnapshotNumber( int *snapshotNumber, int *serverTime ) 
 }
 
 
-#ifdef USE_MV
-/*
-====================
-CL_GetParsedEntityIndexByID
-====================
-*/
-static int CL_GetParsedEntityIndexByID( const clSnapshot_t *clSnap, int entityID, int startIndex, int *parsedIndex, int igs ) {
-	int index, n;
-	for ( index = startIndex; index < clSnap->numEntities; ++index ) {
-		n = ( clSnap->parseEntitiesNum + index ) & (MAX_PARSE_ENTITIES-1);
-		if ( cl.parseEntities[ n ].number == entityID ) {
-			*parsedIndex = n;
-			return index;
-		}
-	}
-	return -1;
-}
-#endif // USE_MV
-
 /*
 ====================
 CL_GetSnapshot
@@ -214,102 +195,6 @@ static qboolean CL_GetSnapshot( int snapshotNumber, snapshot_t *snapshot ) {
 	snapshot->ping = clSnap->ping;
 	snapshot->serverTime = clSnap->serverTime;
 
-
-#ifdef USE_MV
-	if ( clSnap->multiview ) {
-		int		entityNum;
-		int		startIndex;
-		int		parsedIndex;
-		byte	*entMask;
-#ifdef USE_MULTIVM_CLIENT
-		int cv = clientWorlds[cgvmi];
-#else
-		int cv = 0;
-#endif
-
-		if ( clSnap->clps[ cv ].valid ) {
-		} else {
-			// we need to select another POV
-			if ( clSnap->clps[ clc.clientNum ].valid ) {
-#ifdef USE_MULTIVM_CLIENT
-				Com_DPrintf( S_COLOR_CYAN "multiview: switch POV back from %d to %d\n", clientWorlds[cgvmi], clc.clientNum );
-				cv = clientWorlds[cgvmi] = clc.clientNum; // fixup to avoid glitches
-#else
-				Com_DPrintf( S_COLOR_CYAN "multiview: switch POV back to %d\n", clc.clientNum );
-				cv = clc.clientNum; // fixup to avoid glitches
-#endif
-			} else { 
-				// invalid primary id? search for any valid
-				for ( i = 0; i < MAX_CLIENTS; i++ ) {
-					if ( clSnap->clps[ i ].valid ) {
-#ifdef USE_MULTIVM_CLIENT
-						cv = clc.clientNum = clientWorlds[cgvmi] = i;
-#else
-						cv = clc.clientNum = i;
-#endif
-						Com_Printf( S_COLOR_CYAN "multiview: set primary client id %d\n", clc.clientNum );
-						break;
-					}
-				}
-#ifndef USE_MULTIVM_CLIENT
-				if ( i == MAX_CLIENTS ) {
-					if ( !( snapshot->snapFlags & SNAPFLAG_NOT_ACTIVE ) ) {
-						Com_Error( ERR_DROP, "Unable to find any playerState in multiview" );
-						return qfalse;
-					}
-				}
-#endif
-			}
-		}
-		Com_Memcpy( snapshot->areamask, clSnap->clps[ cv ].areamask, sizeof( snapshot->areamask ) );
-		snapshot->ps = clSnap->clps[ cv ].ps;
-		entMask = clSnap->clps[ cv ].entMask;
-		if(cv != clc.clientNum) {
-#define PMF_FOLLOW			4096	// spectate following another player
-			snapshot->ps.pm_flags |= PMF_FOLLOW;
-		}
-
-		count = 0;
-		startIndex = 0;
-		for ( entityNum = 0; entityNum < MAX_GENTITIES-1; entityNum++ ) {
-			if ( GET_ABIT( entMask, entityNum ) ) {
-				// skip own and spectated entity
-				if ( entityNum != cv && entityNum != snapshot->ps.clientNum )
-				{
-#ifdef USE_MULTIVM_CLIENT
-					startIndex = CL_GetParsedEntityIndexByID( clSnap, entityNum, startIndex, &parsedIndex, igs );
-#else
-					startIndex = CL_GetParsedEntityIndexByID( clSnap, entityNum, startIndex, &parsedIndex, 0 );
-#endif
-					if ( startIndex >= 0 ) {
-						// should never happen but anyway:
-						if ( count >= MAX_ENTITIES_IN_SNAPSHOT ) {
-							Com_Error( ERR_DROP, "snapshot entities count overflow for %i", cv );
-							break;
-						}
-						snapshot->entities[ count++ ] = cl.parseEntities[ parsedIndex ];
-					} else {
-//#ifndef USE_MULTIVM_CLIENT
-						// TODO: not sure why multiview crashes here, because you can't follow a spectated entity? Should transfer people's own multiview entity regardless.
-#ifdef USE_MULTIVM_CLIENT
-						Com_Error( ERR_DROP, "packet entity not found in snapshot: %i (%i)", entityNum, igs );
-#else
-						Com_Error( ERR_DROP, "packet entity not found in snapshot: %i", entityNum );
-#endif
-						break;
-					}
-				}
-			}
-		}
-		snapshot->numEntities = count;
-
-#ifdef USE_XDAMAGE
-    X_DMG_ParseSnapshotDamage();
-#endif
-
-		return qtrue;
-	}
-#endif // USE_MV
 
 
 	Com_Memcpy( snapshot->areamask, clSnap->areamask, sizeof( snapshot->areamask ) );

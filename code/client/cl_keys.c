@@ -627,42 +627,6 @@ extern qboolean s_soundMuted;
 
 #endif
 
-#ifdef USE_MV
-	if ( (key == K_MOUSE1 || key == K_MOUSE2) && clc.demoplaying 
-#ifdef USE_MULTIVM_CLIENT
-		&& cl.snapWorlds[0].multiview 
-#else
-		&& cl.snap.multiview 
-#endif
-	) {
-		int id, n, d;
-		//if ( key == K_MOUSE1 )
-			d = 1;
-		//else
-		//	d = -1;
-//#ifdef USE_MULTIVM_CLIENT
-//		int from = (clientWorlds[clc.currentView] + d + MAX_CLIENTS ) % MAX_CLIENTS;
-//#else
-		int from = (d + MAX_CLIENTS ) % MAX_CLIENTS;
-//#endif
-		for ( id = from, n = 0; n < MAX_CLIENTS; n++, id = ( id + d + MAX_CLIENTS ) % MAX_CLIENTS ) {
-#ifdef USE_MULTIVM_CLIENT
-			if ( cl.snapWorlds[0].clps[ id ].valid ) {
-				Com_Printf( S_COLOR_CYAN "MultiView: switch POV %d => %d\n", clientWorlds[clc.currentView], id );
-				clientWorlds[clc.currentView] = id;
-				break;
-			}
-#else
-			if ( cl.snap.clps[ id ].valid ) {
-				Com_Printf( S_COLOR_CYAN "MultiView: switch POV => %d\n", id );
-				break;
-			}
-#endif
-		}
-	}
-#endif // USE_MV
-
-
 
 	// escape is always handled special
 	if ( key == K_ESCAPE ) {

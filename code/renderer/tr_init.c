@@ -1822,8 +1822,6 @@ static void R_Register( void )
 		" 3 - linear filtering, stretch to full size\n"
 		" 4 - linear filtering, preserve aspect ratio (black bars on sides)\n" );
 #endif // USE_FBO
-
-
 }
 
 #define EPSILON 1e-6f
@@ -2136,7 +2134,6 @@ refexport_t *GetRefAPI ( int apiVersion, refimport_t *rimp ) {
 	re.GetConfig = RE_GetConfig;
 	re.VertexLighting = RE_VertexLighting;
 	re.SyncRender = RE_SyncRender;
-
 
 	re.AddPolyBufferToScene =   RE_AddPolyBufferToScene;
   re.GetFrustum = RE_GetFrustum;
