@@ -546,26 +546,11 @@ void R_AddPolygonBufferSurfaces( void ) {
 	tr.currentEntityNum = REFENTITYNUM_WORLD;
 	tr.shiftedEntityNum = tr.currentEntityNum << QSORT_REFENTITYNUM_SHIFT;
 
-#ifdef USE_UNLOCKED_CVARS
-	int startList = floor(tr.refdef.firstPolyBuffer / MAX_POLYBUFFERS_DIVISOR);
-	int numLists = floor((tr.refdef.numPolyBuffers - tr.refdef.firstPolyBuffer) / MAX_POLYBUFFERS_DIVISOR);
-	int startIndex = tr.refdef.firstPolyBuffer % MAX_POLYBUFFERS_DIVISOR;
-	for( int j = startList; j <= startList + numLists; j++ ) {
-		for ( i = j == startList ? startIndex : 0, 
-			polybuffer = j == startList ? &backEndData->polybuffers[j][startIndex] : &backEndData->polybuffers[j][0];
-			(j * MAX_POLYBUFFERS_DIVISOR) + i < tr.refdef.numPolyBuffers ; i++, polybuffer++ 
-		) {
-			sh = R_GetShaderByHandle( polybuffer->pPolyBuffer->shader );
-			R_AddDrawSurf( ( void * )polybuffer, sh, polybuffer->fogIndex, 0 );
-		}
-	}
-#else
 	for ( i = 0, polybuffer = tr.refdef.polybuffers; i < tr.refdef.numPolyBuffers ; i++, polybuffer++ ) {
 		sh = R_GetShaderByHandle( polybuffer->pPolyBuffer->shader );
 
 		R_AddDrawSurf( ( void * )polybuffer, sh, polybuffer->fogIndex, 0 );
 	}
-#endif
 }
 
 
@@ -589,20 +574,7 @@ void RE_AddPolyBufferToScene( polyBuffer_t* pPolyBuffer ) {
 		return;
 	}
 
-#ifdef USE_UNLOCKED_CVARS
-	int buffersUsed = r_numpolybuffers % MAX_POLYBUFFERS_DIVISOR;
-	int buffersList = (r_numpolybuffers - buffersUsed) / MAX_POLYBUFFERS_DIVISOR;
-	if(buffersUsed + 1 >= MAX_POLYBUFFERS_DIVISOR) {
-		Com_Printf("Expanding the polybuffers list one time.\n");
-		backEndData->polyVerts[buffersList + 1] = ri.Hunk_Alloc(sizeof(polyBuffer_t) * MAX_POLYBUFFERS_DIVISOR, h_low);
-		r_numpolyverts = (buffersList + 1) * MAX_POLYBUFFERS_DIVISOR;
-		pPolySurf = &backEndData->polybuffers[buffersList + 1][0];
-	} else {
-		pPolySurf = &backEndData->polybuffers[buffersList][buffersUsed];
-	}
-#else
 	pPolySurf = &backEndData->polybuffers[r_numpolybuffers];
-#endif
 	r_numpolybuffers++;
 
 	pPolySurf->surfaceType = SF_POLYBUFFER;
