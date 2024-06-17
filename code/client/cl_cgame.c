@@ -785,7 +785,7 @@ static intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 #ifdef USE_MULTIVM_CLIENT
 		if(clientScreens[cgvmi][0] > -1)
 #endif
-		SCR_UpdateScreen();
+		SCR_UpdateScreen( qtrue );
 		return 0;
 	case CG_CM_LOADMAP:
 		CL_CM_LoadMap( VMA(1) );

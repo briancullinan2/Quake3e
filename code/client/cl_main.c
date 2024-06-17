@@ -1180,7 +1180,7 @@ void CL_MapLoading( void ) {
 		Com_Memset( &cl.gameState, 0, sizeof( cl.gameState ) );
 		clc.lastPacketSentTime = cls.realtime - 9999;  // send packet immediately
 		cls.framecount++;
-		SCR_UpdateScreen();
+		SCR_UpdateScreen( qfalse );
 	} else {
 		// clear nextmap so the cinematic shutdown doesn't execute it
 		Cvar_Set( "nextmap", "" );
@@ -1189,7 +1189,7 @@ void CL_MapLoading( void ) {
 		cls.state = CA_CHALLENGING;		// so the connect screen is drawn
 		Key_SetCatcher( 0 );
 		cls.framecount++;
-		SCR_UpdateScreen();
+		SCR_UpdateScreen( qfalse );
 		clc.connectTime = -RETRANSMIT_TIMEOUT;
 		NET_StringToAdr( cls.servername, &clc.serverAddress, NA_UNSPEC );
 		// we don't need a challenge on the localhost
@@ -1326,7 +1326,7 @@ qboolean CL_Disconnect( qboolean showMainMenu ) {
 	if ( CL_VideoRecording() ) {
 		// Finish rendering current frame
 		cls.framecount++;
-		SCR_UpdateScreen();
+		SCR_UpdateScreen( qfalse );
 		CL_CloseAVI( qfalse );
 	}
 
@@ -3269,7 +3269,7 @@ void CL_Frame( int msec, int realMsec ) {
 			cls.frametime = msec;
 			cls.realtime += msec;
 			cls.framecount++;
-			SCR_UpdateScreen();
+			SCR_UpdateScreen( qfalse );
 			S_Update( realMsec );
 			Con_RunConsole();
 			return;
@@ -3383,7 +3383,7 @@ void CL_Frame( int msec, int realMsec ) {
 
 	// update the screen
 	cls.framecount++;
-	SCR_UpdateScreen();
+	SCR_UpdateScreen( qfalse );
 
 	// update audio
 	S_Update( realMsec );
@@ -4653,6 +4653,9 @@ void CL_Init( void ) {
 	Cvar_SetDescription( cl_dlDirectory, s );
 
 	cl_reconnectArgs = Cvar_Get( "cl_reconnectArgs", "", CVAR_ARCHIVE_ND | CVAR_NOTABCOMPLETE );
+  cl_drawFPS = Cvar_Get ("cl_drawFPS", "1", CVAR_ARCHIVE );
+  cl_lagometer = Cvar_Get ("cl_lagometer", "1", CVAR_ARCHIVE );
+  cl_nopredict = Cvar_Get ("cl_nopredict", "0", 0 );
 
 	// userinfo
 	Cvar_Get ("name", "UnnamedPlayer", CVAR_USERINFO | CVAR_ARCHIVE_ND );
