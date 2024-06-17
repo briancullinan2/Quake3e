@@ -567,6 +567,10 @@ static void S_Base_StartSound( const vec3_t origin, int entityNum, int entchanne
 		allowed = 16;
 	else
 		allowed = 8;
+#ifdef USE_MULTIVM_CLIENT
+		allowed = 32;
+#endif
+
 
 	ch = s_channels;
 	inplay = 0;

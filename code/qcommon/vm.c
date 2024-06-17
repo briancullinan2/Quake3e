@@ -212,7 +212,12 @@ int		vm_debugLevel;
 // used by Com_Error to get rid of running vm's before longjmp
 static int forced_unload;
 
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
+// so that vminfo can list all of them
+static struct vm_s vmTable[ VM_COUNT * MAX_NUM_VMS ];
+#else
 static struct vm_s vmTable[ VM_COUNT ];
+#endif
 
 static const char *vmName[ VM_COUNT ] = {
 	"qagame",
@@ -1757,11 +1762,21 @@ vm_t *VM_Create( vmIndex_t index, syscall_t systemCalls, dllSyscall_t dllSyscall
 
 	// see if we already have the VM
 	if ( vm->name ) {
+#if defined(USE_MULTIVM_SERVER) || defined(USE_MULTIVM_CLIENT)
+		// reserve the first 3 slots for the named VMs then find any empty slot
+		for(int i = VM_COUNT; i < VM_COUNT * MAX_NUM_VMS; i++) {
+			if ( !vmTable[i].name ) {
+				vm = &vmTable[i];
+				break;
+			}
+		}
+#else
 		if ( vm->index != index ) {
 			Com_Error( ERR_DROP, "VM_Create: bad allocated vm index %i", vm->index );
 			return NULL;
 		}
 		return vm;
+#endif
 	}
 
 	name = vmName[ index ];
@@ -1893,9 +1908,15 @@ void VM_Free( vm_t *vm ) {
 
 void VM_Clear( void ) {
 	int i;
+#if defined(USE_MULTIVM_SERVER) || defined(USE_MULTIVM_CLIENT)
+	for ( i = 0; i < VM_COUNT * MAX_NUM_VMS; i++ ) {
+		VM_Free( &vmTable[ i ] );
+	}
+#else
 	for ( i = 0; i < VM_COUNT; i++ ) {
 		VM_Free( &vmTable[ i ] );
 	}
+#endif
 }
 
 
@@ -2112,6 +2133,9 @@ static void VM_VmInfo_f( void ) {
 	int		i;
 
 	Com_Printf( "Registered virtual machines:\n" );
+#if defined(USE_MULTIVM_SERVER) || defined(USE_MULTIVM_CLIENT)
+#define VM_COUNT VM_COUNT * MAX_NUM_VMS
+#endif
 	for ( i = 0 ; i < VM_COUNT ; i++ ) {
 		vm = &vmTable[i];
 		if ( !vm->name ) {

@@ -627,6 +627,43 @@ extern qboolean s_soundMuted;
 
 #endif
 
+#ifdef USE_MV
+	if ( (key == K_MOUSE1 || key == K_MOUSE2) && clc.demoplaying 
+#ifdef USE_MULTIVM_CLIENT
+		&& cl.snapWorlds[0].multiview 
+#else
+		&& cl.snap.multiview 
+#endif
+	) {
+		int id, n, d;
+		//if ( key == K_MOUSE1 )
+			d = 1;
+		//else
+		//	d = -1;
+//#ifdef USE_MULTIVM_CLIENT
+//		int from = (clientWorlds[clc.currentView] + d + MAX_CLIENTS ) % MAX_CLIENTS;
+//#else
+		int from = (d + MAX_CLIENTS ) % MAX_CLIENTS;
+//#endif
+		for ( id = from, n = 0; n < MAX_CLIENTS; n++, id = ( id + d + MAX_CLIENTS ) % MAX_CLIENTS ) {
+#ifdef USE_MULTIVM_CLIENT
+			if ( cl.snapWorlds[0].clps[ id ].valid ) {
+				Com_Printf( S_COLOR_CYAN "MultiView: switch POV %d => %d\n", clientWorlds[clc.currentView], id );
+				clientWorlds[clc.currentView] = id;
+				break;
+			}
+#else
+			if ( cl.snap.clps[ id ].valid ) {
+				Com_Printf( S_COLOR_CYAN "MultiView: switch POV => %d\n", id );
+				break;
+			}
+#endif
+		}
+	}
+#endif // USE_MV
+
+
+
 	// escape is always handled special
 	if ( key == K_ESCAPE ) {
 #ifdef USE_CURL
@@ -764,6 +801,24 @@ Called by the system for both key up and key down events
 */
 void CL_KeyEvent( int key, qboolean down, unsigned time, int finger )
 {
+#if 0 //def USE_MULTIVM_CLIENT
+	if(!clc.sv_mvWorld) {
+		for(int i = 0; i < MAX_NUM_VMS; i++) {
+			if(clientGames[i] > -1) {
+				cgvmi = i;
+				CM_SwitchMap(clientMaps[i]);
+				if ( down )
+					CL_KeyDownEvent( key, time, finger );
+				else
+					CL_KeyUpEvent( key, time, finger );
+			}
+		}
+		return;
+	}
+	cgvmi = clc.currentView;
+	CM_SwitchMap(clientMaps[cgvmi]);
+#endif
+
 	if ( down )
 		CL_KeyDownEvent( key, time );
 	else

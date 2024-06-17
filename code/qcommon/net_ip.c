@@ -205,7 +205,9 @@ static cvar_t	*net_dropsim;
 
 static sockaddr_t socksRelayAddr;
 
+#ifndef USE_MULTIVM_SERVER
 static SOCKET	ip_socket = INVALID_SOCKET;
+#endif
 static SOCKET	socks_socket = INVALID_SOCKET;
 
 #ifdef USE_IPV6
@@ -217,6 +219,22 @@ static struct ipv6_mreq curgroup;
 // And the currently bound address.
 static struct sockaddr_in6 boundto;
 #endif
+
+
+
+#ifdef USE_MULTIVM_SERVER
+
+#define MAX_NUM_PORTS MAX_NUM_VMS
+#define ip_socket ip_sockets[igvm]
+static SOCKET	ip_sockets[MAX_NUM_PORTS] = {
+  INVALID_SOCKET, INVALID_SOCKET, INVALID_SOCKET, INVALID_SOCKET,
+  INVALID_SOCKET, INVALID_SOCKET, INVALID_SOCKET, INVALID_SOCKET,
+  INVALID_SOCKET, INVALID_SOCKET
+};
+
+#endif
+
+
 
 #ifndef IF_NAMESIZE
   #define IF_NAMESIZE 16
@@ -702,7 +720,11 @@ NET_GetPacket
 Receive one packet
 ==================
 */
+#ifdef USE_MULTIVM_SERVER
+static qboolean NET_GetPacket( netadr_t *net_from, msg_t *net_message, const fd_set *fdr, int igvm )
+#else
 static qboolean NET_GetPacket( netadr_t *net_from, msg_t *net_message, const fd_set *fdr )
+#endif
 {
 	int 	ret;
 	sockaddr_t	from;
@@ -749,6 +771,9 @@ static qboolean NET_GetPacket( netadr_t *net_from, msg_t *net_message, const fd_
 			}
 
 			net_message->cursize = ret;
+#ifdef USE_MULTIVM_SERVER
+			net_from->netWorld = igvm;
+#endif
 			return qtrue;
 		}
 	}
@@ -779,6 +804,9 @@ static qboolean NET_GetPacket( netadr_t *net_from, msg_t *net_message, const fd_
 			}
 			
 			net_message->cursize = ret;
+#ifdef USE_MULTIVM_SERVER
+			net_from->netWorld = igvm;
+#endif
 			return qtrue;
 		}
 	}
@@ -827,6 +855,9 @@ Sys_SendPacket
 void Sys_SendPacket( int length, const void *data, const netadr_t *to ) {
 	int ret = SOCKET_ERROR;
 	sockaddr_t addr;
+#ifdef USE_MULTIVM_SERVER
+	int igvm = to->netWorld;
+#endif
 
 	switch ( to->type ) {
 		case NA_BROADCAST:
@@ -1587,12 +1618,37 @@ static void NET_GetLocalAddress( void ) {
 NET_OpenIP
 ====================
 */
-static void NET_OpenIP( void ) {
+#ifndef USE_MULTIVM_SERVER
+static void NET_OpenIP( void )
+#else
+// used from sv_init now to open additional multiworld connection ports for each world added
+void NET_OpenIP( int igvm )
+#endif
+{
 	int		i;
 	int		err;
 	int		port;
 #ifdef USE_IPV6
 	int		port6;
+#endif
+
+#ifdef USE_MULTIVM_SERVER
+	if(igvm == -1) {
+		for(igvm = 0; igvm < MAX_NUM_PORTS; igvm++) {
+			if(ip_sockets[igvm] != INVALID_SOCKET)
+				continue;
+			else
+				break;
+		}
+		if(igvm == MAX_NUM_PORTS) {
+			Com_Printf( "NET_OpenIP: MAX_NUM_PORTS reached\n" );
+			return;
+		}
+	}
+	else if(ip_sockets[igvm] != INVALID_SOCKET) {
+		Com_Printf( "NET_OpenIP: Socket already open for world slot\n" );
+		return;
+	}
 #endif
 
 	port = net_port->integer;
@@ -1632,6 +1688,10 @@ static void NET_OpenIP( void ) {
 		for( i = 0 ; i < 10 ; i++ ) {
 			ip_socket = NET_IPSocket( net_ip->string, port + i, &err );
 			if (ip_socket != INVALID_SOCKET) {
+#ifdef USE_MULTIVM_SERVER
+				Com_Printf("binding to %i - %s:%i\n", igvm, net_ip->string, port + i);
+				if(igvm == 0)
+#endif
 				Cvar_SetIntegerValue( "net_port", port + i );
 
 				if (net_socksEnabled->integer)
@@ -1813,6 +1873,9 @@ static void NET_Config( qboolean enableNetworking ) {
 
 #ifndef __WASM__
 	if( stop ) {
+#ifdef USE_MULTIVM_SERVER
+    for(int igvm = 0; igvm < MAX_NUM_PORTS; igvm++)
+#endif
 		if ( ip_socket != INVALID_SOCKET ) {
 			closesocket( ip_socket );
 			ip_socket = INVALID_SOCKET;
@@ -1843,7 +1906,11 @@ static void NET_Config( qboolean enableNetworking ) {
 	{
 		if ( net_enabled->integer )
 		{
+#if !defined(USE_MULTIVM_SERVER) || defined(__WASM__)
 			NET_OpenIP();
+#else
+			NET_OpenIP(-1);
+#endif
 #ifdef USE_IPV6
 			NET_SetMulticast6();
 #endif
@@ -1913,7 +1980,11 @@ NET_Event
 Called from NET_Sleep which uses select() to determine which sockets have seen action.
 ====================
 */
+#ifdef USE_MULTIVM_SERVER
+static void NET_Event( const fd_set *fdr, int igvm )
+#else
 static void NET_Event( const fd_set *fdr )
+#endif
 {
 	byte bufData[ MAX_MSGLEN_BUF ];
 	netadr_t from;
@@ -1923,7 +1994,11 @@ static void NET_Event( const fd_set *fdr )
 	{
 		MSG_Init( &netmsg, bufData, MAX_MSGLEN );
 
-		if ( NET_GetPacket( &from, &netmsg, fdr ) )
+#ifdef USE_MULTIVM_SERVER
+		if ( NET_GetPacket( &from, &netmsg, fdr, igvm ) )
+#else
+    if ( NET_GetPacket( &from, &netmsg, fdr ) )
+#endif
 		{
 			if ( net_dropsim->value > 0.0f && net_dropsim->value <= 100.0f )
 			{
@@ -1968,11 +2043,26 @@ qboolean NET_Sleep( int timeout )
 
 	FD_ZERO( &fdr );
 
+#ifdef USE_MULTIVM_SERVER
+  for(int igvm = 0; igvm < MAX_NUM_PORTS; igvm++)
+#endif
 	if ( ip_socket != INVALID_SOCKET )
 	{
 		FD_SET( ip_socket, &fdr );
 
+#ifdef USE_MULTIVM_SERVER
+		if ( highestfd == INVALID_SOCKET || ip_socket > highestfd ) {
+			tv.tv_sec = timeout / 1000000;
+			tv.tv_usec = timeout - tv.tv_sec * 1000000;
+			retval = select( ip_socket + 1, &fdr, NULL, NULL, &tv );
+			if ( retval > 0 ) {
+				NET_Event( &fdr, igvm );
+				return qfalse;
+			}
+		}
+#else
 		highestfd = ip_socket;
+#endif
 	}
 
 #ifdef USE_IPV6
@@ -2006,7 +2096,11 @@ qboolean NET_Sleep( int timeout )
 	retval = select( highestfd + 1, &fdr, NULL, NULL, &tv );
 
 	if ( retval > 0 ) {
+#ifdef USE_MULTIVM_SERVER
+		NET_Event( &fdr, 0 );
+#else
 		NET_Event( &fdr );
+#endif
 		return qfalse;
 	}
 

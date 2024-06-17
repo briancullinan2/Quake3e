@@ -31,6 +31,22 @@ static cvar_t		*cl_graphheight;
 static cvar_t		*cl_graphscale;
 static cvar_t		*cl_graphshift;
 
+#ifdef USE_MULTIVM_CLIENT
+float clientScreens[MAX_NUM_VMS][4] = {
+	{0,0,0,0},    {-1,-1,-1,-1},
+	{-1,-1,-1,-1},{-1,-1,-1,-1},
+	{-1,-1,-1,-1},{-1,-1,-1,-1},
+	{-1,-1,-1,-1},{-1,-1,-1,-1},
+	{-1,-1,-1,-1},{-1,-1,-1,-1}
+};
+
+refdef_t views[MAX_NUM_VMS];
+qboolean viewsUpdated[MAX_NUM_VMS] = {
+  qtrue, qtrue, qtrue, qtrue, qtrue,
+  qtrue, qtrue, qtrue, qtrue, qtrue
+};
+#endif
+
 /*
 ================
 SCR_DrawNamedPic

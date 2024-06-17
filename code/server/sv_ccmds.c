@@ -280,13 +280,22 @@ static void SV_MapRestart_f( void ) {
 
 	// check for changes in variables that can't just be restarted
 	// check for maxclients change
-	if ( sv_maxclients->modified || sv_gametype->modified || sv_pure->modified ) {
+#ifdef USE_MV
+	if ( sv_maxclients->modified || sv_gametype->modified || sv_pure->modified || sv_mvClients->modified )
+#else
+	if ( sv_maxclients->modified || sv_gametype->modified || sv_pure->modified )
+#endif	
+	{
 		char	mapname[MAX_QPATH];
 
 		Com_Printf( "variable change -- restarting.\n" );
 		// restart the map the slow way
 		Q_strncpyz( mapname, Cvar_VariableString( "mapname" ), sizeof( mapname ) );
 
+
+#ifdef USE_MV
+		SV_MultiViewStopRecord_f(); // as an alternative: save/restore recorder state and continue recording?
+#endif
 		SV_SpawnServer( mapname, qfalse );
 		return;
 	}
@@ -1542,6 +1551,58 @@ static void SV_CompleteMapName( const char *args, int argNum ) {
 }
 
 
+
+
+#ifdef USE_MULTIVM_SERVER
+void SV_GameCL_f( client_t *client );
+
+void SV_Game_f ( void ) {
+	client_t *client;
+	int i;
+	if ( Cmd_Argc() > 4 ) {
+		Com_Printf ("Usage: game (<mode>) [num] <client>\n");
+		return;
+	}
+
+	if(Cmd_Argc() < 4) {
+		//if(sv_gametype->integer == GT_SINGLE_PLAYER) {
+			// teleport entire team to new world with me
+			for ( i=0, client=svs.clients ; i < sv_maxclients->integer ; i++,client++ ) {
+				if ( !client->state ) {
+					continue;
+				}
+				if( client->netchan.remoteAddress.type == NA_LOOPBACK ) {
+					Cmd_TokenizeString( va("game %s %s", Cmd_Argv(1), Cmd_Argv(2)) );
+					SV_GameCL_f( client );
+				}
+			}
+		//} else {
+		//	Com_Printf( "No player specified. %s\n", Cmd_ArgsFrom(0) );
+		//	return;
+		//}
+	} else {
+		client = SV_GetPlayerByHandle();
+		Cmd_TokenizeString( va("game %s %s", Cmd_Argv(1), Cmd_Argv(2)) );
+		SV_GameCL_f( client );
+	}
+	Cmd_Clear();
+}
+
+void SV_Teleport_f (void) {
+	if ( Cmd_Argc() > 4 || Cmd_Argc() == 2 ) {
+		Com_Printf ("Usage: teleport <clientnum> [xcoord zcoord ycoord]\n");
+		return;
+	}
+	//cl = SV_GetPlayerByNum();
+	//ps = SV_GameClientNum( i );
+	//client = SV_GetPlayerByHandle();
+}
+
+void SV_LoadVM_f(void) {
+	SV_LoadVM(NULL);
+}
+#endif
+
 //#ifdef __WASM__
 void SV_MakeMinimap(void);
 //#endif
@@ -1600,9 +1661,25 @@ void SV_AddOperatorCommands( void ) {
 #endif
 	Cmd_AddCommand( "filter", SV_AddFilter_f );
 	Cmd_AddCommand( "filtercmd", SV_AddFilterCmd_f );
-//#ifdef __WASM__
-	Cmd_AddCommand ("minimap", SV_MakeMinimap);
-//#endif
+
+
+
+#ifdef USE_MV
+	Cmd_AddCommand( "mvrecord", SV_MultiViewRecord_f );
+	//Cmd_SetDescription( "mvrecord", "Start a multiview recording\nUsage: mvrecord <filename>" );
+	Cmd_AddCommand( "mvstoprecord", SV_MultiViewStopRecord_f );
+	//Cmd_SetDescription( "mvstoprecord", "Stop a multiview recording\nUsage: mvstoprecord" );
+	Cmd_AddCommand( "mvstop", SV_MultiViewStopRecord_f );
+	//Cmd_SetDescription( "mvstop", "Stop a multiview recording\nUsage: mvstop" );
+#endif
+
+#ifdef USE_MULTIVM_SERVER
+	Cmd_AddCommand ("game", SV_Game_f);
+	//Cmd_SetDescription( "game", "Switch games in multiVM mode to another match\nUsage: game <client> [num]" );
+	Cmd_AddCommand ("teleport", SV_Teleport_f);
+	//Cmd_SetDescription( "teleport", "Teleport into the game as if you just connected\nUsage: teleport <client> [xcoord zcoord ycoord]" );
+#endif
+
 }
 
 
@@ -1637,6 +1714,12 @@ void SV_AddDedicatedCommands( void )
 	Cmd_AddCommand( "tell", SV_ConTell_f );
 	Cmd_AddCommand( "say", SV_ConSay_f );
 	Cmd_AddCommand( "locations", SV_Locations_f );
+
+#ifdef USE_MULTIVM_SERVER
+	Cmd_AddCommand( "load", SV_LoadVM_f );
+	//Cmd_SetDescription("load", "Load extra VMs for showing multiple players or maps\nUsage: load");
+#endif
+
 }
 
 
@@ -1647,4 +1730,8 @@ void SV_RemoveDedicatedCommands( void )
 	Cmd_RemoveCommand( "tell" );
 	Cmd_RemoveCommand( "say" );
 	Cmd_RemoveCommand( "locations" );
+
+#ifdef USE_MULTIVM_SERVER
+	Cmd_RemoveCommand( "load" );
+#endif
 }

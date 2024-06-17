@@ -32,12 +32,42 @@ extern void startCamera(int camNum, int time);
 extern qboolean getCameraInfo(int camNum, int time, vec3_t *origin, vec3_t *angles, float *fov);
 extern void stopCamera(int camNum);
 
+#ifdef USE_MULTIVM_CLIENT
+int clientMaps[MAX_NUM_VMS] = {
+  0,0,0,0,0,0,0,0,0,0
+};
+
+int worldMaps[MAX_NUM_VMS] = {
+  0,-1,-1,-1,-1,-1,-1,-1,-1,-1
+};
+
+int clientGames[MAX_NUM_VMS] = {
+	0,-1,-1,-1,-1,-1,-1,-1,-1,-1
+};
+
+int clientWorlds[MAX_NUM_VMS] = {
+	0,-1,-1,-1,-1,-1,-1,-1,-1,-1
+};
+
+extern refdef_t views[MAX_NUM_VMS];
+#else
+#if USE_MULTIVM_SERVER
+int clientMap;
+#endif
+#endif
+
+vec3_t clientCameras[MAX_NUM_VMS];
+
+
 /*
 ====================
 CL_GetGameState
 ====================
 */
 static void CL_GetGameState( gameState_t *gs ) {
+#ifdef USE_MULTIVM_CLIENT
+	int igs = clientGames[cgvmi];
+#endif
 	*gs = cl.gameState;
 }
 
@@ -58,6 +88,9 @@ CL_GetUserCmd
 ====================
 */
 static qboolean CL_GetUserCmd( int cmdNumber, usercmd_t *ucmd ) {
+#ifdef USE_MULTIVM_CLIENT
+  int igvm = cgvmi;
+#endif
 	// cmds[cmdNumber] is the last properly generated command
 
 	// can't return anything that we haven't created yet
@@ -83,7 +116,12 @@ CL_GetCurrentCmdNumber
 ====================
 */
 static int CL_GetCurrentCmdNumber( void ) {
+#ifdef USE_MULTIVM_CLIENT
+  int igvm = cgvmi;
+  return cl.clCmdNumbers[igvm];
+#else
 	return cl.cmdNumber;
+#endif
 }
 
 
@@ -93,10 +131,32 @@ CL_GetCurrentSnapshotNumber
 ====================
 */
 static void CL_GetCurrentSnapshotNumber( int *snapshotNumber, int *serverTime ) {
+#ifdef USE_MULTIVM_CLIENT
+	int igs = clientGames[cgvmi];
+#endif
 	*snapshotNumber = cl.snap.messageNum;
 	*serverTime = cl.snap.serverTime;
 }
 
+
+#ifdef USE_MV
+/*
+====================
+CL_GetParsedEntityIndexByID
+====================
+*/
+static int CL_GetParsedEntityIndexByID( const clSnapshot_t *clSnap, int entityID, int startIndex, int *parsedIndex, int igs ) {
+	int index, n;
+	for ( index = startIndex; index < clSnap->numEntities; ++index ) {
+		n = ( clSnap->parseEntitiesNum + index ) & (MAX_PARSE_ENTITIES-1);
+		if ( cl.parseEntities[ n ].number == entityID ) {
+			*parsedIndex = n;
+			return index;
+		}
+	}
+	return -1;
+}
+#endif // USE_MV
 
 /*
 ====================
@@ -106,6 +166,9 @@ CL_GetSnapshot
 static qboolean CL_GetSnapshot( int snapshotNumber, snapshot_t *snapshot ) {
 	clSnapshot_t	*clSnap;
 	int				i, count;
+#ifdef USE_MULTIVM_CLIENT
+	int igs = clientGames[cgvmi];
+#endif
 
 	if ( cl.snap.messageNum - snapshotNumber < 0 ) {
 		Com_Error( ERR_DROP, "CL_GetSnapshot: snapshotNumber (%i) > cl.snapshot.messageNum (%i)", snapshotNumber, cl.snap.messageNum );
@@ -119,20 +182,136 @@ static qboolean CL_GetSnapshot( int snapshotNumber, snapshot_t *snapshot ) {
 	// if the frame is not valid, we can't return it
 	clSnap = &cl.snapshots[snapshotNumber & PACKET_MASK];
 	if ( !clSnap->valid ) {
+#ifdef USE_MULTIVM_CLIENT
+		for(int i = snapshotNumber+1; i <= cl.snap.messageNum; i++)  {
+			clSnap = &cl.snapshots[i & PACKET_MASK];
+			if(!clSnap->valid || clSnap->serverTime < cl.snapshots[snapshotNumber & PACKET_MASK].serverTime) {
+        return qfalse;
+			} else {
+				break;
+			}
+		}
+#else
 		return qfalse;
+#endif
 	}
 
 	// if the entities in the frame have fallen out of their
 	// circular buffer, we can't return it
+#ifdef USE_MULTIVM_CLIENT
+	if ( cl.parseEntitiesNumWorlds[igs] - clSnap->parseEntitiesNum >= MAX_PARSE_ENTITIES ) {
+		return qfalse;
+	}
+#else
 	if ( cl.parseEntitiesNum - clSnap->parseEntitiesNum >= MAX_PARSE_ENTITIES ) {
 		return qfalse;
 	}
+#endif
 
 	// write the snapshot
 	snapshot->snapFlags = clSnap->snapFlags;
 	snapshot->serverCommandSequence = clSnap->serverCommandNum;
 	snapshot->ping = clSnap->ping;
 	snapshot->serverTime = clSnap->serverTime;
+
+
+#ifdef USE_MV
+	if ( clSnap->multiview ) {
+		int		entityNum;
+		int		startIndex;
+		int		parsedIndex;
+		byte	*entMask;
+#ifdef USE_MULTIVM_CLIENT
+		int cv = clientWorlds[cgvmi];
+#else
+		int cv = 0;
+#endif
+
+		if ( clSnap->clps[ cv ].valid ) {
+		} else {
+			// we need to select another POV
+			if ( clSnap->clps[ clc.clientNum ].valid ) {
+#ifdef USE_MULTIVM_CLIENT
+				Com_DPrintf( S_COLOR_CYAN "multiview: switch POV back from %d to %d\n", clientWorlds[cgvmi], clc.clientNum );
+				cv = clientWorlds[cgvmi] = clc.clientNum; // fixup to avoid glitches
+#else
+				Com_DPrintf( S_COLOR_CYAN "multiview: switch POV back to %d\n", clc.clientNum );
+				cv = clc.clientNum; // fixup to avoid glitches
+#endif
+			} else { 
+				// invalid primary id? search for any valid
+				for ( i = 0; i < MAX_CLIENTS; i++ ) {
+					if ( clSnap->clps[ i ].valid ) {
+#ifdef USE_MULTIVM_CLIENT
+						cv = clc.clientNum = clientWorlds[cgvmi] = i;
+#else
+						cv = clc.clientNum = i;
+#endif
+						Com_Printf( S_COLOR_CYAN "multiview: set primary client id %d\n", clc.clientNum );
+						break;
+					}
+				}
+#ifndef USE_MULTIVM_CLIENT
+				if ( i == MAX_CLIENTS ) {
+					if ( !( snapshot->snapFlags & SNAPFLAG_NOT_ACTIVE ) ) {
+						Com_Error( ERR_DROP, "Unable to find any playerState in multiview" );
+						return qfalse;
+					}
+				}
+#endif
+			}
+		}
+		Com_Memcpy( snapshot->areamask, clSnap->clps[ cv ].areamask, sizeof( snapshot->areamask ) );
+		snapshot->ps = clSnap->clps[ cv ].ps;
+		entMask = clSnap->clps[ cv ].entMask;
+		if(cv != clc.clientNum) {
+#define PMF_FOLLOW			4096	// spectate following another player
+			snapshot->ps.pm_flags |= PMF_FOLLOW;
+		}
+
+		count = 0;
+		startIndex = 0;
+		for ( entityNum = 0; entityNum < MAX_GENTITIES-1; entityNum++ ) {
+			if ( GET_ABIT( entMask, entityNum ) ) {
+				// skip own and spectated entity
+				if ( entityNum != cv && entityNum != snapshot->ps.clientNum )
+				{
+#ifdef USE_MULTIVM_CLIENT
+					startIndex = CL_GetParsedEntityIndexByID( clSnap, entityNum, startIndex, &parsedIndex, igs );
+#else
+					startIndex = CL_GetParsedEntityIndexByID( clSnap, entityNum, startIndex, &parsedIndex, 0 );
+#endif
+					if ( startIndex >= 0 ) {
+						// should never happen but anyway:
+						if ( count >= MAX_ENTITIES_IN_SNAPSHOT ) {
+							Com_Error( ERR_DROP, "snapshot entities count overflow for %i", cv );
+							break;
+						}
+						snapshot->entities[ count++ ] = cl.parseEntities[ parsedIndex ];
+					} else {
+//#ifndef USE_MULTIVM_CLIENT
+						// TODO: not sure why multiview crashes here, because you can't follow a spectated entity? Should transfer people's own multiview entity regardless.
+#ifdef USE_MULTIVM_CLIENT
+						Com_Error( ERR_DROP, "packet entity not found in snapshot: %i (%i)", entityNum, igs );
+#else
+						Com_Error( ERR_DROP, "packet entity not found in snapshot: %i", entityNum );
+#endif
+						break;
+					}
+				}
+			}
+		}
+		snapshot->numEntities = count;
+
+#ifdef USE_XDAMAGE
+    X_DMG_ParseSnapshotDamage();
+#endif
+
+		return qtrue;
+	}
+#endif // USE_MV
+
+
 	Com_Memcpy( snapshot->areamask, clSnap->areamask, sizeof( snapshot->areamask ) );
 	snapshot->ps = clSnap->ps;
 	count = clSnap->numEntities;
@@ -158,6 +337,9 @@ CL_SetUserCmdValue
 =====================
 */
 static void CL_SetUserCmdValue( int userCmdValue, float sensitivityScale ) {
+#ifdef USE_MULTIVM_CLIENT
+  int igvm = cgvmi;
+#endif
 	cl.cgameUserCmdValue = userCmdValue;
 	cl.cgameSensitivity = sensitivityScale;
 }
@@ -184,6 +366,9 @@ static void CL_ConfigstringModified( void ) {
 	const char	*dup;
 	gameState_t	oldGs;
 	int			len;
+#ifdef USE_MULTIVM_CLIENT
+	int igs = clientGames[cgvmi];
+#endif
 
 	index = atoi( Cmd_Argv(1) );
 	if ( (unsigned) index >= MAX_CONFIGSTRINGS ) {
@@ -229,7 +414,11 @@ static void CL_ConfigstringModified( void ) {
 
 	if ( index == CS_SYSTEMINFO ) {
 		// parse serverId and other cvars
+#ifdef USE_MULTIVM_CLIENT
+		CL_SystemInfoChanged( qfalse, igs );
+#else
 		CL_SystemInfoChanged( qfalse );
+#endif
 	}
 }
 
@@ -246,6 +435,9 @@ static qboolean CL_GetServerCommand( int serverCommandNumber ) {
 	const char *cmd;
 	static char bigConfigString[BIG_INFO_STRING];
 	int argc, index;
+#ifdef USE_MULTIVM_CLIENT
+  int igvm = cgvmi;
+#endif
 
 	// if we have irretrievably lost a reliable command, drop the connection
 	if ( clc.serverCommandSequence - serverCommandNumber >= MAX_RELIABLE_COMMANDS ) {
@@ -268,7 +460,12 @@ static qboolean CL_GetServerCommand( int serverCommandNumber ) {
 	s = clc.serverCommands[ index ];
 	clc.lastExecutedServerCommand = serverCommandNumber;
 
+
+#ifdef USE_MULTIVM_CLIENT
+	Com_DPrintf( "serverCommand [%i]: %i : %s\n", cgvmi, serverCommandNumber, s );
+#else
 	Com_DPrintf( "serverCommand: %i : %s\n", serverCommandNumber, s );
+#endif
 
 	if ( clc.serverCommandsIgnore[ index ] ) {
 		Cmd_Clear();
@@ -352,6 +549,19 @@ rescan:
 		return qtrue;
 	}
 
+
+#ifdef USE_MULTIVM_CLIENT
+	if ( !strcmp( cmd, "world" ) ) {
+		// prevent multiple VMs from processing this command
+		clc.serverCommandsIgnore[ index ] = qtrue;
+		cls.lastVidRestart = Sys_Milliseconds();
+		cvar_modifiedFlags |= CVAR_USERINFO;
+		Cbuf_ExecuteText(EXEC_INSERT, va("wait ; world %s\n", Cmd_ArgsFrom(1)));
+		Cmd_Clear();
+		return qfalse;
+	}
+#endif
+
 	// we may want to put a "connect to other server" command here
 
 	// cgame can now act on the command
@@ -368,9 +578,18 @@ Just adds default parameters that cgame doesn't need to know about
 */
 static void CL_CM_LoadMap( const char *mapname ) {
 	int		checksum;
-
+#ifdef USE_MULTIVM_CLIENT
+  clientMaps[cgvmi] = CM_LoadMap( mapname, qtrue, &checksum );
+#else
+#if USE_MULTIVM_SERVER
+	clientMap= CM_LoadMap( mapname, qtrue, &checksum );
+#else
 	CM_LoadMap( mapname, qtrue, &checksum );
+#endif
+#endif
 }
+
+
 
 
 /*
@@ -383,6 +602,14 @@ void CL_ShutdownCGame( void ) {
 
 	Key_SetCatcher( Key_GetCatcher( ) & ~KEYCATCH_CGAME );
 	cls.cgameStarted = qfalse;
+#ifdef USE_MULTIVM_CLIENT
+	for(int i = 0; i < MAX_NUM_VMS; i++) {
+		clientScreens[i][0] =
+		clientScreens[i][1] =
+		clientScreens[i][2] =
+		clientScreens[i][3] = -1;
+		cgvmi = i;
+#endif
 
 	if ( !cgvm ) {
 		return;
@@ -393,6 +620,14 @@ void CL_ShutdownCGame( void ) {
 	VM_Call( cgvm, 0, CG_SHUTDOWN );
 	VM_Free( cgvm );
 	cgvm = NULL;
+#ifdef USE_MULTIVM_CLIENT
+	}
+	cgvmi = 0;
+  clientScreens[cgvmi][0] = 
+	clientScreens[cgvmi][1] = 0;
+	clientScreens[cgvmi][2] = 
+	clientScreens[cgvmi][3] = 1;
+#endif
 	FS_VM_CloseFiles( H_CGAME );
 }
 
@@ -476,7 +711,11 @@ static intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 			return 0;
 		}
 #endif
+#ifdef USE_MULTIVM_CLIENT
+		Com_Error( ERR_DROP, "[%i]: %s", cgvmi, (const char*)VMA(1) );
+#else
 		Com_Error( ERR_DROP, "%s", (const char*)VMA(1) );
+#endif
 		return 0;
 	case CG_MILLISECONDS:
 		return Sys_Milliseconds();
@@ -521,6 +760,9 @@ static intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 		return FS_VM_SeekFile( args[1], args[2], args[3], H_CGAME );
 
 	case CG_SENDCONSOLECOMMAND: {
+//#if 0 //def USE_MULTIVM_CLIENT
+//		Cbuf_ExecuteTagged( EXEC_APPEND, VMA(1), -1 );
+//#else
 		const char *cmd = VMA(1);
 		Cbuf_NestedAdd( cmd );
 		return 0;
@@ -540,6 +782,9 @@ static intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 		// We can't call Com_EventLoop here, a restart will crash and this _does_ happen
 		// if there is a map change while we are downloading at pk3.
 		// ZOID
+#ifdef USE_MULTIVM_CLIENT
+		if(clientScreens[cgvmi][0] > -1)
+#endif
 		SCR_UpdateScreen();
 		return 0;
 	case CG_CM_LOADMAP:
@@ -548,7 +793,15 @@ static intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 	case CG_CM_NUMINLINEMODELS:
 		return CM_NumInlineModels();
 	case CG_CM_INLINEMODEL:
+#if defined(USE_MULTIVM_CLIENT)
+		return CM_InlineModel( args[1], 1, cgvmi );
+#else
+#if defined(USE_MULTIVM_SERVER)
+		return CM_InlineModel( args[1], 1, 0 );
+#else
 		return CM_InlineModel( args[1] );
+#endif
+#endif
 	case CG_CM_TEMPBOXMODEL:
 		return CM_TempBoxModel( VMA(1), VMA(2), /*int capsule*/ qfalse );
 	case CG_CM_TEMPCAPSULEMODEL:
@@ -570,20 +823,35 @@ static intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 		CM_TransformedBoxTrace( VMA(1), VMA(2), VMA(3), VMA(4), VMA(5), args[6], args[7], VMA(8), VMA(9), /*int capsule*/ qtrue );
 		return 0;
 	case CG_CM_MARKFRAGMENTS:
+#ifdef USE_MULTIVM_CLIENT
+		if(clientScreens[cgvmi][0] > -1)
+#endif
 		return re.MarkFragments( args[1], VMA(2), VMA(3), args[4], VMA(5), args[6], VMA(7) );
 	case CG_S_STARTSOUND:
+#ifdef USE_MULTIVM_CLIENT
+		if(clientScreens[cgvmi][0] > -1)
+#endif
 		S_StartSound( VMA(1), args[2], args[3], args[4] );
 		return 0;
 	case CG_S_STARTLOCALSOUND:
+#ifdef USE_MULTIVM_CLIENT
+		if(clientScreens[cgvmi][0] > -1)
+#endif
 		S_StartLocalSound( args[1], args[2] );
 		return 0;
 	case CG_S_CLEARLOOPINGSOUNDS:
 		S_ClearLoopingSounds(args[1]);
 		return 0;
 	case CG_S_ADDLOOPINGSOUND:
+#ifdef USE_MULTIVM_CLIENT
+		if(clientScreens[cgvmi][0] > -1)
+#endif
 		S_AddLoopingSound( args[1], VMA(2), VMA(3), args[4] );
 		return 0;
 	case CG_S_ADDREALLOOPINGSOUND:
+#ifdef USE_MULTIVM_CLIENT
+		if(clientScreens[cgvmi][0] > -1)
+#endif
 		S_AddRealLoopingSound( args[1], VMA(2), VMA(3), args[4] );
 		return 0;
 	case CG_S_STOPLOOPINGSOUND:
@@ -593,15 +861,26 @@ static intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 		S_UpdateEntityPosition( args[1], VMA(2) );
 		return 0;
 	case CG_S_RESPATIALIZE:
+#ifdef USE_MULTIVM_CLIENT
+		if(clientScreens[cgvmi][0] > -1)
+#endif
 		S_Respatialize( args[1], VMA(2), VMA(3), args[4] );
 		return 0;
 	case CG_S_REGISTERSOUND:
 		return S_RegisterSound( VMA(1), args[2] );
 	case CG_S_STARTBACKGROUNDTRACK:
+#ifdef USE_MULTIVM_CLIENT
+		if(clientScreens[cgvmi][0] > -1)
+#endif
 		S_StartBackgroundTrack( VMA(1), VMA(2) );
 		return 0;
 	case CG_R_LOADWORLDMAP:
+#ifdef USE_MULTIVM_CLIENT
+		worldMaps[cgvmi] = 0;
+		re.LoadWorld( (char *)VMA(1) );
+#else
 		re.LoadWorld( VMA(1) );
+#endif
 		return 0;
 	case CG_R_REGISTERMODEL:
 		return re.RegisterModel( VMA(1) );
@@ -618,32 +897,65 @@ static intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 		re.ClearScene();
 		return 0;
 	case CG_R_ADDREFENTITYTOSCENE:
+#ifdef USE_MULTIVM_CLIENT
+		if(clientScreens[cgvmi][0] > -1)
+#endif
 		re.AddRefEntityToScene( VMA(1), qfalse );
 		return 0;
 	case CG_R_ADDPOLYTOSCENE:
+#ifdef USE_MULTIVM_CLIENT
+		if(clientScreens[cgvmi][0] > -1)
+#endif
 		re.AddPolyToScene( args[1], args[2], VMA(3), 1 );
 		return 0;
 	case CG_R_ADDPOLYSTOSCENE:
+#ifdef USE_MULTIVM_CLIENT
+		if(clientScreens[cgvmi][0] > -1)
+#endif
 		re.AddPolyToScene( args[1], args[2], VMA(3), args[4] );
 		return 0;
+
 	case CG_R_ADDPOLYBUFFERTOSCENE:
+#ifdef USE_MULTIVM_CLIENT
+		if(clientScreens[cgvmi][0] > -1)
+#endif
 		re.AddPolyBufferToScene( VMA( 1 ) );
 		break;
 	case CG_R_LIGHTFORPOINT:
+#ifdef USE_MULTIVM_CLIENT
+		if(clientScreens[cgvmi][0] == -1)
+      return qfalse;
+    else
+#endif
 		return re.LightForPoint( VMA(1), VMA(2), VMA(3), VMA(4) );
 	case CG_R_ADDLIGHTTOSCENE:
+#ifdef USE_MULTIVM_CLIENT
+		if(clientScreens[cgvmi][0] > -1)
+#endif
 		re.AddLightToScene( VMA(1), VMF(2), VMF(3), VMF(4), VMF(5) );
 		return 0;
 	case CG_R_ADDADDITIVELIGHTTOSCENE:
+#ifdef USE_MULTIVM_CLIENT
+		if(clientScreens[cgvmi][0] > -1)
+#endif
 		re.AddAdditiveLightToScene( VMA(1), VMF(2), VMF(3), VMF(4), VMF(5) );
 		return 0;
 	case CG_R_RENDERSCENE:
+#ifdef USE_MULTIVM_CLIENT
+		if(clientScreens[cgvmi][0] > -1)
+#endif
 		re.RenderScene( VMA(1) );
 		return 0;
 	case CG_R_SETCOLOR:
+#ifdef USE_MULTIVM_CLIENT
+		if(clientScreens[cgvmi][0] > -1)
+#endif
 		re.SetColor( VMA(1) );
 		return 0;
 	case CG_R_DRAWSTRETCHPIC:
+#ifdef USE_MULTIVM_CLIENT
+		if(clientScreens[cgvmi][0] > -1)
+#endif
 		re.DrawStretchPic( VMF(1), VMF(2), VMF(3), VMF(4), VMF(5), VMF(6), VMF(7), VMF(8), args[9] );
 		return 0;
 	case CG_R_MODELBOUNDS:
@@ -784,10 +1096,16 @@ static intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 
 	// engine extensions
 	case CG_R_ADDREFENTITYTOSCENE2:
+#ifdef USE_MULTIVM_CLIENT
+		if(clientScreens[cgvmi][0] > -1)
+#endif
 		re.AddRefEntityToScene( VMA(1), qtrue );
 		return 0;
 
 	case CG_R_ADDLINEARLIGHTTOSCENE:
+#ifdef USE_MULTIVM_CLIENT
+		if(clientScreens[cgvmi][0] > -1)
+#endif
 		re.AddLinearLightToScene( VMA(1), VMA(2), VMF(3), VMF(4), VMF(5), VMF(6) );
 		return 0;
 
@@ -815,6 +1133,10 @@ CL_DllSyscall
 ====================
 */
 static intptr_t QDECL CL_DllSyscall( intptr_t arg, ... ) {
+#ifdef USE_MULTIVM_CLIENT
+	int prev = cgvmi;
+#endif
+	intptr_t result;
 #if !id386 || defined __clang__
 	intptr_t	args[10]; // max.count for cgame
 	va_list	ap;
@@ -826,10 +1148,16 @@ static intptr_t QDECL CL_DllSyscall( intptr_t arg, ... ) {
 		args[ i ] = va_arg( ap, intptr_t );
 	va_end( ap );
 
-	return CL_CgameSystemCalls( args );
+	result = CL_CgameSystemCalls( args );
 #else
-	return CL_CgameSystemCalls( &arg );
+	result = CL_CgameSystemCalls( &arg );
 #endif
+#ifdef USE_MULTIVM_CLIENT
+	if(cgvmi != prev) {
+		Com_Error( ERR_DROP, "Cgame changed while in callback %i -> %i\n", prev, cgvmi );
+	}
+#endif
+	return result;
 }
 
 
@@ -840,11 +1168,25 @@ CL_InitCGame
 Should only be called by CL_StartHunkUsers
 ====================
 */
-void CL_InitCGame( void ) {
+#ifdef USE_MULTIVM_CLIENT
+void CL_InitCGame( int inVM ) 
+#else
+void CL_InitCGame( void ) 
+#endif
+{
 	const char			*info;
 	const char			*mapname;
 	int					t1, t2;
 	vmInterpret_t		interpret;
+#ifdef USE_MULTIVM_CLIENT
+//  int prev = cgvmi; // must use this pattern here because of compiler template
+  if(inVM == -1) {
+    cgvmi = 0;
+  } else {
+    cgvmi = inVM;
+  }
+  int igs = cgvmi;
+#endif
 
 	Cbuf_NestedReset();
 
@@ -896,7 +1238,11 @@ void CL_InitCGame( void ) {
 
 	t2 = Sys_Milliseconds();
 
+#ifdef USE_MULTIVM_CLIENT
+	Com_Printf( "%s (%i): %5.2f seconds\n", __func__, cgvmi, (t2-t1)/1000.0 );
+#else
 	Com_Printf( "CL_InitCGame: %5.2f seconds\n", (t2-t1)/1000.0 );
+#endif
 
 	// have the renderer touch all its images, so they are present
 	// on the card even if the driver does deferred loading
@@ -908,10 +1254,17 @@ void CL_InitCGame( void ) {
 	}
 
 	// clear anything that got printed
+#ifdef USE_MULTIVM_CLIENT
+	if(inVM == -1)
+#endif
 	Con_ClearNotify ();
 
 	// do not allow vid_restart for first time
 	cls.lastVidRestart = Sys_Milliseconds();
+//#ifdef USE_MULTIVM_CLIENT
+//  cgvmi = prev; // set to previous in case this was called from a GameCommand()
+//  re.SwitchWorld(cgvmi);
+//#endif
 }
 
 
@@ -925,6 +1278,11 @@ See if the current console command is claimed by the cgame
 
 qboolean CL_GameCommand( void ) {
 	qboolean bRes;
+#ifdef USE_MULTIVM_CLIENT
+	cgvmi = clc.currentView;
+  //int igs = clientGames[cgvmi];
+	CM_SwitchMap(clientMaps[cgvmi]);
+#endif
 
 	if ( !cgvm ) {
 		return qfalse;
@@ -944,7 +1302,11 @@ CL_CGameRendering
 =====================
 */
 void CL_CGameRendering( stereoFrame_t stereo ) {
+#ifdef USE_MULTIVM_CLIENT
+  VM_Call( cgvm, 3, CG_DRAW_ACTIVE_FRAME, cl.serverTimes[clientGames[clc.currentView]], stereo, clc.demoplaying );
+#else
 	VM_Call( cgvm, 3, CG_DRAW_ACTIVE_FRAME, cl.serverTime, stereo, clc.demoplaying );
+#endif
 #ifdef DEBUG
 	VM_Debug( 0 );
 #endif
@@ -976,6 +1338,9 @@ or bursted delayed packets.
 static void CL_AdjustTimeDelta( void ) {
 	int		newDelta;
 	int		deltaDelta;
+#ifdef USE_MULTIVM_CLIENT
+	int igs = clientGames[cgvmi];
+#endif
 
 	cl.newSnapshots = qfalse;
 
@@ -990,7 +1355,11 @@ static void CL_AdjustTimeDelta( void ) {
 	if ( deltaDelta > RESET_TIME ) {
 		cl.serverTimeDelta = newDelta;
 		cl.oldServerTime = cl.snap.serverTime;	// FIXME: is this a problem for cgame?
+#ifdef USE_MULTIVM_CLIENT
+		cl.serverTimes[0] = cl.snap.serverTime;
+#else
 		cl.serverTime = cl.snap.serverTime;
+#endif
 		if ( cl_showTimeDelta->integer ) {
 			Com_Printf( "<RESET> " );
 		}
@@ -1029,6 +1398,10 @@ CL_FirstSnapshot
 ==================
 */
 static void CL_FirstSnapshot( void ) {
+#ifdef USE_MULTIVM_CLIENT
+	int igs = clientGames[cgvmi];
+#endif
+
 	// ignore snapshots that don't have entities
 	if ( cl.snap.snapFlags & SNAPFLAG_NOT_ACTIVE ) {
 		return;
@@ -1070,6 +1443,9 @@ static float CL_AvgPing( void ) {
 	int count = 0;
 	int i, j, iTemp;
 	float result;
+#ifdef USE_MULTIVM_CLIENT
+	int igs = clientGames[cgvmi];
+#endif
 
 	for ( i = 0; i < PACKET_BACKUP; i++ ) {
 		if ( cl.snapshots[i].ping > 0 && cl.snapshots[i].ping < 999 ) {
@@ -1126,6 +1502,10 @@ CL_SetCGameTime
 */
 void CL_SetCGameTime( void ) {
 	qboolean demoFreezed;
+#ifdef USE_MULTIVM_CLIENT
+  int igs = clientGames[cgvmi];
+	CM_SwitchMap(clientMaps[cgvmi]);
+#endif
 
 	// getting a valid frame message ends the connection process
 	if ( cls.state != CA_ACTIVE ) {
@@ -1152,7 +1532,11 @@ void CL_SetCGameTime( void ) {
 
 	// if we have gotten to this point, cl.snap is guaranteed to be valid
 	if ( !cl.snap.valid ) {
+#ifdef USE_MULTIVM_CLIENT
+    Com_Error( ERR_DROP, "%s: !cl.snap.valid (%i)", __func__, igs );
+#else
 		Com_Error( ERR_DROP, "CL_SetCGameTime: !cl.snap.valid" );
+#endif
 	}
 
 	// allow pause in single player
@@ -1161,9 +1545,11 @@ void CL_SetCGameTime( void ) {
 		return;
 	}
 
+#ifndef USE_MULTIVM_CLIENT
 	if ( cl.snap.serverTime - cl.oldFrameServerTime < 0 ) {
 		Com_Error( ERR_DROP, "cl.snap.serverTime < cl.oldFrameServerTime" );
 	}
+#endif
 	cl.oldFrameServerTime = cl.snap.serverTime;
 
 	// get our current view of time
@@ -1175,6 +1561,20 @@ void CL_SetCGameTime( void ) {
 		// cl_timeNudge is a user adjustable cvar that allows more
 		// or less latency to be added in the interest of better
 		// smoothness or better responsiveness.
+#ifdef USE_MULTIVM_CLIENT
+    cl.serverTimes[0] = cls.realtime + cl.serverTimeDelta - CL_TimeNudge();
+		/*if(cl.serverTimes[igs] > cl.serverTimes[clientGames[clc.currentView]]) {
+			Com_Printf("updating times: %i -> %i: %i\n", igs, clientGames[clc.currentView], cl.serverTimes[igs]);
+			cl.oldServerTime = cl.serverTimes[clientGames[clc.currentView]] = cl.serverTimes[igs];
+		}*/
+		if ( cl.serverTimes[0] <= cl.snap.serverTime ) {
+			cl.serverTimes[0] = cl.snap.serverTime + 2;
+		}
+		if ( cl.serverTimes[0] < cl.oldServerTime ) {
+			cl.serverTimes[0] = cl.oldServerTime;
+		}
+		cl.oldServerTime = cl.serverTimes[0];
+#else
 		cl.serverTime = cls.realtime + cl.serverTimeDelta - CL_TimeNudge();
 
 		// guarantee that time will never flow backwards, even if
@@ -1183,6 +1583,7 @@ void CL_SetCGameTime( void ) {
 			cl.serverTime = cl.oldServerTime;
 		}
 		cl.oldServerTime = cl.serverTime;
+#endif
 
 		// note if we are almost past the latest frame (without timeNudge),
 		// so we will try and adjust back a bit when the next snapshot arrives
@@ -1216,11 +1617,21 @@ void CL_SetCGameTime( void ) {
 			clc.timeDemoStart = Sys_Milliseconds();
 		}
 		clc.timeDemoFrames++;
+#ifdef USE_MULTIVM_CLIENT
+    cl.serverTimes[0] = clc.timeDemoBaseTime + clc.timeDemoFrames * 50;
+#else
 		cl.serverTime = clc.timeDemoBaseTime + clc.timeDemoFrames * 50;
+#endif
 	}
 
 	//while ( cl.serverTime >= cl.snap.serverTime ) {
-	while ( cl.serverTime - cl.snap.serverTime >= 0 ) {
+#ifdef USE_MULTIVM_CLIENT
+  while ( cl.serverTimes[0] - cl.snapWorlds[igs].serverTime >= 0 )
+#else
+	while ( cl.serverTime - cl.snap.serverTime >= 0 )
+#endif
+	{
+
 		// feed another message, which should change
 		// the contents of cl.snap
 		CL_ReadDemoMessage();

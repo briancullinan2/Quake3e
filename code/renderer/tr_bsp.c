@@ -33,7 +33,15 @@ void RE_LoadWorldMap( const char *name );
 
 */
 
+#ifdef USE_MULTIVM_CLIENT
+static 		world_t		s_worldDatas[MAX_NUM_WORLDS];
+int       rwi = 0; // render world, should match number of loaded clip maps, 
+                   //   since they are reusable
+#define s_worldData s_worldDatas[rwi]
+#else
 static	world_t		s_worldData;
+#endif
+
 static	byte		*fileBase;
 
 static int	c_gridVerts;
@@ -2149,6 +2157,29 @@ static void R_LoadEntities( const lump_t *l ) {
 }
 
 
+
+#ifdef USE_LAZY_MEMORY
+#ifdef USE_MULTIVM_CLIENT
+void RE_SetWorld(int);
+void RE_SwitchWorld(int w) {
+	//if(w != rwi)
+	//  ri.Printf( PRINT_ALL, "Switching renderers %i -> %i\n", rwi, w );
+	if(s_worldDatas[w].name[0] == '\0'
+		|| w < 0 || w >= MAX_NUM_WORLDS) {
+		//Com_DPrintf("RE_SwitchWorld: no world loaded on %i\n", w);
+		// allow engine to prep renderer
+		if(w < 0 || w >= MAX_NUM_WORLDS) {
+			rwi = 0;
+			return;
+		}
+	}
+	rwi = w;
+}
+#endif
+#endif
+
+
+
 /*
 =================
 RE_GetEntityToken
@@ -2175,7 +2206,12 @@ RE_LoadWorldMap
 Called directly from cgame
 =================
 */
-void RE_LoadWorldMap( const char *name ) {
+#ifdef USE_MULTIVM_CLIENT
+int RE_LoadWorldMap( const char *name )
+#else
+void RE_LoadWorldMap( const char *name )
+#endif
+{
 	int			i;
 	int32_t		size;
 	dheader_t	*header;
@@ -2185,9 +2221,33 @@ void RE_LoadWorldMap( const char *name ) {
 	} buffer;
 	byte		*startMarker;
 
+
+#ifdef USE_MULTIVM_CLIENT
+	int j, empty = -1;
+	for(j = 0; j < MAX_NUM_WORLDS; j++) {
+		if ( !Q_stricmp( s_worldDatas[j].name, name ) ) {
+			// TODO: PRINT_DEVELOPER
+			rwi = j;
+			ri.Printf( PRINT_ALL, "RE_LoadWorldMap (%i): Already loaded %s\n", rwi, name );
+			return j;
+		} else if (s_worldDatas[j].name[0] == '\0' && empty == -1) {
+			// load additional world in to next slot
+			empty = j;
+		}
+	}
+	rwi = empty;
+	// TODO: if (empty == -1) FreeOldestClipmap
+#else
+	if ( tr.worldMapLoaded ) {
+#ifdef USE_LAZY_MEMORY
+  	ri.Printf( PRINT_WARNING, "ERROR: attempted to redundantly load world map\n" );
+#else
 	if ( tr.worldMapLoaded ) {
 		ri.Error( ERR_DROP, "ERROR: attempted to redundantly load world map" );
 	}
+#endif
+	}
+#endif
 
 	// set default sun direction to be used if it isn't
 	// overridden by a shader
@@ -2268,4 +2328,8 @@ void RE_LoadWorldMap( const char *name ) {
 	tr.world = &s_worldData;
 
 	ri.FS_FreeFile( buffer.v );
+#ifdef USE_MULTIVM_CLIENT
+	return rwi;
+#endif
+
 }

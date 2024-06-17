@@ -244,6 +244,12 @@ model_t *R_AllocModel( void ) {
 	mod = ri.Hunk_Alloc( sizeof( *tr.models[tr.numModels] ), h_low );
 	mod->index = tr.numModels;
 	tr.models[tr.numModels] = mod;
+
+#ifdef USE_MULTIVM_CLIENT
+	if(rwi != 0)
+		trWorlds[0].models[trWorlds[0].numModels++] = mod;
+#endif
+
 	tr.numModels++;
 
 	return mod;
@@ -261,6 +267,7 @@ optimization to prevent disk rescanning if they are
 asked for again.
 ====================
 */
+
 qhandle_t RE_RegisterModel( const char *name ) {
 	model_t		*mod;
 	qhandle_t	hModel;
@@ -280,6 +287,7 @@ qhandle_t RE_RegisterModel( const char *name ) {
 		ri.Printf( PRINT_ALL, "Model name exceeds MAX_QPATH\n" );
 		return 0;
 	}
+
 
 	//
 	// search the currently loaded models
@@ -822,7 +830,12 @@ static qboolean R_LoadMDR( model_t *mod, void *buffer, int filesize, const char 
 			// register the shaders
 			sh = R_FindShader(surf->shader, LIGHTMAP_NONE, qtrue);
 			if ( sh->defaultShader ) {
+#ifdef USE_MULTIVM_CLIENT
+        sh->remappedShader = tr.defaultShader;
+				surf->shaderIndex = sh->index;
+#else
 				surf->shaderIndex = 0;
+#endif
 			} else {
 				surf->shaderIndex = sh->index;
 			}
@@ -976,6 +989,12 @@ void R_ModelInit( void ) {
 
 	mod = R_AllocModel();
 	mod->type = MOD_BAD;
+#ifdef USE_MULTIVM_CLIENT
+	for(int i = 1; i < MAX_NUM_WORLDS; i++) {
+		trWorlds[i].models[0] = mod;
+		trWorlds[i].numModels = 1;
+	}
+#endif
 }
 
 

@@ -89,6 +89,9 @@ static cvar_t *m_filter;
 static qboolean in_mlooking;
 
 static void IN_CenterView( void ) {
+#ifdef USE_MULTIVM_CLIENT
+	int igs = clc.currentView;
+#endif
 	cl.viewangles[PITCH] = -SHORT2ANGLE(cl.snap.ps.delta_angles[PITCH]);
 }
 
@@ -368,6 +371,10 @@ CL_MouseEvent
 =================
 */
 void CL_MouseEvent( int dx, int dy /*, int time*/, qboolean absolute ) {
+#ifdef USE_MULTIVM_CLIENT
+	cgvmi = clc.currentView;
+	CM_SwitchMap(clientMaps[cgvmi]);
+#endif
 	if( absolute ) {
 		if ( Key_GetCatcher() & KEYCATCH_UI ) {
 			VM_Call( uivm, 2, UI_MOUSE_EVENT, -10000, -10000 );
@@ -583,7 +590,12 @@ static void CL_CmdButtons( usercmd_t *cmd ) {
 CL_FinishMove
 ==============
 */
-static void CL_FinishMove( usercmd_t *cmd ) {
+#ifdef USE_MULTIVM_CLIENT
+static void CL_FinishMove( usercmd_t *cmd, int igvm ) 
+#else
+static void CL_FinishMove( usercmd_t *cmd ) 
+#endif
+{
 	int		i;
 
 	// copy the state that the cgame is currently sending
@@ -591,7 +603,12 @@ static void CL_FinishMove( usercmd_t *cmd ) {
 
 	// send the current server time so the amount of movement
 	// can be determined without allowing cheating
+#ifdef USE_MULTIVM_CLIENT
+	//int igs = clientGames[igvm];
+  cmd->serverTime = cl.serverTimes[0];
+#else
 	cmd->serverTime = cl.serverTime;
+#endif
 
 	for (i=0 ; i<3 ; i++) {
 		cmd->angles[i] = ANGLE2SHORT(cl.viewangles[i]);
@@ -604,7 +621,12 @@ static void CL_FinishMove( usercmd_t *cmd ) {
 CL_CreateCmd
 =================
 */
-static usercmd_t CL_CreateCmd( void ) {
+#ifdef USE_MULTIVM_CLIENT
+static usercmd_t CL_CreateCmd( int igvm ) 
+#else
+static usercmd_t CL_CreateCmd( void ) 
+#endif
+{
 	usercmd_t	cmd;
 	vec3_t		oldAngles;
 
@@ -634,7 +656,11 @@ static usercmd_t CL_CreateCmd( void ) {
 	}
 
 	// store out the final values
+#ifdef USE_MULTIVM_CLIENT
+	CL_FinishMove( &cmd, igvm );
+#else
 	CL_FinishMove( &cmd );
+#endif
 
 	// draw debug graphs of turning for mouse testing
 	if ( cl_debugMove->integer ) {
@@ -656,7 +682,12 @@ CL_CreateNewCommands
 Create a new usercmd_t structure for this frame
 =================
 */
-static void CL_CreateNewCommands( void ) {
+#ifdef USE_MULTIVM_CLIENT
+static void CL_CreateNewCommands( int igvm )
+#else
+static void CL_CreateNewCommands( void )
+#endif
+{
 	int			cmdNum;
 
 	// no need to create usercmds until we have a gamestate
@@ -682,8 +713,14 @@ static void CL_CreateNewCommands( void ) {
 
 	// generate a command for this frame
 	cl.cmdNumber++;
+#ifdef USE_MULTIVM_CLIENT
+	cl.clCmdNumbers[igvm] = cl.cmdNumber;
+	cmdNum = cl.cmdNumber & CMD_MASK;
+	cl.cmds[cmdNum] = CL_CreateCmd(igvm);
+#else
 	cmdNum = cl.cmdNumber & CMD_MASK;
 	cl.cmds[cmdNum] = CL_CreateCmd();
+#endif
 }
 
 
@@ -780,6 +817,36 @@ void CL_WritePacket( void ) {
 	}
 
 	Com_Memset( &nullcmd, 0, sizeof(nullcmd) );
+
+#ifdef USE_MULTIVM_CLIENT
+	// TODO: make optional based on game setup, multiple game controllers on one computer
+	//   e.g. clone world with multiple simultaneous game types, 
+	//     deathmatch players are unaware they are also participating in CTF
+	//   e.g. dead world versus living world, like respawn in WoW, 
+	//     different enemies in dead world for powerups like in Prey
+	for(int igvm = 0; igvm < MAX_NUM_VMS; igvm++) {
+		// TODO: only send from clientWorlds[clc.currentView]
+		if(clientGames[igvm] == -1
+			//|| (igvm != clc.currentView && clientWorlds[igvm] != clc.clientNum)
+			//|| (igvm != clc.currentView && clc.sv_mvWorld)
+		) {
+			continue;
+		}
+		int igs = clientGames[igvm];
+		//int oldCmdNum = cl.clCmdNumbers[igvm];
+		CL_CreateNewCommands(igvm);
+		//printf("input: %i -> %i: %i, %i\n", igvm, igs, cl.serverTimes[0], cl.serverTimeDelta);
+		if(clc.sv_mvOmnipresent && igvm != 0) {
+      // choose which client to extract movement commands from, cl.currentView?
+			cl.cmds[cl.clCmdNumbers[igvm] & CMD_MASK].forwardmove = 
+				cl.cmdWorlds[0][cl.clCmdNumbers[0] & CMD_MASK].forwardmove;
+			cl.cmds[cl.clCmdNumbers[igvm] & CMD_MASK].rightmove = 
+				cl.cmdWorlds[0][cl.clCmdNumbers[0] & CMD_MASK].rightmove;
+			cl.cmds[cl.clCmdNumbers[igvm] & CMD_MASK].upmove = 
+				cl.cmdWorlds[0][cl.clCmdNumbers[0] & CMD_MASK].upmove;
+		}
+#endif
+
 	oldcmd = &nullcmd;
 
 	MSG_Init( &buf, data, MAX_MSGLEN );
@@ -810,8 +877,14 @@ void CL_WritePacket( void ) {
 	// few packet, so even if a couple packets are dropped in a row,
 	// all the cmds will make it to the server
 
+
+#if 0 //def USE_MULTIVM_CLIENT
+	oldPacketNum = (clc.netchan.outgoingSequence - 2) & PACKET_MASK;
+	count = 2;
+#else
 	oldPacketNum = (clc.netchan.outgoingSequence - 1 - cl_packetdup->integer) & PACKET_MASK;
 	count = cl.cmdNumber - cl.outPackets[ oldPacketNum ].p_cmdNumber;
+#endif
 	if ( count > MAX_PACKET_USERCMDS ) {
 		count = MAX_PACKET_USERCMDS;
 		Com_Printf("MAX_PACKET_USERCMDS\n");
@@ -822,6 +895,18 @@ void CL_WritePacket( void ) {
 		}
 
 		// begin a client move command
+#ifdef USE_MULTIVM_CLIENT
+		if(cl.snapWorlds[clc.currentView].multiview || cl.snap.multiview) {
+			if ( !cl_nodelta || cl_nodelta->integer || !cl.snap.valid || clc.demowaiting
+				|| clc.serverMessageSequence != cl.snap.messageNum ) {
+				MSG_WriteByte (&buf, clc_mvMoveNoDelta);
+				MSG_WriteByte (&buf, igs);
+			} else {
+				MSG_WriteByte (&buf, clc_mvMove);
+				MSG_WriteByte (&buf, igs);
+			}
+		} else
+#endif
 		if ( cl_nodelta->integer || !cl.snap.valid || clc.demowaiting
 			|| clc.serverMessageSequence != cl.snap.messageNum ) {
 			MSG_WriteByte (&buf, clc_moveNoDelta);
@@ -841,7 +926,11 @@ void CL_WritePacket( void ) {
 
 		// write all the commands, including the predicted command
 		for ( i = 0 ; i < count ; i++ ) {
+#ifdef USE_MULTIVM_CLIENT
+			j = (cl.clCmdNumbers[igvm] - count + i + 1) & CMD_MASK;
+#else
 			j = (cl.cmdNumber - count + i + 1) & CMD_MASK;
+#endif
 			cmd = &cl.cmds[j];
 			MSG_WriteDeltaUsercmdKey (&buf, key, oldcmd, cmd);
 			oldcmd = cmd;
@@ -854,7 +943,13 @@ void CL_WritePacket( void ) {
 	packetNum = clc.netchan.outgoingSequence & PACKET_MASK;
 	cl.outPackets[ packetNum ].p_realtime = cls.realtime;
 	cl.outPackets[ packetNum ].p_serverTime = oldcmd->serverTime;
+#ifdef USE_MULTIVM_CLIENT
+	//int igs = clientGames[igvm]
+	//cl.outPackets[ packetNum ].p_serverTime = cl.serverTimes[igs];
+  cl.outPackets[ packetNum ].p_cmdNumber = cl.clCmdNumbers[igvm];
+#else
 	cl.outPackets[ packetNum ].p_cmdNumber = cl.cmdNumber;
+#endif
 	clc.lastPacketSentTime = cls.realtime;
 
 	if ( cl_showSend->integer ) {
@@ -862,6 +957,25 @@ void CL_WritePacket( void ) {
 	}
 
 	CL_Netchan_Transmit( &clc.netchan, &buf );
+#ifdef USE_MULTIVM_CLIENT
+	} // end for above
+	if(in_right.active)
+		in_right.downtime = com_frameTime;
+	if(in_left.active)
+		in_left.downtime = com_frameTime;
+	if(in_moveright.active)
+		in_moveright.downtime = com_frameTime;
+	if(in_moveleft.active)
+		in_moveleft.downtime = com_frameTime;
+	if(in_up.active)
+		in_up.downtime = com_frameTime;
+	if(in_down.active)
+		in_down.downtime = com_frameTime;
+	if(in_forward.active)
+		in_forward.downtime = com_frameTime;
+	if(in_back.active)
+		in_back.downtime = com_frameTime;
+#endif
 }
 
 
@@ -884,7 +998,11 @@ void CL_SendCmd( void ) {
 	}
 
 	// we create commands even if a demo is playing,
+#ifdef USE_MULTIVM_CLIENT
+	CL_CreateNewCommands(0);
+#else
 	CL_CreateNewCommands();
+#endif
 
 	// don't send a packet if the last packet was sent too recently
 	if ( !CL_ReadyToSendPacket() ) {

@@ -22,6 +22,40 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "tr_local.h"
 
+
+#ifdef USE_MULTIVM_CLIENT
+int			r_firstSceneDrawSurfs[MAX_NUM_WORLDS];
+#define r_firstSceneDrawSurf r_firstSceneDrawSurfs[rwi]
+#ifdef USE_PMLIGHT
+int			r_firstSceneLitSurfWorlds[MAX_NUM_WORLDS];
+#define r_firstSceneLitSurf r_firstSceneLitSurfWorlds[rwi]
+#endif
+
+int			r_numdlightWorlds[MAX_NUM_WORLDS];
+#define r_numdlights r_numdlightWorlds[rwi]
+int			r_firstSceneDlights[MAX_NUM_WORLDS];
+#define r_firstSceneDlight r_firstSceneDlights[rwi]
+
+int			r_numentityWorlds[MAX_NUM_WORLDS];
+#define r_numentities r_numentityWorlds[rwi]
+int			r_firstSceneEntities[MAX_NUM_WORLDS];
+#define r_firstSceneEntity r_firstSceneEntities[rwi]
+
+int			r_numpolyWorlds[MAX_NUM_WORLDS];
+#define r_numpolys r_numpolyWorlds[rwi]
+int			r_firstScenePolys[MAX_NUM_WORLDS];
+#define r_firstScenePoly r_firstScenePolys[rwi]
+
+int			r_numpolyvertWorlds[MAX_NUM_WORLDS];
+#define r_numpolyverts r_numpolyvertWorlds[rwi]
+int     r_numindexWorlds[MAX_NUM_WORLDS];
+#define r_numindexes r_numindexWorlds[rwi]
+
+int r_firstScenePolybuffers[MAX_NUM_WORLDS];
+#define r_firstScenePolybuffer r_firstScenePolybuffers[rwi]
+int r_numpolybufferWorlds[MAX_NUM_WORLDS];
+#define r_numpolybuffers r_numpolybufferWorlds[rwi]
+#else
 static int			r_firstSceneDrawSurf;
 #ifdef USE_PMLIGHT
 static int			r_firstSceneLitSurf;
@@ -38,6 +72,10 @@ static int			r_firstScenePoly;
 
 static int			r_numpolyverts;
 static int     r_numindexes;
+
+static int r_firstScenePolybuffer;
+static int r_numpolybuffers;
+#endif
 
 static int r_firstScenePolybuffer;
 static int r_numpolybuffers;
@@ -223,7 +261,11 @@ void RE_AddRefEntityToScene( const refEntity_t *ent, qboolean intShaderTime ) {
 		return;
 	}
 	if ( r_numentities >= MAX_REFENTITIES ) {
+#ifdef USE_MULTIVM_CLIENT
+		ri.Printf( PRINT_DEVELOPER, "RE_AddRefEntityToScene (%i): Dropping refEntity, reached MAX_REFENTITIES\n", rwi );
+#else
 		ri.Printf( PRINT_DEVELOPER, "RE_AddRefEntityToScene: Dropping refEntity, reached MAX_REFENTITIES\n" );
+#endif
 		return;
 	}
 	if ( isnan_fp( &ent->origin[0] ) || isnan_fp( &ent->origin[1] ) || isnan_fp( &ent->origin[2] ) ) {
@@ -464,6 +506,9 @@ void RE_RenderScene( const refdef_t *fd ) {
 	tr.refdef.numPolyBuffers = r_numpolybuffers - r_firstScenePolybuffer;
 	tr.refdef.polybuffers = &backEndData->polybuffers[r_firstScenePolybuffer];
 
+	tr.refdef.numPolyBuffers = r_numpolybuffers - r_firstScenePolybuffer;
+	tr.refdef.polybuffers = &backEndData->polybuffers[r_firstScenePolybuffer];
+
 	// turn off dynamic lighting globally by clearing all the
 	// dlights if it needs to be disabled
 	if ( r_dynamiclight->integer == 0 || glConfig.hardwareType == GLHW_PERMEDIA2 ) {
@@ -485,10 +530,18 @@ void RE_RenderScene( const refdef_t *fd ) {
 	// convert to GL's 0-at-the-bottom space
 	//
 	Com_Memset( &parms, 0, sizeof( parms ) );
+
+#ifdef USE_MULTIVM_CLIENT
+	parms.viewportX = tr.refdef.x * dvrXScale + (dvrXOffset * glConfig.vidWidth);
+	parms.viewportY = glConfig.vidHeight - ( (tr.refdef.y * dvrYScale + (dvrYOffset * glConfig.vidHeight)) + (tr.refdef.height * dvrYScale) );
+	parms.viewportWidth = tr.refdef.width * dvrXScale;
+	parms.viewportHeight = tr.refdef.height * dvrYScale;
+#else
 	parms.viewportX = tr.refdef.x;
 	parms.viewportY = glConfig.vidHeight - ( tr.refdef.y + tr.refdef.height );
 	parms.viewportWidth = tr.refdef.width;
 	parms.viewportHeight = tr.refdef.height;
+#endif
 
 	parms.scissorX = parms.viewportX;
 	parms.scissorY = parms.viewportY;
@@ -531,6 +584,7 @@ void RE_RenderScene( const refdef_t *fd ) {
 }
 
 
+
 /*
 =====================
 R_AddPolygonBufferSurfaces
@@ -567,8 +621,8 @@ void RE_AddPolyBufferToScene( polyBuffer_t* pPolyBuffer ) {
 	vec3_t bounds[2];
 	int i;
 
-	if ( r_numpolybuffers >= max_polybuffers 
-		|| r_numpolyverts + pPolyBuffer->numVerts >= max_polyverts 
+	if ( r_numpolybuffers >= r_maxpolybuffers->integer 
+		|| r_numpolyverts + pPolyBuffer->numVerts >= r_maxpolyverts->integer 
 	) {
 		ri.Printf( PRINT_DEVELOPER, "WARNING: RE_AddPolyBufferToScene: r_numpolybuffers or r_maxpolyverts reached\n");
 		return;

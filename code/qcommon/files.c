@@ -33,6 +33,11 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "qcommon.h"
 #include "unzip.h"
 
+
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
+//#define USE_MULTIFS 1
+#endif
+
 /*
 =============================================================================
 
@@ -316,6 +321,9 @@ typedef struct searchpath_s {
 	pack_t		*pack;		// only one of pack / dir will be non NULL
 	directory_t	*dir;
 	dirPolicy_t	policy;
+#ifdef USE_MULTIFS
+  int16_t worldPolicy; // allows up to 16 worlds as a bit flag
+#endif
 } searchpath_t;
 
 #define MAX_BASEGAMES 4
@@ -4162,7 +4170,12 @@ Sets fs_gamedir, adds the directory to the head of the path,
 then loads the zip headers
 ================
 */
-static void FS_AddGameDirectory( const char *path, const char *dir ) {
+#ifdef USE_MULTIFS
+void FS_AddGameDirectory( const char *path, const char *dir, int igvm ) 
+#else
+static void FS_AddGameDirectory( const char *path, const char *dir ) 
+#endif
+{
 	const searchpath_t *sp;
 	int				len;
 	searchpath_t	*search;
@@ -4199,6 +4212,11 @@ static void FS_AddGameDirectory( const char *path, const char *dir ) {
 
 	search = Z_TagMalloc( len, TAG_SEARCH_PATH );
 	Com_Memset( search, 0, len );
+
+#ifdef USE_MULTIFS
+  search->worldPolicy = igvm;
+#endif
+
 	search->dir = (directory_t*)( search + 1 );
 	search->dir->path = (char*)( search->dir + 1 );
 	search->dir->gamedir = (char*)( search->dir->path + path_len );
@@ -4802,50 +4820,65 @@ static void FS_Startup( void ) {
 #endif
 
 	// add search path elements in reverse priority order
-	if (fs_steampath->string[0]) {
-		// handle multiple basegames:
-		for (i = 0; i < basegame_cnt; i++) {
-			FS_AddGameDirectory( fs_steampath->string, basegames[i] );
-		}
+	if ( fs_steampath->string[0] ) {
+#ifdef USE_MULTIFS
+		FS_AddGameDirectory( fs_steampath->string, fs_basegame->string, 0 );
+#else
+		FS_AddGameDirectory( fs_steampath->string, fs_basegame->string );
+#endif
 	}
 
-	if (fs_basepath->string[0]) {
-		// handle multiple basegames:
-		for (i = 0; i < basegame_cnt; i++) {
-			FS_AddGameDirectory( fs_basepath->string, basegames[i] );
-		}
+	if ( fs_basepath->string[0] ) {
+#ifdef USE_MULTIFS
+		FS_AddGameDirectory( fs_basepath->string, fs_basegame->string, 0 );
+#else
+		FS_AddGameDirectory( fs_basepath->string, fs_basegame->string );
+#endif
 	}
 
 #ifdef __APPLE__
 	fs_apppath = Cvar_Get( "fs_apppath", Sys_DefaultAppPath(), CVAR_INIT | CVAR_PROTECTED );
 	// Make MacOSX also include the base path included with the .app bundle
-	if ( fs_apppath->string[0] ) {
-		// handle multiple basegames:
-		for ( i = 0; i < basegame_cnt; i++ ) {
-			FS_AddGameDirectory( fs_apppath->string, basegames[i] );
-		}
-	}
+	if (fs_apppath->string[0])
+#ifdef USE_MULTIFS
+		FS_AddGameDirectory(fs_apppath->string, fs_basegame->string, 0 );
+#else
+		FS_AddGameDirectory(fs_apppath->string, fs_basegame->string);
+#endif
 #endif
 
 	// fs_homepath is somewhat particular to *nix systems, only add if relevant
 	// NOTE: same filtering below for mods and basegame
 	if ( fs_homepath->string[0] && Q_stricmp( fs_homepath->string, fs_basepath->string ) ) {
-		// handle multiple basegames:
-		for ( i = 0; i < basegame_cnt; i++ ) {
-			FS_AddGameDirectory( fs_homepath->string, basegames[i] );
-		}
+#ifdef USE_MULTIFS
+		FS_AddGameDirectory( fs_homepath->string, fs_basegame->string, 0 );
+#else
+		FS_AddGameDirectory( fs_homepath->string, fs_basegame->string );
+#endif
 	}
 
 	// check for additional game folder for mods
-	if ( fs_gamedirvar->string[0] != '\0' && !FS_IsBaseGame( fs_gamedirvar->string ) ) {
-		if ( fs_steampath->string[0] != '\0' ) {
+	if ( fs_gamedirvar->string[0] && Q_stricmp( fs_gamedirvar->string, fs_basegame->string ) ) {
+		if ( fs_steampath->string[0] ) {
+#ifdef USE_MULTIFS
+			FS_AddGameDirectory( fs_steampath->string, fs_gamedirvar->string, 0 );
+#else
 			FS_AddGameDirectory( fs_steampath->string, fs_gamedirvar->string );
+#endif
 		}
-		if ( fs_basepath->string[0] != '\0' ) {
+		if ( fs_basepath->string[0] ) {
+#ifdef USE_MULTIFS
+			FS_AddGameDirectory( fs_basepath->string, fs_gamedirvar->string, 0 );
+#else
 			FS_AddGameDirectory( fs_basepath->string, fs_gamedirvar->string );
+#endif
 		}
-		if ( fs_homepath->string[0] != '\0' && Q_stricmp( fs_homepath->string, fs_basepath->string ) ) {
+		if ( fs_homepath->string[0] && Q_stricmp( fs_homepath->string, fs_basepath->string ) ) {
+#ifdef USE_MULTIFS
+			FS_AddGameDirectory( fs_homepath->string, fs_gamedirvar->string, 0 );
+#else
 			FS_AddGameDirectory( fs_homepath->string, fs_gamedirvar->string );
+#endif
 		}
 	}
 
@@ -5630,10 +5663,18 @@ FS_ConditionalRestart
 restart if necessary
 =================
 */
-qboolean FS_ConditionalRestart( int checksumFeed, qboolean clientRestart )
-{
+qboolean FS_ConditionalRestart( int checksumFeed, qboolean clientRestart ) {
 	if ( fs_gamedirvar->modified )
 	{
+#if 0 //def USE_MULTIFS
+    if(igvm != 0) {
+      // add the game directory instead of replacing them, 
+      //   because it will filter automatically using world policy
+      FS_AddGameDirectory( fs_basepath->string, fs_gamedirvar->string, igvm );
+      fs_gamedirvar->modified = qfalse;
+      return qtrue;
+    }
+#endif
 		Com_GameRestart( checksumFeed, clientRestart );
 		return qtrue;
 	}

@@ -872,3 +872,10 @@ botlib_export_t *GetBotLibAPI(int apiVersion, botlib_import_t *import) {
 
 	return &be_botlib_export;
 }
+
+
+#ifdef USE_MULTIVM_SERVER
+void SetAASgvm(int gvm) {
+	aasgvm = gvm;
+}
+#endif

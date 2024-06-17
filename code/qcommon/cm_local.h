@@ -179,7 +179,16 @@ typedef struct {
 // and to avoid various numeric issues
 #define	SURFACE_CLIP_EPSILON	(0.125)
 
+
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
+#define MAX_NUM_MAPS MAX_NUM_VMS
+#define cm        cmWorlds[cmi]
+extern	clipMap_t	cmWorlds[MAX_NUM_MAPS];
+extern  int       cmi;
+#else
 extern	clipMap_t	cm;
+#endif
+
 extern	int			c_pointcontents;
 extern	int			c_traces, c_brush_traces, c_patch_traces;
 extern	cvar_t		*cm_noAreas;

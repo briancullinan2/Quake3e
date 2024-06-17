@@ -26,7 +26,12 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 extern	botlib_export_t	*botlib_export;
 
+#ifdef USE_MULTIVM_CLIENT
+int   uivmi = 0;
+vm_t *uivmWorlds[MAX_NUM_VMS];
+#else
 vm_t *uivm = NULL;
+#endif
 
 /*
 ====================
@@ -34,6 +39,9 @@ GetClientState
 ====================
 */
 static void GetClientState( uiClientState_t *state ) {
+#ifdef USE_MULTIVM_CLIENT
+	int igs = clc.currentView;
+#endif
 	state->connectPacketCount = clc.connectPacketCount;
 	state->connState = cls.state;
 	Q_strncpyz( state->servername, cls.servername, sizeof( state->servername ) );
@@ -716,6 +724,9 @@ GetConfigString
 static int GetConfigString(int index, char *buf, int size)
 {
 	int		offset;
+#ifdef USE_MULTIVM_CLIENT
+  int igs = clientGames[cgvmi];
+#endif
 
 	if (index < 0 || index >= MAX_CONFIGSTRINGS)
 		return qfalse;
@@ -833,7 +844,11 @@ static intptr_t CL_UISystemCalls( intptr_t *args ) {
 
 	case UI_CVAR_INFOSTRINGBUFFER:
 		VM_CHECKBOUNDS( uivm, args[2], args[3] );
+#ifdef USE_MULTIVM_CLIENT
+    Cvar_InfoStringBuffer( args[1], VMA(2), args[3] );
+#else
 		Cvar_InfoStringBuffer( args[1], VMA(2), args[3] );
+#endif
 		return 0;
 
 	case UI_ARGC:
@@ -854,7 +869,11 @@ static intptr_t CL_UISystemCalls( intptr_t *args ) {
 			Com_Printf (S_COLOR_YELLOW "turning EXEC_NOW '%.11s' into EXEC_INSERT\n", (const char*)VMA(2));
 			args[1] = EXEC_INSERT;
 		}
+#if 0 //def USE_MULTIVM_CLIENT
+    Cbuf_ExecuteTagged( args[1], VMA(2), uivmi );
+#else
 		Cbuf_ExecuteText( args[1], VMA(2) );
+#endif
 		return 0;
 
 	case UI_FS_FOPENFILE:
@@ -970,6 +989,9 @@ static intptr_t CL_UISystemCalls( intptr_t *args ) {
 
 	case UI_KEY_SETCATCHER:
 		// Don't allow the ui module to close the console
+#ifdef USE_MULTIVM_CLIENT
+		if(uivmi == clc.currentView)
+#endif
 		Key_SetCatcher( args[1] | ( Key_GetCatcher( ) & KEYCATCH_CONSOLE ) );
 		return 0;
 
@@ -1216,6 +1238,10 @@ CL_ShutdownUI
 ====================
 */
 void CL_ShutdownUI( void ) {
+#ifdef USE_MULTIVM_CLIENT
+	for(int i = 0; i < MAX_NUM_VMS; i++) {
+		uivmi = i;
+#endif
 	Key_SetCatcher( Key_GetCatcher() & ~KEYCATCH_UI );
 	cls.uiStarted = qfalse;
 	if ( !uivm ) {
@@ -1224,6 +1250,10 @@ void CL_ShutdownUI( void ) {
 	VM_Call( uivm, 0, UI_SHUTDOWN );
 	VM_Free( uivm );
 	uivm = NULL;
+#ifdef USE_MULTIVM_CLIENT
+	}
+	uivmi = 0;
+#endif
 	FS_VM_CloseFiles( H_Q3UI );
 }
 
@@ -1235,7 +1265,12 @@ CL_InitUI
 */
 #define UI_OLD_API_VERSION	4
 
-void CL_InitUI( void ) {
+#ifdef USE_MULTIVM_CLIENT
+void CL_InitUI( qboolean loadNew ) 
+#else
+void CL_InitUI( void ) 
+#endif
+{
 	int		v;
 	vmInterpret_t		interpret;
 
@@ -1318,6 +1353,10 @@ See if the current console command is claimed by the ui
 ====================
 */
 qboolean UI_GameCommand( void ) {
+#ifdef USE_MULTIVM_CLIENT
+	uivmi = clc.currentView;
+  CM_SwitchMap( clientMaps[uivmi] );
+#endif
 	if ( !uivm ) {
 		return qfalse;
 	}

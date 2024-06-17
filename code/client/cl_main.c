@@ -94,6 +94,10 @@ cvar_t *cl_stencilbits;
 cvar_t *cl_depthbits;
 cvar_t *cl_drawBuffer;
 
+cvar_t  *cl_nopredict;
+cvar_t  *cl_lagometer;
+cvar_t  *cl_drawFPS;
+cvar_t  *cl_snaps;
 
 cvar_t *cl_birdsEye;
 cvar_t *sv_birdsEye;
@@ -108,7 +112,15 @@ cvar_t	*cl_master[MAX_MASTER_SERVERS];		// master server ip address
 clientActive_t		cl;
 clientConnection_t	clc;
 clientStatic_t		cls;
+
+#ifdef USE_MULTIVM_CLIENT
+cvar_t  *cl_mvHighlight;
+static qboolean serverWorld = qfalse;
+int   cgvmi = 0;
+vm_t *cgvmWorlds[MAX_NUM_VMS];
+#else
 vm_t				*cgvm = NULL;
+#endif
 
 netadr_t			rcon_address;
 
@@ -164,6 +176,11 @@ static void CL_ShutdownRef( refShutdownCode_t code );
 static void CL_InitGLimp_Cvars( void );
 
 static void CL_NextDemo( void );
+
+#ifdef USE_MV
+void CL_Multiview_f( void );
+void CL_MultiviewFollow_f( void );
+#endif
 
 /*
 ===============
@@ -352,6 +369,9 @@ static void CL_WriteGamestate( qboolean initial )
 	int			len;
 	entityState_t	*ent;
 	entityState_t	nullstate;
+#ifdef USE_MULTIVM_CLIENT
+	int igs = clc.currentView;
+#endif
 
 	// write out the gamestate message
 	MSG_Init( &msg, bufData, MAX_MSGLEN );
@@ -431,6 +451,9 @@ static void CL_EmitPacketEntities( clSnapshot_t *from, clSnapshot_t *to, msg_t *
 	int		oldindex, newindex;
 	int		oldnum, newnum;
 	int		from_num_entities;
+#ifdef USE_MULTIVM_CLIENT
+	int igs = clc.currentView;
+#endif
 
 	// generate the delta update
 	if ( !from ) {
@@ -493,6 +516,9 @@ static void CL_EmitPacketEntities( clSnapshot_t *from, clSnapshot_t *to, msg_t *
 CL_WriteSnapshot
 ====================
 */
+#ifdef USE_MULTIVM_CLIENT
+#undef snap
+#endif
 static void CL_WriteSnapshot( void ) {
 
 	static	clSnapshot_t saved_snap;
@@ -502,8 +528,13 @@ static void CL_WriteSnapshot( void ) {
 	byte	bufData[ MAX_MSGLEN_BUF ];
 	msg_t	msg;
 	int		i, len;
+#ifdef USE_MULTIVM_CLIENT
+	int igs = clc.currentView;
 
+	snap = &cl.snapshots[ cl.snapWorlds[igs].messageNum & PACKET_MASK ]; // current snapshot
+#else
 	snap = &cl.snapshots[ cl.snap.messageNum & PACKET_MASK ]; // current snapshot
+#endif
 	//if ( !snap->valid ) // should never happen?
 	//	return;
 
@@ -698,6 +729,9 @@ CL_DemoCompleted
 =================
 */
 static void CL_DemoCompleted( void ) {
+#ifdef USE_MULTIVM_CLIENT
+  //int igs = clientGames[cgvmi];
+#endif
 	if ( com_timedemo->integer ) {
 		int	time;
 
@@ -723,6 +757,10 @@ void CL_ReadDemoMessage( void ) {
 	msg_t		buf;
 	byte		bufData[ MAX_MSGLEN_BUF ];
 	int			s;
+#ifdef USE_MULTIVM_CLIENT
+  int igs = clientGames[cgvmi];
+//Com_Printf("%s: %i\n", __func__, igs);
+#endif
 
 	if ( clc.demofile == FS_INVALID_HANDLE ) {
 		CL_DemoCompleted();
@@ -869,10 +907,24 @@ static void CL_PlayDemo_f( void ) {
 	const char	*shortname, *slash;
 	fileHandle_t hFile;
 
+#ifdef USE_MULTIVM_CLIENT
+  int igs = clientGames[cgvmi];
+
+	if ( Cmd_Argc() != 2 && Cmd_Argc() != 3 && !Q_stricmp(Cmd_Argv(0), "load") ) {
+		Com_Printf( "demo <demoname>\n" );
+		return;
+	}
+  if(!Q_stricmp(Cmd_Argv(0), "load")) {
+    arg = Cmd_Argv( 2 );
+  } else {
+    arg = Cmd_Argv( 1 );
+  }
+#else
 	if ( Cmd_Argc() != 2 ) {
 		Com_Printf( "demo <demoname>\n" );
 		return;
 	}
+#endif
 
 	// open the demo file
 	arg = Cmd_Argv( 1 );
@@ -923,11 +975,13 @@ static void CL_PlayDemo_f( void ) {
 	FS_FCloseFile( hFile );
 	hFile = FS_INVALID_HANDLE;
 
+#ifndef USE_MULTIVM_CLIENT
 	// make sure a local server is killed
 	// 2 means don't force disconnect of local client
 	Cvar_Set( "sv_killserver", "2" );
 
 	CL_Disconnect( qtrue );
+#endif
 
 	// clc.demofile will be closed during CL_Disconnect so reopen it
 	if ( FS_FOpenFileRead( name, &clc.demofile, qtrue ) == -1 )
@@ -1059,8 +1113,14 @@ void CL_ClearMemory( void ) {
 		// clear collision map data
 		CM_ClearMap();
 	} else {
+#ifdef USE_MULTIVM_SERVER
+		// clear to mark doesn't work in multivm mode because there are many marks
+		Hunk_Clear();
+    CM_ClearMap();
+#else
 		// clear all the client data on the hunk
 		Hunk_ClearToMark();
+#endif
 	}
 }
 
@@ -1094,6 +1154,11 @@ memory on the hunk from cgame, ui, and renderer
 =====================
 */
 void CL_MapLoading( void ) {
+#ifdef USE_MULTIVM_CLIENT
+  int igs = clientGames[cgvmi];
+	clientWorlds[cgvmi] = clc.clientNum;
+#endif
+
 	if ( com_dedicated->integer ) {
 		cls.state = CA_DISCONNECTED;
 		Key_SetCatcher( KEYCATCH_CONSOLE );
@@ -1237,10 +1302,17 @@ qboolean CL_Disconnect( qboolean showMainMenu ) {
 	}
 
 	// Stop demo playback
+#ifdef USE_MULTIVM_CLIENT
+  if ( clc.demofiles[clc.currentView] != FS_INVALID_HANDLE ) {
+    FS_FCloseFile( clc.demofiles[clc.currentView] );
+    clc.demofiles[clc.currentView] = FS_INVALID_HANDLE;
+  }
+#else
 	if ( clc.demofile != FS_INVALID_HANDLE ) {
 		FS_FCloseFile( clc.demofile );
 		clc.demofile = FS_INVALID_HANDLE;
 	}
+#endif
 
 	// Finish downloads
 	if ( clc.download != FS_INVALID_HANDLE ) {
@@ -1877,7 +1949,11 @@ static void CL_Vid_Restart( refShutdownCode_t shutdownCode ) {
 	// start the cgame if connected
 	if ( ( cls.state > CA_CONNECTED && cls.state != CA_CINEMATIC ) || cls.startCgame ) {
 		cls.cgameStarted = qtrue;
+#ifdef USE_MULTIVM_CLIENT
+		CL_InitCGame(-1);
+#else
 		CL_InitCGame();
+#endif
 		// send pure checksums
 		CL_SendPureChecksums();
 	}
@@ -1963,11 +2039,19 @@ static void CL_Configstrings_f( void ) {
 	}
 
 	for ( i = 0 ; i < MAX_CONFIGSTRINGS ; i++ ) {
+#ifdef USE_MULTIVM_CLIENT
+		ofs = cl.gameStates[clc.currentView].stringOffsets[ i ];
+#else
 		ofs = cl.gameState.stringOffsets[ i ];
+#endif
 		if ( !ofs ) {
 			continue;
 		}
+#ifdef USE_MULTIVM_CLIENT
+		Com_Printf( "%4i: %s\n", i, cl.gameStates[clc.currentView].stringData + ofs );
+#else
 		Com_Printf( "%4i: %s\n", i, cl.gameState.stringData + ofs );
+#endif
 	}
 }
 
@@ -1982,7 +2066,11 @@ static void CL_Clientinfo_f( void ) {
 	Com_Printf( "state: %i\n", cls.state );
 	Com_Printf( "Server: %s\n", cls.servername );
 	Com_Printf ("User info settings:\n");
+#ifdef USE_MULTIVM_CLIENT
+  Info_Print( Cvar_InfoString( CVAR_USERINFO, NULL ) );
+#else
 	Info_Print( Cvar_InfoString( CVAR_USERINFO, NULL ) );
+#endif
 	Com_Printf( "--------------------------------------\n" );
 }
 
@@ -1995,12 +2083,20 @@ CL_Serverinfo_f
 static void CL_Serverinfo_f( void ) {
 	int		ofs;
 
+#ifdef USE_MULTIVM_CLIENT
+	ofs = cl.gameStates[clc.currentView].stringOffsets[ CS_SERVERINFO ];
+#else
 	ofs = cl.gameState.stringOffsets[ CS_SERVERINFO ];
+#endif
 	if ( !ofs )
 		return;
 
 	Com_Printf( "Server info settings:\n" );
+#ifdef USE_MULTIVM_CLIENT
+	Info_Print( cl.gameStates[clc.currentView].stringData + ofs );
+#else
 	Info_Print( cl.gameState.stringData + ofs );
+#endif
 }
 
 
@@ -2012,12 +2108,20 @@ CL_Systeminfo_f
 static void CL_Systeminfo_f( void ) {
 	int ofs;
 
+#ifdef USE_MULTIVM_CLIENT
+	ofs = cl.gameStates[clc.currentView].stringOffsets[ CS_SYSTEMINFO ];
+#else
 	ofs = cl.gameState.stringOffsets[ CS_SYSTEMINFO ];
+#endif
 	if ( !ofs )
 		return;
 
 	Com_Printf( "System info settings:\n" );
+#ifdef USE_MULTIVM_CLIENT
+	Info_Print( cl.gameStates[clc.currentView].stringData + ofs );
+#else
 	Info_Print( cl.gameState.stringData + ofs );
+#endif
 }
 
 
@@ -2044,6 +2148,9 @@ Called when all downloading has been completed
 =================
 */
 static void CL_DownloadsComplete( void ) {
+#ifdef USE_MULTIVM_CLIENT
+	int igs = clientGames[cgvmi];
+#endif
 
 #ifdef USE_CURL
 	// if we downloaded with cURL
@@ -2093,25 +2200,30 @@ static void CL_DownloadsComplete( void ) {
 	// if this is a local client then only the client part of the hunk
 	// will be cleared, note that this is done after the hunk mark has been set
 	//if ( !com_sv_running->integer )
-#ifndef __WASM__
-	CL_FlushMemory();
-#else
-extern	qboolean	first_click;
-
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER) || defined(__WASM__)
 	re.InitShaders();
-	if(!first_click) {
-		S_Shutdown();
-		cls.soundStarted = qtrue;
-		S_Init();
-		cls.soundRegistered = qtrue;
-		S_BeginRegistration();
-	}
+	S_Shutdown();
+	CL_ShutdownVMs();
+	CL_StartHunkUsers();
+#else
+	CL_FlushMemory();
 #endif
 
 
 	// initialize the CGame
 	cls.cgameStarted = qtrue;
+
+
+#ifdef USE_MULTIVM_CLIENT
+	// force the client to load a new VM using sv_mvWorld
+	// this only loads a VM the first time, decoupling game state from loading
+	// TODO: exec world 0:0 asynchronously
+	cgvmi = clc.currentView;
+	// added restart fancy-ness to this function automatically
+	CL_InitCGame(cgvmi);
+#else
 	CL_InitCGame();
+#endif
 
 	if ( clc.demofile == FS_INVALID_HANDLE ) {
 		Cmd_AddCommand( "callvote", NULL );
@@ -2288,6 +2400,9 @@ and determine if we need to download them
 =================
 */
 void CL_InitDownloads( void ) {
+#ifdef USE_MULTIVM_CLIENT
+	int igs = clc.currentView;
+#endif
 
 	if ( !(cl_allowDownload->integer & DLF_ENABLE) )
 	{
@@ -2393,7 +2508,11 @@ static void CL_CheckForResend( void ) {
 		port = Cvar_VariableIntegerValue( "net_qport" );
 
 		infoTruncated = qfalse;
+#ifdef USE_MULTIVM_CLIENT
+    Q_strncpyz( info, Cvar_InfoString( CVAR_USERINFO, &infoTruncated ), sizeof( info ) );
+#else
 		Q_strncpyz( info, Cvar_InfoString( CVAR_USERINFO, &infoTruncated ), sizeof( info ) );
+#endif
 
 		// remove some non-important keys that may cause overflow during connection
 		if ( strlen( info ) > MAX_USERINFO_LENGTH - 64 ) {
@@ -2948,6 +3067,15 @@ A packet has arrived from the main event loop
 */
 void CL_PacketEvent( const netadr_t *from, msg_t *msg ) {
 	int		headerBytes;
+/*#ifdef USE_MULTIVM_CLIENT
+	cgvmi = clc.currentView;
+	CM_SwitchMap(clientMaps[cgvmi]);
+#else
+#ifdef USE_MULTIVM_SERVER
+	CM_SwitchMap(clientMap);
+#endif
+#endif
+*/
 
 	if ( msg->cursize < 5 ) {
 		Com_DPrintf( "%s: Runt packet\n", NET_AdrToStringwPort( from ) );
@@ -3055,6 +3183,9 @@ CL_NoDelay
 */
 qboolean CL_NoDelay( void )
 {
+#ifdef USE_MULTIVM_CLIENT
+  int igs = clientGames[cgvmi];
+#endif
 	if ( CL_VideoRecording() || ( com_timedemo->integer && clc.demofile != FS_INVALID_HANDLE ) )
 		return qtrue;
 
@@ -3085,7 +3216,11 @@ static void CL_CheckUserinfo( void ) {
 
 		cvar_modifiedFlags &= ~CVAR_USERINFO;
 
+#ifdef USE_MULTIVM_CLIENT
 		info = Cvar_InfoString( CVAR_USERINFO, &infoTruncated );
+#else
+		info = Cvar_InfoString( CVAR_USERINFO, &infoTruncated );
+#endif
 		if ( strlen( info ) > MAX_USERINFO_LENGTH || infoTruncated ) {
 			Com_Printf( S_COLOR_YELLOW "WARNING: oversize userinfo, you might be not able to play on remote server!\n" );
 		}
@@ -3101,6 +3236,15 @@ CL_Frame
 ==================
 */
 void CL_Frame( int msec, int realMsec ) {
+
+#ifdef USE_MULTIVM_CLIENT
+	cgvmi = clc.currentView;
+	CM_SwitchMap(clientMaps[cgvmi]);
+#else
+#ifdef USE_MULTIVM_SERVER
+	CM_SwitchMap(clientMap);
+#endif
+#endif
 
 #ifdef USE_CURL
 	if ( download.cURL ) {
@@ -3227,7 +3371,15 @@ void CL_Frame( int msec, int realMsec ) {
 	CL_CheckForResend();
 
 	// decide on the serverTime to render
+#ifdef USE_MULTIVM_CLIENT
+  for(int i = 0; i < MAX_NUM_VMS; i++) {
+    if(!cgvmWorlds[i] || !cl.snapWorlds[i].valid) continue;
+    cgvmi = i;
+    CL_SetCGameTime();
+  }
+#else
 	CL_SetCGameTime();
+#endif
 
 	// update the screen
 	cls.framecount++;
@@ -3240,6 +3392,11 @@ void CL_Frame( int msec, int realMsec ) {
 	SCR_RunCinematic();
 
 	Con_RunConsole();
+
+#ifdef USE_MULTIVM_CLIENT
+	cgvmi = clc.currentView;
+	CM_SwitchMap(clientMaps[cgvmi]);
+#endif
 }
 
 
@@ -3315,6 +3472,17 @@ CL_InitRenderer
 */
 static void CL_InitRenderer( void ) {
 
+#ifdef USE_MULTIVM_CLIENT
+	clc.currentView = clientGames[0] = worldMaps[0] = 0;
+  clientScreens[0][0] = 
+	clientScreens[0][1] = 0;
+	clientScreens[0][2] = 
+	clientScreens[0][3] = 1;
+#ifdef USE_LAZY_MEMORY
+	//re.SwitchWorld(-1);
+#endif
+#endif
+
 	// fixup renderer -EC-
 	if ( !re.BeginRegistration ) {
 		CL_InitRef();
@@ -3360,6 +3528,10 @@ This is the only place that any of these functions are called from
 */
 void CL_StartHunkUsers( void ) {
 
+#ifdef USE_MULTIVM_CLIENT
+	int igs = 0;
+#endif
+
 	if ( !com_cl_running || !com_cl_running->integer ) {
 		return;
 	}
@@ -3390,6 +3562,9 @@ void CL_StartHunkUsers( void ) {
 		CL_InitRenderer();
 	}
 
+#ifdef __WASM__
+	if(!first_click)
+#endif
 	if ( !cls.soundStarted ) {
 		cls.soundStarted = qtrue;
 		S_Init();
@@ -3402,7 +3577,11 @@ void CL_StartHunkUsers( void ) {
 
 	if ( !cls.uiStarted ) {
 		cls.uiStarted = qtrue;
+#ifdef USE_MULTIVM_CLIENT
+		CL_InitUI(qfalse);
+#else
 		CL_InitUI();
+#endif
 	}
 
 	if(!cls.uiStarted) {
@@ -3471,6 +3650,30 @@ static void CL_SetScaling( float factor, int captureWidth, int captureHeight ) {
 	cls.captureWidth = captureWidth;
 	cls.captureHeight = captureHeight;
 }
+
+
+#if defined(USE_MULTIVM_CLIENT)
+byte	*CL_CM_ClusterPVS (int cluster, int cmi)
+{
+	return CM_ClusterPVS(cluster, clientMaps[cgvmi]);
+}
+void	CL_CM_Trace( trace_t *results, const vec3_t start, const vec3_t mins, const vec3_t maxs, const vec3_t end, int passEntityNum, int contentmask, int cmi ) {
+	int prev = CM_SwitchMap(cmi);
+	CM_BoxTrace(results, start, end, mins, maxs, 0, contentmask, qfalse);
+	CM_SwitchMap(prev);
+}
+#else
+byte	*CL_CM_ClusterPVS (int cluster) {
+#if defined(USE_MULTIVM_SERVER)
+	return CM_ClusterPVS(cluster, 0);
+#else
+	return CM_ClusterPVS(cluster);
+#endif
+}
+void	CL_CM_Trace( trace_t *results, const vec3_t start, const vec3_t mins, const vec3_t maxs, const vec3_t end, int passEntityNum, int contentmask ) {
+	CM_BoxTrace(results, start, end, mins, maxs, 0, contentmask, qfalse);
+}
+#endif
 
 
 /*
@@ -3602,6 +3805,10 @@ static void CL_InitRef( void ) {
 	rimp.VKimp_Shutdown = VKimp_Shutdown;
 	rimp.VK_GetInstanceProcAddr = VK_GetInstanceProcAddr;
 	rimp.VK_CreateSurface = VK_CreateSurface;
+#endif
+
+#ifdef USE_MULTIVM_CLIENT
+	rimp.worldMaps = &worldMaps[0];
 #endif
 
 	ret = GetRefAPI( REF_API_VERSION, &rimp );
@@ -3970,6 +4177,330 @@ static void CL_InitGLimp_Cvars( void )
 }
 
 
+#ifdef USE_MULTIVM_CLIENT
+void CL_LoadVM_f( void ) {
+	char *name;
+	
+	if ( Cmd_Argc() < 2 ) {
+		Com_Printf( "Usage: %s <game|cgame|ui|demo> [mapname]\n", Cmd_Argv( 0 ) );
+		return;
+	}
+
+	name = Cmd_Argv( 1 );
+
+	if ( !Q_stricmp( name, "game" ) ) {
+		CL_AddReliableCommand( va("load %s", Cmd_ArgsFrom(1)), qfalse );
+		//CL_ForwardCommandToServer("load game");
+		return;
+
+
+	} else if ( !Q_stricmp( name, "cgame" )
+    || !Q_stricmp( name, "demo" )) {
+		if(Cmd_Argc() > 3) {
+			Com_Printf( "Usage: %s <game|cgame|ui|demo> [numclient]\n", Cmd_Argv( 0 ) );
+			return;
+		}
+
+		int i, count = 0;
+		for(i = 0; i < MAX_NUM_VMS; i++) {
+			if(cgvmWorlds[i]) count++;
+			else {
+				cgvmi = i;
+				break;
+			}
+		}
+		count++;
+    if(!Q_stricmp( name, "demo" )) {
+      CL_PlayDemo_f();
+    } else {
+			clientGames[cgvmi] = clientGames[clc.currentView];
+			clientWorlds[cgvmi] = clientWorlds[clc.currentView];
+		  CL_InitCGame(cgvmi); // createNew if cgvmWorlds[cgvmi] is already taken
+		}
+		return;
+	} else if ( !Q_stricmp( name, "ui" ) ) {
+		int i, count = 0;
+		for(i = 0; i < MAX_NUM_VMS; i++) {
+			if(uivmWorlds[i]) count++;
+			else {
+				uivmi = i; // this looks like it isn't used until compiler templates run
+                   //   and everything past this point uses it like uivms[uivmi]
+				break;
+			}
+		}
+		count++;
+		CL_InitUI(qtrue);
+		uivmi = 0;
+		return;
+  } else if (FS_SV_FOpenFileRead(va("maps/%s.bsp", name), NULL)) {
+    int i, count = 0;
+    for(i = 0; i < MAX_NUM_VMS; i++) {
+			if(clientWorlds[i] > -1) count++;
+      else {
+        clientWorlds[i] = count;
+        clientMaps[i] = count;
+        //worldMaps[i] = 
+				re.LoadWorld( va("maps/%s.bsp", name) );
+        Com_Printf("World loaded on %i\n", i);
+        break;
+      }
+    }
+    return;
+  } else {
+		Com_Printf( " unknown VM name '%s'\n", name );
+		return;
+	}
+	//Cbuf_AddText("vid_restart fast\n");
+}
+
+void CL_Tele_f ( void ) {
+	if ( Cmd_Argc() > 4 || Cmd_Argc() == 2 ) {
+		Com_Printf ("Usage: tele [xcoord zcoord ycoord]\n");
+		return;
+	}
+
+	CL_AddReliableCommand( va("tele %s", Cmd_ArgsFrom(1)), qfalse );
+}
+
+void CL_Game_f ( void ) {
+	if ( Cmd_Argc() > 3 ) {
+		Com_Printf ("Usage: game [0/1/2 moveorigin] [num] (<client>)\n");
+		return;
+	}
+	char *i = Cmd_Argv(2);
+	if(i[0] != '\0') {
+		clc.currentView = atoi(i);
+	} else {
+		clc.currentView = clientGames[clc.currentView] + 1;
+	}
+	if(clc.currentView < 0 || clc.currentView >= MAX_NUM_VMS) {
+		clc.currentView = 0;
+	}
+	if(Cmd_Argc() < 2) {
+		CL_AddReliableCommand( va("game 0 %i %i", clc.currentView, clc.clientNum), qfalse );
+	} else {
+		CL_AddReliableCommand( va("game %i %i %i", atoi(Cmd_Argv(1)), clc.currentView, clc.clientNum), qfalse );
+	}
+}
+
+void CL_World_f( void ) {
+	int i;
+	char world[10];
+	const char *w;
+	int clworld, clgame;
+	qboolean found = qfalse;
+	int empty = -1;
+	if ( Cmd_Argc() > 3 ) {
+		Com_Printf ("Usage: world [numworld]\n");
+		return;
+	}
+	Q_strncpyz(world, Cmd_Argv(1), sizeof(world));
+	Com_Printf( "Client switching world: %s\n", world );
+	// TODO: this format will be used by the server to send camera commands
+	//   so splines can be generated on the server basically by "following"
+	if((w = Q_stristr(world, ":"))) {
+		world[w - world] = '\0';
+		clgame = atoi(world);
+		clworld = atoi(w + 1);
+	} else {
+		clgame = atoi(world);
+		clworld = clc.clientNum;
+	}
+
+	// check if a client game with this address already exists
+	for(i = 0; i < MAX_NUM_VMS; i++) {
+		if (!cgvmWorlds[i]) {
+			// open slot
+			if(empty == -1) // first only
+				empty = i;
+		} else {
+			// slot is taken
+			if(clientGames[i] == clgame) {
+				Com_Printf("World found: %i -> %i:%i\n", i, clientGames[i], clientWorlds[i]);
+				// if it a game exists and is unused it can switch clients
+				if(clientWorlds[i] == clworld
+          || clientWorlds[i] == -1) {
+					found = qtrue;
+					clc.currentView = i;
+					break;
+				}
+			}
+		}
+	}
+	if(!found) {
+		Com_Printf("World not found, creating new game.\n");
+		if(empty == -1) {
+			Com_Error(ERR_DROP, "Too many worlds: \n");
+			return;
+		}
+		// use the empty slot and start a VM
+		i = clc.currentView = empty;
+		clientGames[clc.currentView] = clgame;
+		clientWorlds[clc.currentView] = clworld;
+		CL_InitCGame(i);
+	}
+	serverWorld = qtrue;
+	Cbuf_ExecuteText(EXEC_APPEND, va("tile -1 -1 -1\n"));
+	Cbuf_ExecuteText(EXEC_APPEND, va("tile 0 0 %i\n", i));
+	Cbuf_Execute();
+	serverWorld = qfalse;
+}
+
+void CL_Tile_f( void ) {
+	int clientNum, i, x, y, xMaxVMs, yMaxVMs, count = 0;
+	if(Cmd_Argc() == 1 || Cmd_Argc() > 4 || (clc.sv_mvWorld && !serverWorld)) {
+		if(Cmd_Argc() == 1) {
+			for(int i = 0; i < MAX_NUM_VMS; i++) {
+				if(clientScreens[i][0] > -1) {
+					Com_Printf( "[VM:%i] Game: %i:%i, %fx%f (%fx%f)\n", 
+						i, clientGames[i], clientWorlds[i], 
+						clientScreens[i][0], clientScreens[i][1],
+					 	clientScreens[i][2], clientScreens[i][3]);
+				}
+			}
+		} else if (clc.sv_mvWorld && !serverWorld) {
+			Com_Printf("In server world mode, no tiling.\n");
+			return; // silently disable on this server, world messages are sent
+		}
+		Com_Printf ("Usage: tile [x y] [clientnum]\n");
+		return;
+	}
+	for(i = 0; i < MAX_NUM_VMS; i++) {
+		if(!cgvmWorlds[i]) continue;
+		if(clientScreens[i][0] > -1) count++;
+	}
+	if(Cmd_Argc() == 3 || Cmd_Argc() == 4) {
+		if(Cmd_Argc() == 4) {
+			char world[16];
+			strcpy(world, Cmd_Argv(3));
+			if(world[1] == ':') {
+				world[1] = '\0';
+				clientNum = atoi(world);
+				if(clientGames[clientNum] != -1) {
+					// switch the screen on the world view for this specific client
+					clientWorlds[clientNum] = atoi(&world[2]);
+				}
+			} else {
+				clientNum = atoi(world);
+			}
+		} else
+			clientNum = clc.currentView;
+		x = atoi(Cmd_Argv(1));
+		y = atoi(Cmd_Argv(2));
+		// if it was disabled, now it won't be
+		if (clientNum >= 0 && clientScreens[clientNum][0] == -1
+			&& x > -1 && y > -1) count++;
+			else if (x < 0 || y < 0) count--;
+	} else {
+		clientNum = atoi(Cmd_Argv(1));
+		// if it was disabled, now it won't be
+		if (clientNum >= 0 && clientScreens[clientNum][0] == -1) count++;
+	}
+
+	if(clientNum > MAX_NUM_VMS || clientNum < -1) {
+		Com_Printf("Must be between 0 and %i, given: %i\n", MAX_NUM_VMS, clientNum);
+		return;
+	} else if(clientNum >= 0 && !cgvmWorlds[clientNum] 
+    && clientWorlds[clientNum] == -1) {
+		Com_Printf("CGame not active on %i\n", clientNum);
+		return;
+	} else if(clientNum == -1) {
+		// display all in a grid
+		if(Cmd_Argc() == 2) {
+			count = 0;
+			for(i = 0; i < MAX_NUM_VMS; i++) {
+				if(!cgvmWorlds[i]) continue;
+				count++;
+			}
+		} else {
+			// hide all screens
+			count = 0;
+		}
+	}
+
+	xMaxVMs = ceil(sqrt(count));
+	yMaxVMs = round(sqrt(count));
+	if(Cmd_Argc() < 4) {
+		x = xMaxVMs - 1;
+		y = yMaxVMs - 1;
+	}
+	if(x > xMaxVMs) x = xMaxVMs - 1;
+	if(y > yMaxVMs) y = yMaxVMs - 1;
+	int s = clientNum == -1 ? 0 : clientNum;
+	int e = clientNum == -1 ? MAX_NUM_VMS : clientNum + 1;
+	for(; s < (e > MAX_NUM_VMS ? MAX_NUM_VMS : e); s++) {
+		if(clientNum == -1 && Cmd_Argc() == 2) {
+			x = s % xMaxVMs;
+			y = s / xMaxVMs;
+		}
+		if(x < 0 || y < 0 || (clientNum == -1 && !cgvmWorlds[s])) {
+	    Com_DPrintf("Tiling subtracting: %i x %i "
+        "(client: %i, total: %i)\n", x, y, s, count);
+			clientScreens[s][0] = 
+			clientScreens[s][1] = 
+			clientScreens[s][2] = 
+			clientScreens[s][3] = -1;
+		} else {
+	    Com_DPrintf("Tiling adding: %i x %i "
+        "(client: %i, total: %i)\n", x, y, s, count);
+			clientScreens[s][0] = (1.0f * (x % xMaxVMs)) / xMaxVMs;
+			clientScreens[s][1] = (1.0f * (y % yMaxVMs)) / yMaxVMs;
+			clientScreens[s][2] = 1.0f / xMaxVMs;
+			clientScreens[s][3] = 1.0f / yMaxVMs;
+		}
+	}
+}
+
+void CL_Dvr_f(void) {
+	char *xIn, *yIn, *wIn, *hIn;
+	int clientNum, argc = 0;
+	if(Cmd_Argc() < 5 || Cmd_Argc() > 6
+		|| (clc.sv_mvWorld && !serverWorld)) {
+		if(Cmd_Argc() == 1) {
+			for(int i = 0; i < MAX_NUM_VMS; i++) {
+				if(clientScreens[i][0] > -1) {
+					Com_Printf( "[%i] %i %i: %fx%f (%fx%f)\n", 
+						i, clientGames[i], clientWorlds[i], 
+						clientScreens[i][0], clientScreens[i][1],
+					 	clientScreens[i][2], clientScreens[i][3]);
+				}
+			}
+		} else if (clc.sv_mvWorld && !serverWorld) {
+			Com_Printf("In server world mode, no tiling.\n");
+			return; // silently disable on this server, world messages are sent
+		}
+		Com_Printf ("Usage: dvr [clientnum] [x y w h]\n");
+		return;
+	}
+	if(Cmd_Argc() == 5) {
+		clientNum = clc.currentView;
+	} else {
+		char world[16];
+		strcpy(world, Cmd_Argv(++argc));
+		if(world[1] == ':') {
+			world[1] = '\0';
+			clientNum = atoi(world);
+			if(clientGames[clientNum] != -1) {
+				// switch the screen on the world view for this specific client
+				clientWorlds[clientNum] = atoi(&world[2]);
+			}
+		} else {
+			clientNum = atoi(world);
+		}
+	}
+	xIn = Cmd_Argv(++argc);
+	yIn = Cmd_Argv(++argc);
+	wIn = Cmd_Argv(++argc);
+	hIn = Cmd_Argv(++argc);
+	clientScreens[clientNum][0] = Q_atof(xIn);
+	clientScreens[clientNum][1] = Q_atof(yIn);
+	clientScreens[clientNum][2] = Q_atof(wIn);
+	clientScreens[clientNum][3] = Q_atof(hIn);
+}
+
+#endif
+
+
 /*
 ====================
 CL_Init
@@ -4048,6 +4579,18 @@ void CL_Init( void ) {
   }
 #endif
 
+#ifdef USE_MV
+#ifdef USE_MULTIVM_CLIENT
+	Cvar_Get( "mvproto", va( "%i", MV_MULTIWORLD_VERSION ), CVAR_USERINFO | CVAR_ROM );
+#else
+	Cvar_Get( "mvproto", va( "%i", MV_PROTOCOL_VERSION ), CVAR_USERINFO | CVAR_ROM );
+#endif
+#endif
+#ifdef USE_MULTIVM_CLIENT
+  cl_mvHighlight = Cvar_Get("cl_mvHighlight", "1", CVAR_ARCHIVE);
+  Cvar_CheckRange( cl_mvHighlight, "0", "1", CV_INTEGER );
+#endif
+
 	cl_allowDownload = Cvar_Get( "cl_allowDownload", "1", CVAR_ARCHIVE_ND );
 	Cvar_SetDescription( cl_allowDownload, "Enables downloading of content needed in server. Valid bitmask flags:\n 1: Downloading enabled\n 2: Do not use HTTP/FTP downloads\n 4: Do not use UDP downloads" );
 #ifdef USE_CURL
@@ -4114,7 +4657,11 @@ void CL_Init( void ) {
 	// userinfo
 	Cvar_Get ("name", "UnnamedPlayer", CVAR_USERINFO | CVAR_ARCHIVE_ND );
 	Cvar_Get ("rate", "25000", CVAR_USERINFO | CVAR_ARCHIVE );
+#ifdef USE_MULTIVM_CLIENT
+	Cvar_Get ("snaps", "100", CVAR_USERINFO | CVAR_ARCHIVE );
+#else
 	Cvar_Get ("snaps", "40", CVAR_USERINFO | CVAR_ARCHIVE );
+#endif
 	Cvar_Get ("model", "sarge", CVAR_USERINFO | CVAR_ARCHIVE_ND );
 	Cvar_Get ("headmodel", "sarge", CVAR_USERINFO | CVAR_ARCHIVE_ND );
  	Cvar_Get ("team_model", "sarge", CVAR_USERINFO | CVAR_ARCHIVE_ND );
@@ -4178,6 +4725,32 @@ void CL_Init( void ) {
 	Cmd_AddCommand( "dlmap", CL_Download_f );
 #endif
 	Cmd_AddCommand( "modelist", CL_ModeList_f );
+
+
+#ifdef USE_MV
+	Cmd_AddCommand( "mvjoin", CL_Multiview_f );
+	//Cmd_SetDescription("mvjoin", "Join multiview to allow viewing of other players\nUsage: mvjoin");
+	Cmd_AddCommand( "mvleave", CL_Multiview_f );
+	//Cmd_SetDescription("mvleave", "Leave multiview and stop showing other players\nUsage: mvleave");
+	Cmd_AddCommand( "mvfollow", CL_MultiviewFollow_f );
+	//Cmd_SetDescription("mvfollow", "Follow a specific player in multiview\nUsage: mvfollow <playernumber>");
+#endif
+
+#ifdef USE_MULTIVM_CLIENT
+	Cmd_AddCommand( "load", CL_LoadVM_f );
+	//Cmd_SetDescription("load", "Load extra VMs for showing multiple players or maps\nUsage: load [ui|cgame|game]");
+	Cmd_AddCommand ("tele", CL_Tele_f);
+	//Cmd_SetDescription( "tele", "Teleport into the game as if you just connected\nUsage: teleport <client> [xcoord zcoord ycoord]" );
+	Cmd_AddCommand ("game", CL_Game_f);
+	//Cmd_SetDescription( "game", "Switch games in multiVM mode to another match\nUsage: game [0/1/2 moveorigin] [num]" );
+	Cmd_AddCommand ("world", CL_World_f);
+	//Cmd_SetDescription( "world", "Switch the rendered world client side only\nUsage: world <numworld>" );
+	Cmd_AddCommand ("tile", CL_Tile_f);
+	//Cmd_SetDescription( "tile", "Display multiview renderings in a grid\nUsage: tile [+/-] [x y] [clientnum]" );
+	Cmd_AddCommand ("dvr", CL_Dvr_f);
+	//Cmd_SetDescription( "dvr", "Change where the screen output is drawn using percentages\nUsage: dvr [clientnum] x y w h" );
+#endif
+
 
 	Cvar_Set( "cl_running", "1" );
 #ifdef USE_MD5
@@ -4258,6 +4831,17 @@ void CL_Shutdown( const char *finalmsg, qboolean quit ) {
 	Cmd_RemoveCommand( "download" );
 	Cmd_RemoveCommand( "dlmap" );
 #endif
+
+
+#ifdef USE_MV
+	Cmd_RemoveCommand( "mvjoin" );
+	Cmd_RemoveCommand( "mvleave" );
+	Cmd_RemoveCommand( "mvfollow" );
+#endif
+#ifdef USE_MULTIVM_CLIENT
+	Cmd_RemoveCommand( "load" );
+#endif
+
 
 	CL_ClearInput();
 
@@ -4682,6 +5266,9 @@ static void CL_LocalServers_f( void ) {
 		for ( j = 0 ; j < NUM_SERVER_PORTS ; j++ ) {
 			to.port = BigShort( (short)(PORT_SERVER + j) );
 
+#ifdef USE_MULTIVM_SERVER
+			to.netWorld = 0;
+#endif
 			to.type = NA_BROADCAST;
 			NET_SendPacket( NS_CLIENT, n, message, &to );
 #ifdef USE_IPV6
@@ -5265,3 +5852,57 @@ static void CL_Download_f( void )
 	CL_Download( Cmd_Argv( 0 ), Cmd_Argv( 1 ), qfalse );
 }
 #endif // USE_CURL
+
+#ifdef USE_MV
+
+void CL_Multiview_f( void ) {
+#ifdef USE_MULTIVM_CLIENT
+	int igs = clc.currentView;
+#endif
+
+	if ( cls.state != CA_ACTIVE || !cls.servername[0] || clc.demoplaying ) {
+		Com_Printf( "Not connected.\n" );
+		return;
+	}
+
+	if ( atoi( Info_ValueForKey( cl.gameState.stringData + cl.gameState.stringOffsets[ CS_SERVERINFO ], "mvproto" ) ) != MV_PROTOCOL_VERSION ) {
+		Com_Printf( S_COLOR_YELLOW "Remote server does not support this function.\n" );
+		return;
+	}
+
+	CL_AddReliableCommand( Cmd_Argv( 0 ), qfalse );
+}
+
+
+void CL_MultiviewFollow_f( void ) {
+	int clientNum;
+#ifdef USE_MULTIVM_CLIENT
+	int igs = clc.currentView;
+#endif
+
+#ifdef USE_MULTIVM_CLIENT
+	if ( !cl.snapWorlds[igs].multiview ) 
+#else
+	if ( !cl.snap.multiview ) 
+#endif
+	{
+		Com_Printf("Not a multiview snapshot.\n");
+		return;
+	}
+
+	clientNum = atoi( Cmd_Argv( 1 ) );
+
+	if ( (unsigned)clientNum >= MAX_CLIENTS ) {
+		Com_Printf("Multiview client out of range.\n");
+		return;
+	}
+
+#ifdef USE_MULTIVM_CLIENT
+	if ( GET_ABIT( cl.snapWorlds[igs].clientMask, clientNum ) )
+		clientWorlds[clc.currentView] = clientNum;
+#endif
+	else 
+		Com_Printf("Multiview client not available.\n");
+}
+
+#endif // USE_MV

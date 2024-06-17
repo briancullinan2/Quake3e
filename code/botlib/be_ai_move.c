@@ -114,7 +114,12 @@ static libvar_t *cmd_grappleon;
 //type of model, func_plat or func_bobbing
 static int modeltypes[MAX_MODELS];
 
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
+bot_movestate_t *botmovestatesWorlds[MAX_NUM_VMS][MAX_CLIENTS+1];
+#define botmovestates botmovestatesWorlds[aasgvm]
+#else
 static bot_movestate_t *botmovestates[MAX_CLIENTS+1];
+#endif
 
 //========================================================================
 //

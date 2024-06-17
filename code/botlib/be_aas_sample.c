@@ -61,7 +61,13 @@ typedef struct aas_tracestack_s
 	int nodenum;		//node found after splitting with planenum
 } aas_tracestack_t;
 
+
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
+int numaaslinksWorlds[MAX_NUM_VMS];
+#define numaaslinks numaaslinksWorlds[aasgvm]
+#else
 static int numaaslinks;
+#endif
 
 //===========================================================================
 //
