@@ -1273,6 +1273,8 @@ void SV_ClientEnterWorld( client_t *client ) {
 
 	client->state = CS_ACTIVE;
 
+	client->gamestateAcked = qtrue;
+	client->oldServerTime = 0;
 #ifdef USE_MULTIVM_SERVER
 	if(sv_mvWorld->integer 
 		// check client is multiworld capable, even if it's not enabled
@@ -2552,37 +2554,27 @@ static void SV_UserMove( client_t *cl, msg_t *msg, qboolean delta ) {
 			}
 			return;
 		}
-
 #ifdef USE_MULTIVM_SERVER
 		int prevGvm = gvmi; // hopefully it is the same but maybe not
 		gvmi = cl->gameWorld = cl->newWorld;
 		CM_SwitchMap(gameWorlds[gvmi]);
 		SV_SetAASgvm(gvmi);
-		if(cl->newWorld != cl->gameWorld) {
-			//if(cl->multiview.protocol < 1 && atoi(Info_ValueForKey( cl->userinfo, "mvproto" ))) {
-			//	cl->multiview.protocol = atoi(Info_ValueForKey( cl->userinfo, "mvproto" ));
-			//}
-			// If we don't reset client->lastUsercmd and are restarting during map load,
-			// the client will hang because we'll use the last Usercmd from the previous map,
-			// which is wrong obviously.
-			SV_ClientEnterWorld( cl );
-		} else {
-			SV_ClientEnterWorld( cl );
-		}
+		SV_ClientEnterWorld( cl );
 		gvmi = prevGvm;
 		CM_SwitchMap(gameWorlds[gvmi]);
 		SV_SetAASgvm(gvmi);
 #else
-
 		SV_ClientEnterWorld( cl );
-
 #endif
-
 		// the moves can be processed normally
 	}
 
 	// a bad cp command was sent, drop the client
-	if ( sv_pure->integer != 0 && !cl->pureAuthentic ) {
+	if ( sv_pure->integer != 0 && !cl->pureAuthentic 
+#ifdef USE_MULTIVM_SERVER
+			&& cl->newWorld == cl->gameWorld
+#endif
+	) {
 #ifndef DEDICATED
 		if ( !cl->gotCP && cl->state == CS_ACTIVE && cl->netchan.remoteAddress.type == NA_LOOPBACK ) {
 			// fix host player being dropped with ZTM' FlexibleHud at level end in TA SP

@@ -895,7 +895,7 @@ void CL_WritePacket( void ) {
 		}
 
 		// begin a client move command
-#ifdef USE_MULTIVM_CLIENT
+#if 0 //def USE_MULTIVM_CLIENT
 		if(cl.snapWorlds[clc.currentView].multiview || cl.snap.multiview) {
 			if ( !cl_nodelta || cl_nodelta->integer || !cl.snap.valid || clc.demowaiting
 				|| clc.serverMessageSequence != cl.snap.messageNum ) {

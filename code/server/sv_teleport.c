@@ -628,3 +628,107 @@ void SV_RestoreClient( int clientNum ) {
 #endif
 
 
+#ifdef USE_MULTIVM_SERVER
+static void SV_BuildCommonSnapshot( void );
+
+typedef struct {
+	int number;
+	int world;
+	int worldFrom;
+	qboolean isCamera;
+	qboolean isTeleporter;
+	vec3_t origin;
+} multiworld_t;
+
+// TODO: alloc as needed?
+static multiworld_t multiworldEntities[MAX_NUM_VMS * MAX_GENTITIES];
+static int numMultiworldEntities = 0;
+// per client check if 
+static qboolean multiworldInView[MAX_NUM_VMS * MAX_GENTITIES];
+static qboolean hasMultiworldInView[MAX_NUM_VMS];
+
+
+int parseEntities(const char **ents);
+int parseKeys(const char *buffer, const char **keys, const char **vals);
+
+void SV_AddWorldlyEntities( void ) {
+#define MAX_KEYVALUES 16
+	vec3_t origin;
+	static const char *entities[MAX_GENTITIES];
+	char message[MAX_TOKEN_CHARS];
+	int world;
+	int numEntities;
+	memset(entities, 0, sizeof(entities));
+	numEntities = parseEntities(entities);
+
+	for(int i = 0; i < numEntities; i++) {
+		const char *keys[MAX_KEYVALUES];
+		const char *vals[MAX_KEYVALUES];
+		memset(keys, 0, sizeof(keys));
+		memset(vals, 0, sizeof(vals));
+		const char *ent = entities[i];
+		qboolean isWorldspawn = qfalse;
+		qboolean isTeleporter = qfalse;
+		qboolean isCamera = qfalse;
+		int numKeyValues = parseKeys(ent, keys, vals);
+		world = gvmi;
+		message[0] = '\0';
+		VectorClear(origin);
+		for(int j = 0; j < numKeyValues; j++) {
+			if(!Q_stricmpn(keys[j], "classname", 9)) {
+				if(!Q_stricmpn(vals[j]+1, "misc_teleporter_dest", 10)
+					|| !Q_stricmpn(vals[j]+1, "info_player_deathmatch", 10)
+				) {
+					isTeleporter = qtrue;
+				}
+				else if (!Q_stricmpn(vals[j]+1, "info_player_intermission", 10)
+					|| !Q_stricmpn(vals[j]+1, "misc_portal_camera", 10)) {
+					isCamera = qtrue;
+				}
+				else if (!Q_stricmpn(vals[j]+1, "worldspawn", 10)) {
+					isWorldspawn = qtrue;
+				}
+				else {
+				}
+			}
+			else if(!Q_stricmpn(keys[j], "world", 5)) {
+				sscanf(vals[j], "\"%i\"", &world);
+			}
+			else if(!Q_stricmpn(keys[j], "message", 7)) {
+				sscanf(vals[j], "\"%s\"", message);
+			}
+			else if(!Q_stricmpn(keys[j], "origin", 6)) {
+				sscanf(vals[j], "\"%f %f %f\"", 
+					&origin[0], 
+					&origin[1], 
+					&origin[2]);
+			}
+		}
+		if(isWorldspawn) {
+			continue;
+		}
+		if( (isCamera || isTeleporter) /* && world != gvmi &*/ ) {
+			multiworldEntities[numMultiworldEntities].isCamera = isCamera;
+			multiworldEntities[numMultiworldEntities].isTeleporter = isTeleporter;
+			multiworldEntities[numMultiworldEntities].world = world;
+			multiworldEntities[numMultiworldEntities].worldFrom = gvmi;
+			multiworldEntities[numMultiworldEntities].number = i;
+			VectorCopy(origin, multiworldEntities[numMultiworldEntities].origin);
+			numMultiworldEntities++;
+		}
+	}
+}
+
+void SV_RemoveWorldlyEntities( void ) {
+	for(int i = 0; i < numMultiworldEntities; i++) {
+		if(multiworldEntities[i].worldFrom == gvmi) {
+			memcpy(&multiworldEntities[i], &multiworldEntities[i + 1], sizeof(multiworldEntities) - (i + 1) * sizeof(multiworldEntities[i]));
+			numMultiworldEntities--;
+			memset(&multiworldEntities[numMultiworldEntities], 0, sizeof(multiworldEntities[0]));
+			i--;
+		}
+	}
+}
+
+
+#endif

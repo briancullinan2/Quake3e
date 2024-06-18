@@ -3062,7 +3062,7 @@ A packet has arrived from the main event loop
 */
 void CL_PacketEvent( const netadr_t *from, msg_t *msg ) {
 	int		headerBytes;
-/*#ifdef USE_MULTIVM_CLIENT
+#ifdef USE_MULTIVM_CLIENT
 	cgvmi = clc.currentView;
 	CM_SwitchMap(clientMaps[cgvmi]);
 #else
@@ -3070,7 +3070,7 @@ void CL_PacketEvent( const netadr_t *from, msg_t *msg ) {
 	CM_SwitchMap(clientMap);
 #endif
 #endif
-*/
+
 
 	if ( msg->cursize < 5 ) {
 		Com_DPrintf( "%s: Runt packet\n", NET_AdrToStringwPort( from ) );

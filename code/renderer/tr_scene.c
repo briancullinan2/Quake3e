@@ -77,9 +77,6 @@ static int r_firstScenePolybuffer;
 static int r_numpolybuffers;
 #endif
 
-static int r_firstScenePolybuffer;
-static int r_numpolybuffers;
-
 /*
 ====================
 R_InitNextFrame

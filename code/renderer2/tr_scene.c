@@ -34,10 +34,10 @@ static int			r_numpolys;
 static int			r_firstScenePoly;
 
 static int			r_numpolyverts;
-static int     r_numindexes;
+static int			r_numindexes;
 
-static int r_firstScenePolybuffer;
-static int r_numpolybuffers;
+static int			r_firstScenePolybuffer;
+static int			r_numpolybuffers;
 
 /*
 ====================

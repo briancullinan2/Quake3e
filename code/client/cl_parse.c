@@ -1028,6 +1028,7 @@ void CL_ParseServerMessage( msg_t *msg ) {
 			CL_ParseGamestate( msg );
 			break;
 #ifdef USE_MULTIVM_CLIENT
+int MSG_ReadBits( msg_t *msg, int bits );
 		case svc_baseline:
 			{
 				entityState_t	nullstate;
@@ -1057,9 +1058,6 @@ void CL_ParseServerMessage( msg_t *msg ) {
 			igs = MSG_ReadByte( msg );
 			break;
 		case svc_snapshot:
-			CL_ParseSnapshot( msg, -1 );
-			break;
-		case svc_multiview:
 			CL_ParseSnapshot( msg, igs );
 			break;
 #else // !USE_MULTIVM_CLIENT

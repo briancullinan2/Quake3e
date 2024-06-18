@@ -467,7 +467,7 @@ static void CL_CM_LoadMap( const char *mapname ) {
   clientMaps[cgvmi] = CM_LoadMap( mapname, qtrue, &checksum );
 #else
 #if USE_MULTIVM_SERVER
-	clientMap= CM_LoadMap( mapname, qtrue, &checksum );
+	clientMap = CM_LoadMap( mapname, qtrue, &checksum );
 #else
 	CM_LoadMap( mapname, qtrue, &checksum );
 #endif
