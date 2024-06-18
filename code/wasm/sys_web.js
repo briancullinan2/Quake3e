@@ -50,7 +50,7 @@ function getQueryCommands() {
 		// this prevents lightmap from being wrong when switching maps
 		//   renderer doesn't restart between maps, but BSP loading updates
 		//   textures with lightmap by default, so this keeps them separate
-		//'+set', 'r_mergeLightmaps', '0',
+		'+set', 'r_mergeLightmaps', '0',
 		//'+set', 'r_deluxeMapping', '0',
 		//'+set', 'r_normalMapping', '0',
 		//'+set', 'r_specularMapping', '0',
