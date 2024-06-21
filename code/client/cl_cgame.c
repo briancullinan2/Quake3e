@@ -438,6 +438,11 @@ static qboolean CL_GetValue( char* value, int valueSize, const char* key ) {
 		return qtrue;
 	}
 
+	if ( !Q_stricmp( key, "trap_R_AddPolyBufferToScene" ) && re.AddPolyBufferToScene ) {
+		Com_sprintf( value, valueSize, "%i", CG_R_ADDPOLYBUFFERTOSCENE );
+		return qtrue;
+	}
+
 	return qfalse;
 }
 
