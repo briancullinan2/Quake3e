@@ -2140,7 +2140,7 @@ void SV_LoadVM( client_t *cl ) {
 		CM_SwitchMap(gameWorlds[gvmi]);
 	} else {
 		FS_BypassPure();
-		Sys_SetStatus( "Loading map %s", mapname );
+		Sys_SetStatus( "Loading map %s\n", mapname );
     Cvar_Get( va("mapname_%i", gvmi), mapname, CVAR_TAGGED_SPECIFIC );
     Cvar_Set( va("mapname_%i", gvmi), mapname );
     Cvar_Set( "mapname", mapname );
@@ -2770,7 +2770,10 @@ void SV_ExecuteClientMessage( client_t *cl, msg_t *msg ) {
 			SV_SetAASgvm(gvmi);
 		//}
 		SV_UserMove( cl, msg, c == clc_mvMove );
-	} else 
+	} else {
+		gvmi = cl->newWorld;
+		CM_SwitchMap(gameWorlds[gvmi]);
+		SV_SetAASgvm(gvmi);
 #endif
 
 
@@ -2785,6 +2788,8 @@ void SV_ExecuteClientMessage( client_t *cl, msg_t *msg ) {
 //		Com_Printf( "WARNING: Junk at end of packet for client %i\n", cl - svs.clients );
 //	}
 #ifdef USE_MULTIVM_SERVER
+	}
+
 	gvmi = 0;
 	CM_SwitchMap(gameWorlds[gvmi]);
 	SV_SetAASgvm(gvmi);

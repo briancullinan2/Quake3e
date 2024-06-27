@@ -609,7 +609,7 @@ void CL_ParseServerMessage( msg_t *msg );
 #ifdef USE_MULTIVM_CLIENT
 void CL_ParseSnapshot( msg_t *msg, int igs );
 #else
-static void CL_ParseSnapshot( msg_t *msg );
+//static void CL_ParseSnapshot( msg_t *msg );
 #endif
 
 //====================================================================

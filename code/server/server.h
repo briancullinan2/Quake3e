@@ -326,12 +326,13 @@ typedef struct {
 	int			snapshotFrame;			// incremented with each common snapshot built
 	int			currentSnapshotFrame;	// for initializing empty frames
 	int			lastValidFrame;			// updated with each snapshot built
-	snapshotFrame_t	snapFrames[ NUM_SNAPSHOT_FRAMES ];
 	
 #ifdef USE_MULTIVM_SERVER
+	snapshotFrame_t	snapFrameWorlds[MAX_NUM_VMS][ NUM_SNAPSHOT_FRAMES ];
   snapshotFrame_t	*currFrameWorlds[MAX_NUM_VMS]; // current frame that clients can refer
 #define currFrame  currFrameWorlds[gvmi]
 #else
+	snapshotFrame_t	snapFrames[ NUM_SNAPSHOT_FRAMES ];
 	snapshotFrame_t	*currFrame; // current frame that clients can refer
 #endif
 
@@ -355,12 +356,22 @@ typedef struct
 extern	serverStatic_t	svs;				// persistant server info across maps
 extern	server_t		sv;					// cleared each map
 #ifndef USE_MULTIVM_SERVER
+
 extern	vm_t			*gvm;				// game virtual machine
 #else
 extern  int   gvmi;
 extern  vm_t *gvmWorlds[MAX_NUM_VMS];
 extern  int   gameWorlds[MAX_NUM_VMS];
 #endif
+
+typedef struct {
+	int number;
+	int world;
+	int worldFrom;
+	qboolean isCamera;
+	qboolean isTeleporter;
+	vec3_t origin;
+} multiworld_t;
 
 extern	cvar_t	*sv_fps;
 extern	cvar_t	*sv_timeout;

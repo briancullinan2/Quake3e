@@ -3,6 +3,7 @@
 
 #if defined(USE_MULTIVM_SERVER) || defined(USE_ENGINE_TELE)
 
+void SV_CreateBaseline( void ) ;
 
 // TODO: write displacement code like showing a black cat and shifting 32 units to the right and 
 //   gibbing like a telefrag if they end up inside a wall, "player was displaced."
@@ -89,7 +90,6 @@ void SV_Teleport( client_t *client, int newWorld, origin_enum_t changeOrigin, ve
 			client->state = CS_CONNECTED;
 			client->gamestateMessageNum = -1; // send a new gamestate
 
-/*
 			Cvar_Set( "mapname", Cvar_VariableString( va("mapname_%i", client->newWorld) ) );
 			Cvar_Set( "sv_mapChecksum", Cvar_VariableString( va("sv_mapChecksum_%i", client->newWorld) ) );
 			SV_SetConfigstring( CS_SYSTEMINFO, Cvar_InfoString_Big( CVAR_SYSTEMINFO, NULL ) );
@@ -97,8 +97,8 @@ void SV_Teleport( client_t *client, int newWorld, origin_enum_t changeOrigin, ve
 			SV_SetConfigstring( CS_SERVERINFO, Cvar_InfoString( CVAR_SERVERINFO, NULL ) );
 			cvar_modifiedFlags &= ~CVAR_SERVERINFO;
 			SV_CreateBaseline();
-*/
 			SV_SendClientGameState( client );
+
 			//return; // update location below
 		} else {
 			// above must come before this because there is a filter 
@@ -631,18 +631,10 @@ void SV_RestoreClient( int clientNum ) {
 #ifdef USE_MULTIVM_SERVER
 static void SV_BuildCommonSnapshot( void );
 
-typedef struct {
-	int number;
-	int world;
-	int worldFrom;
-	qboolean isCamera;
-	qboolean isTeleporter;
-	vec3_t origin;
-} multiworld_t;
 
 // TODO: alloc as needed?
-static multiworld_t multiworldEntities[MAX_NUM_VMS * MAX_GENTITIES];
-static int numMultiworldEntities = 0;
+multiworld_t multiworldEntities[MAX_NUM_VMS * MAX_GENTITIES];
+int numMultiworldEntities = 0;
 // per client check if 
 static qboolean multiworldInView[MAX_NUM_VMS * MAX_GENTITIES];
 static qboolean hasMultiworldInView[MAX_NUM_VMS];

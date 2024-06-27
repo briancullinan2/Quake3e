@@ -461,6 +461,10 @@ static void SV_AddEntitiesVisibleFromPoint( const vec3_t origin, clientSnapshot_
 	}
 }
 
+#ifdef USE_MULTIVM_SERVER
+extern multiworld_t multiworldEntities[MAX_NUM_VMS * MAX_GENTITIES];
+extern int numMultiworldEntities;
+#endif
 
 /*
 ===============
@@ -470,7 +474,13 @@ SV_InitSnapshotStorage
 void SV_InitSnapshotStorage( void ) 
 {
 	// initialize snapshot storage
+#ifdef USE_MULTIVM_SERVER
+	Com_Memset( svs.snapFrameWorlds, 0, sizeof( svs.snapFrameWorlds ) );
+	memset( multiworldEntities, 0, sizeof( multiworldEntities ) );
+	numMultiworldEntities = 0;
+#else
 	Com_Memset( svs.snapFrames, 0, sizeof( svs.snapFrames ) );
+#endif
 	svs.freeStorageEntities = svs.numSnapshotEntities;
 	svs.currentStoragePosition = 0;
 
@@ -552,8 +562,12 @@ static void SV_BuildCommonSnapshot( void )
 
 	sv.snapshotCounter = -1;
 
+#ifdef USE_MULTIVM_SERVER
+	sf = &svs.snapFrameWorlds[gvmi][ svs.snapshotFrame % NUM_SNAPSHOT_FRAMES ];
+#else
 	sf = &svs.snapFrames[ svs.snapshotFrame % NUM_SNAPSHOT_FRAMES ];
-	
+#endif
+
 	// track last valid frame
 	if ( svs.snapshotFrame - svs.lastValidFrame > (NUM_SNAPSHOT_FRAMES-1) ) {
 		svs.lastValidFrame = svs.snapshotFrame - (NUM_SNAPSHOT_FRAMES-1);
@@ -564,7 +578,11 @@ static void SV_BuildCommonSnapshot( void )
 
 	// release more frames if needed
 	while ( svs.freeStorageEntities < count && svs.lastValidFrame != svs.snapshotFrame ) {
+#ifdef USE_MULTIVM_SERVER
+		tmp = &svs.snapFrameWorlds[gvmi][ svs.lastValidFrame % NUM_SNAPSHOT_FRAMES ];
+#else
 		tmp = &svs.snapFrames[ svs.lastValidFrame % NUM_SNAPSHOT_FRAMES ];
+#endif
 		svs.lastValidFrame++;
 		// release storage
 		svs.freeStorageEntities += tmp->count;
@@ -741,6 +759,13 @@ Also called by SV_FinalMessage
 void SV_SendClientSnapshot( client_t *client ) {
 	byte		msg_buf[ MAX_MSGLEN_BUF ];
 	msg_t		msg;
+
+#ifdef USE_MULTIVM_SERVER
+		gvmi = client->newWorld;
+		CM_SwitchMap(gameWorlds[gvmi]);
+		SV_SetAASgvm(gvmi);
+#endif
+
 
 	// build the snapshot
 	SV_BuildClientSnapshot( client );
