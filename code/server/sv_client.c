@@ -2200,6 +2200,14 @@ void SV_LoadVM( client_t *cl ) {
 	gvmi = 0;
 	CM_SwitchMap(gameWorlds[gvmi]);
 	SV_SetAASgvm(gvmi);
+
+  SV_SetConfigstring( CS_SYSTEMINFO, Cvar_InfoString_Big( CVAR_SYSTEMINFO, NULL ) );
+  cvar_modifiedFlags &= ~CVAR_SYSTEMINFO;
+
+  SV_SetConfigstring( CS_SERVERINFO, Cvar_InfoString( CVAR_SERVERINFO, NULL ) );
+  cvar_modifiedFlags &= ~CVAR_SERVERINFO;
+	
+	SV_CreateBaseline();
 }
 #endif
 
@@ -2771,9 +2779,6 @@ void SV_ExecuteClientMessage( client_t *cl, msg_t *msg ) {
 		//}
 		SV_UserMove( cl, msg, c == clc_mvMove );
 	} else {
-		gvmi = cl->newWorld;
-		CM_SwitchMap(gameWorlds[gvmi]);
-		SV_SetAASgvm(gvmi);
 #endif
 
 

@@ -431,6 +431,7 @@ The module is making a system call
 ====================
 */
 static intptr_t SV_GameSystemCalls( intptr_t *args ) {
+	//Com_Printf("world: %i, %i\n", gvmi, args[0]);
 	switch( args[0] ) {
 	case G_PRINT:
 		Com_Printf( "%s", (const char*)VMA(1) );

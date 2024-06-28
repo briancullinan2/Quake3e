@@ -698,7 +698,24 @@ static void SV_BuildClientSnapshot( client_t *client ) {
 	// add all the entities directly visible to the eye, which
 	// may include portal entities that merge other viewpoints
 	entityNumbers.unordered = qfalse;
+#ifndef USE_MULTIVM_SERVER
 	SV_AddEntitiesVisibleFromPoint( org, frame, &entityNumbers, qfalse );
+#else
+		// only add point of view if player is present
+		if(!sv_mvWorld->integer || SV_PlayerPresent(ps->clientNum)) {
+			SV_AddEntitiesVisibleFromPoint( org, frame, &entityNumbers, qfalse );
+		}
+		for(int j = 0; j < numMultiworldEntities; j++) {
+			vec3_t dist;
+			VectorSubtract(org, multiworldEntities[j].origin, dist);
+			if(VectorLength(dist) < 8.0f
+				&& multiworldEntities[j].world == gvmi) {
+				// TODO: add another visibility point from this view point
+				SV_AddEntitiesVisibleFromPoint( multiworldEntities[j].origin, frame, &entityNumbers, qfalse );
+				entityNumbers.unordered = qtrue;
+			}
+		}
+#endif
 
 	// if there were portals visible, there may be out of order entities
 	// in the list which will need to be resorted for the delta compression
