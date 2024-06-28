@@ -1280,6 +1280,27 @@ void HandleEvents( void )
 							Cvar_SetIntegerValue( "vid_ypos", e.window.data2 );
 						}
 						break;
+					case SDL_WINDOWEVENT_RESIZED:
+						if ( !gw_minimized && !glw_state.isFullscreen ) {
+							glconfig_t *glConfig = re.GetConfig();
+							cvar_t *aspect = Cvar_Get("r_customAspect", "", 0);
+							glw_state.config->vidHeight = e.window.data2;
+							glw_state.config->vidWidth = e.window.data1;
+							glw_state.config->windowAspect = (float)glw_state.config->vidWidth / (float)glw_state.config->vidHeight;
+							glConfig->vidWidth = glw_state.config->vidWidth;
+							glConfig->vidHeight = glw_state.config->vidHeight;
+							glConfig->windowAspect = glw_state.config->windowAspect;
+						
+							cls.glconfig = *glConfig;
+
+							Cvar_SetIntegerValue("r_customWidth", glw_state.config->vidWidth);
+							Cvar_SetIntegerValue("r_customHeight", glw_state.config->vidHeight);
+							Cvar_SetValueSafe("r_customAspect", glw_state.config->windowAspect);
+							cvar_modifiedFlags |= CVAR_MODIFIED;
+							aspect->modified = qtrue;
+							aspect->modificationCount++;
+						}
+						break;
 					// window states:
 					case SDL_WINDOWEVENT_HIDDEN:
 					case SDL_WINDOWEVENT_MINIMIZED:		gw_active = qfalse; gw_minimized = qtrue; break;

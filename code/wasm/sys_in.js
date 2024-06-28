@@ -499,9 +499,9 @@ function IN_Init() {
   window.addEventListener('resize', resizeViewport, false)
   //window.addEventListener('popstate', CL_ModifyMenu, false)
 
-  GL.canvas.addEventListener('mousemove', InputPushMouseEvent, false)
-  GL.canvas.addEventListener('mousedown', InputPushMouseEvent, false)
-  GL.canvas.addEventListener('mouseup', InputPushMouseEvent, false)
+  document.addEventListener('mousemove', InputPushMouseEvent, false)
+  document.addEventListener('mousedown', InputPushMouseEvent, false)
+  document.addEventListener('mouseup', InputPushMouseEvent, false)
 
   document.addEventListener('mousewheel', InputPushWheelEvent, { capture: false, passive: true })
   document.addEventListener('visibilitychange', InputPushFocusEvent, false)
@@ -687,7 +687,7 @@ function InitNippleJoysticks() {
     position: { bottom: '50px', right: '50px' },
   })
   INPUT.joysticks[2] = nipplejs.create({
-    dataOnly: true,
+    //dataOnly: true,
     zone: document.body,
     multitouch: false,
     mode: 'dynamic',
@@ -750,9 +750,9 @@ function GLimp_Shutdown(destroy) {
   document.removeEventListener('pointerlockchange', InputPushFocusEvent);
 
   if (destroy && GL.canvas) {
-    GL.canvas.removeEventListener('mousemove', InputPushMouseEvent)
-    GL.canvas.removeEventListener('mousedown', InputPushMouseEvent)
-    GL.canvas.removeEventListener('mouseup', InputPushMouseEvent)
+    document.removeEventListener('mousemove', InputPushMouseEvent)
+    document.removeEventListener('mousedown', InputPushMouseEvent)
+    document.removeEventListener('mouseup', InputPushMouseEvent)
     GL.deleteContext(INPUT.handle);
     GL.canvas.remove()
     delete GL.canvas

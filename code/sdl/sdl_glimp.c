@@ -284,6 +284,8 @@ static int GLW_SetMode( int mode, const char *modeFS, qboolean fullscreen, qbool
 	else if ( r_noborder->integer )
 	{
 		flags |= SDL_WINDOW_BORDERLESS;
+	} else {
+		flags |= SDL_WINDOW_RESIZABLE;
 	}
 
 	//flags |= SDL_WINDOW_ALLOW_HIGHDPI;
