@@ -62,6 +62,7 @@ function getQueryCommands() {
 		'+set', 'r_fullscreen', window.fullscreen ? '1' : '0',
 		'+set', 'r_customHeight', '' + GL.canvas.clientHeight || 0,
 		'+set', 'r_customWidth', '' + GL.canvas.clientWidth || 0,
+		'+set', 'r_customAspect', '' + (GL.canvas.clientWidth / GL.canvas.clientHeight) || 0,
 	])
 	// meant to do this a lot sooner, with a download, we can just package
 	//   whatever pk3/autoexec we want with the game.

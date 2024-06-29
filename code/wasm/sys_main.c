@@ -353,6 +353,7 @@ void GLimp_Init( glconfig_t *config )
 	config->depthBits = 24;
 	config->stencilBits = 8;
 	config->isFullscreen = qfalse;
+	config->windowAspect = (float)config->vidWidth / (float)config->vidHeight;
 
   // These values force the UI to disable driver selection
   config->driverType = GLDRV_ICD;
