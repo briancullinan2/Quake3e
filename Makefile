@@ -454,6 +454,7 @@ CLIENT_LDFLAGS  = $(LDFLAGS) code/wasm/stack_ops.S \
   -Wl,--export=Com_RunAndTimeServerPacket,--export=Com_Frame \
   -Wl,--export=Cvar_VariableValue,--export=Cvar_VariableIntegerValue \
   -Wl,--export=Cvar_VariableString,--export=Cvar_Get \
+  -Wl,--export=cvar_modifiedFlags,--export=WindowResize \
   -Wl,--export=Cvar_Set,--export=Cvar_SetValue \
   -Wl,--export=Cvar_SetIntegerValue,--export=Cvar_CheckRange \
   -Wl,--export=FS_ReadFile,--export=VM_Call \

@@ -41,13 +41,20 @@ function GLimp_StartDriverAndSetMode(mode, modeFS, fullscreen, fallback) {
 function updateVideoCmd() {
   GL.canvas.setAttribute('width', GL.canvas.clientWidth)
   GL.canvas.setAttribute('height', GL.canvas.clientHeight)
+  /*
   // THIS IS THE NEW VID_RESTART FAST HACK
   HEAP32[INPUT.updateWidth >> 2] = GL.canvas.width
   HEAP32[INPUT.updateHeight >> 2] = GL.canvas.height
   Cvar_Set(stringToAddress('r_customWidth'), stringToAddress('' + GL.canvas.clientWidth))
   Cvar_Set(stringToAddress('r_customHeight'), stringToAddress('' + GL.canvas.clientHeight))
+  Cvar_Set(stringToAddress('r_customAspect'), stringToAddress('' + (round(GL.canvas.clientWidth / GL.canvas.clientHeight * 100) / 100)))
   // TODO: make this an SDL/Sys_Queue event to `vid_restart fast` on native
-  Cbuf_AddText(stringToAddress('vid_restart fast\n'));
+  //Cbuf_AddText(stringToAddress('set r_customAspect ' + (round(GL.canvas.clientWidth / GL.canvas.clientHeight * 100) / 100) + '\n'));
+  HEAP32[(INPUT.aspect >> 2) + 5] = true;
+  HEAP32[(INPUT.aspect >> 2) + 6]++;
+  HEAP32[cvar_modifiedFlags >> 2] |= 0x40000000 // CVAR_MODIFIED
+  */
+  WindowResize(GL.canvas.width, GL.canvas.height)
 }
 
 function resizeViewport() {
@@ -459,6 +466,7 @@ function IN_Init() {
 
   console.log('\n------- Input Initialization -------\n')
 
+  INPUT.aspect = Cvar_Get(stringToAddress('r_customAspect'), stringToAddress(''), 0);
   INPUT.fpsUnfocused = Cvar_Get(stringToAddress('com_maxfpsUnfocused'), stringToAddress('60'), 0);
   INPUT.fps = Cvar_Get(stringToAddress('com_maxfps'), stringToAddress('250'), 0);
   INPUT.fpsModified = HEAPU32[(INPUT.fps >> 2) + 6]
