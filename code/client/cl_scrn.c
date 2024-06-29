@@ -633,6 +633,15 @@ void SCR_UpdateScreen( void ) {
 		if ( next_frametime && ms - next_frametime < 0 ) {
 			re.ThrottleBackend();
 		} else {
+
+#ifdef __WASM__
+	if(!gw_minimized) {
+		// don't ask game or UI to draw if the window is unfocused
+		//   otherwise it will freeze when the user switches back to
+		//   catch up with all the render commands it missed in the background
+		next_frametime = ms + 100; // limit to 60 FPS
+	} else 
+#endif
 			next_frametime = ms + 16; // limit to 60 FPS
 		}
 	} else {

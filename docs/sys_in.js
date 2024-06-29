@@ -101,10 +101,11 @@ function InputPushFocusEvent(evt) {
   }
   if (document.visibilityState != 'visible' || evt.type == 'blur') {
     Key_ClearStates();
-    HEAP32[gw_active >> 2] = false;
+    //HEAP32[gw_active >> 2] = false;
+    HEAP32[gw_minimized >> 2] = true;
   } else {
     Key_ClearStates();
-    HEAP32[gw_active >> 2] = true;
+    //HEAP32[gw_active >> 2] = true;
     HEAP32[gw_minimized >> 2] = false;
   }
 }
@@ -288,7 +289,7 @@ function InputPushKeyEvent(evt) {
 
   if (evt.keyCode == 27) {
     SDL_ShowCursor()
-    HEAP32[gw_active >> 2] = false
+    //HEAP32[gw_active >> 2] = false
     Sys_QueEvent(Sys_Milliseconds(), SE_KEY,
       INPUT.keystrings['ESCAPE'], evt.type == 'keydown', 0, null);
   }
@@ -313,7 +314,7 @@ function InputPushTextEvent(evt) {
         // TODO: show a temporary text box to focus on so the game knows to process
         createTemporaryText()
         TEMPORARY_TEXT.focus()
-        HEAP32[gw_active >> 2] = false
+        //HEAP32[gw_active >> 2] = false
       } else {
       }
     }, 100)
@@ -410,7 +411,7 @@ function InputPushMouseEvent(evt) {
   //   the unfocusedFPS is cancelled and changed to real FPS, 200+!
   if (down && document.pointerLockElement != GL.canvas) {
     // TODO: start sound, capture mouse
-    HEAP32[gw_active >> 2] = 1
+    HEAP32[gw_active >> 2] = true
     createTemporaryText()
     TEMPORARY_TEXT.focus()
     GL.canvas.requestPointerLock()
@@ -499,9 +500,9 @@ function IN_Init() {
   window.addEventListener('resize', resizeViewport, false)
   //window.addEventListener('popstate', CL_ModifyMenu, false)
 
-  GL.canvas.addEventListener('mousemove', InputPushMouseEvent, false)
-  GL.canvas.addEventListener('mousedown', InputPushMouseEvent, false)
-  GL.canvas.addEventListener('mouseup', InputPushMouseEvent, false)
+  document.addEventListener('mousemove', InputPushMouseEvent, false)
+  document.addEventListener('mousedown', InputPushMouseEvent, false)
+  document.addEventListener('mouseup', InputPushMouseEvent, false)
 
   document.addEventListener('mousewheel', InputPushWheelEvent, { capture: false, passive: true })
   document.addEventListener('visibilitychange', InputPushFocusEvent, false)
@@ -687,7 +688,7 @@ function InitNippleJoysticks() {
     position: { bottom: '50px', right: '50px' },
   })
   INPUT.joysticks[2] = nipplejs.create({
-    dataOnly: true,
+    //dataOnly: true,
     zone: document.body,
     multitouch: false,
     mode: 'dynamic',
@@ -750,9 +751,9 @@ function GLimp_Shutdown(destroy) {
   document.removeEventListener('pointerlockchange', InputPushFocusEvent);
 
   if (destroy && GL.canvas) {
-    GL.canvas.removeEventListener('mousemove', InputPushMouseEvent)
-    GL.canvas.removeEventListener('mousedown', InputPushMouseEvent)
-    GL.canvas.removeEventListener('mouseup', InputPushMouseEvent)
+    document.removeEventListener('mousemove', InputPushMouseEvent)
+    document.removeEventListener('mousedown', InputPushMouseEvent)
+    document.removeEventListener('mouseup', InputPushMouseEvent)
     GL.deleteContext(INPUT.handle);
     GL.canvas.remove()
     delete GL.canvas
