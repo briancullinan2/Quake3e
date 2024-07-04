@@ -691,6 +691,7 @@ typedef struct {
 	surfaceType_t	surfaceType;
 	cplane_t	plane;
 
+	vec3_t			bounds[2];
 	// dynamic lighting information
 #ifdef USE_LEGACY_DLIGHTS
 	int			dlightBits;
@@ -847,8 +848,11 @@ typedef struct {
 typedef struct {
 	char		name[MAX_QPATH];		// ie: maps/tim_dm2.bsp
 	char		baseName[MAX_QPATH];	// ie: tim_dm2
-
+#ifdef USE_AUTO_TERRAIN
+	shader_t *terrainShader[8];
+#endif
 	int			dataSize;
+	vec3_t		bounds[2];
 
 	int			numShaders;
 	dshader_t	*shaders;

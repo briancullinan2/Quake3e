@@ -622,11 +622,13 @@ static void ParseFace( const dsurface_t *ds, const drawVert_t *verts, msurface_t
 	cv->numIndices = numIndexes;
 	cv->ofsIndices = ofsIndexes;
 
+	ClearBounds( cv->bounds[0], cv->bounds[1] );
 	verts += LittleLong( ds->firstVert );
 	for ( i = 0 ; i < numPoints ; i++ ) {
 		for ( j = 0 ; j < 3 ; j++ ) {
 			cv->points[i][j] = LittleFloat( verts[i].xyz[j] );
 		}
+		AddPointToBounds( cv->points[i], cv->bounds[0], cv->bounds[1] );
 		for ( j = 0 ; j < 2 ; j++ ) {
 			cv->points[i][3+j] = LittleFloat( verts[i].st[j] );
 			cv->points[i][5+j] = LittleFloat( verts[i].lightmap[j] );
@@ -669,6 +671,36 @@ static void ParseFace( const dsurface_t *ds, const drawVert_t *verts, msurface_t
 	cv->plane.dist = DotProduct( cv->points[0], cv->plane.normal );
 	SetPlaneSignbits( &cv->plane );
 	cv->plane.type = PlaneTypeForNormal( cv->plane.normal );
+
+#ifdef USE_AUTO_TERRAIN
+{
+	float oneFifth = (s_worldData.bounds[1][2] - s_worldData.bounds[0][2]) / 8;
+	float center = (cv->bounds[1][2] + (cv->bounds[1][2] - cv->bounds[0][2]) / 2) - s_worldData.bounds[0][2]; // + cv->plane.normal[2] * (cv->plane.dist / 2) - s_worldData.bounds[0][2];
+	//Com_Printf("plane: %f\n", center);
+	if((surf->shader->surfaceFlags & SURF_TERRAIN)
+		|| surf->shader == s_worldData.terrainShader[0]
+		|| surf->shader == s_worldData.terrainShader[1]) {
+		//Com_Printf("normal: %f > %f\n", cv->points[0][2], oneFifth + s_worldData.bounds[0][2]);
+		if(center > (oneFifth * 7) ) {
+			surf->shader = s_worldData.terrainShader[7];
+		} else 
+		if(center > (oneFifth * 6) && cv->plane.normal[2] > 1) {
+			surf->shader = s_worldData.terrainShader[6];
+		} else
+		if(center > (oneFifth * 5)) {
+			surf->shader = s_worldData.terrainShader[5];
+		} else
+		if(center > (oneFifth * 4)) {
+			surf->shader = s_worldData.terrainShader[4];
+		} else 
+		if(center > (oneFifth * 3)) {
+			surf->shader = s_worldData.terrainShader[3];
+		} else {
+			surf->shader = s_worldData.terrainShader[2];
+		} 
+	}
+}
+#endif
 
 	surf->data = (surfaceType_t *)cv;
 }
@@ -815,6 +847,18 @@ static void ParseTriSurf( const dsurface_t *ds, const drawVert_t *verts, msurfac
 			tri->verts[i].lightmap[1] = tri->verts[i].lightmap[1] * tr.lightmapScale[1] + lightmapY;
 		}
 	}
+
+#ifdef USE_AUTO_TERRAIN
+{
+	float oneFifth = (s_worldData.bounds[1][1] - s_worldData.bounds[0][1]) / 5;
+	if(surf->shader->surfaceFlags & SURF_TERRAIN) {
+		if(tri->bounds[1][1] - tri->bounds[0][1] > oneFifth) {
+			surf->shader = s_worldData.terrainShader[7];
+		}
+	}
+}
+#endif
+
 
 	// copy indexes
 	indexes += LittleLong( ds->firstIndex );
@@ -2246,6 +2290,34 @@ void RE_LoadWorldMap( const char *name ) {
 	// load into heap
 	R_LoadLightmaps( &header->lumps[LUMP_LIGHTMAPS] );
 	R_LoadShaders( &header->lumps[LUMP_SHADERS] );
+
+#ifdef USE_AUTO_TERRAIN
+	{
+		int j;
+		lump_t *subs = &header->lumps[LUMP_MODELS];
+		const dmodel_t *in = (void *)(fileBase + subs->fileofs);
+
+		// checkout shaders for terrain
+		s_worldData.terrainShader[0] = R_FindShader("textures/common/terrain", LIGHTMAP_NONE, qtrue);
+		s_worldData.terrainShader[1] = R_FindShader("textures/common/terrain2", LIGHTMAP_NONE, qtrue);
+		s_worldData.terrainShader[2] = R_FindShader(va("textures/terrain/%s_0.tga", s_worldData.baseName), LIGHTMAP_NONE, qtrue);
+		s_worldData.terrainShader[3] = R_FindShader(va("textures/terrain/%s_0to1.tga", s_worldData.baseName), LIGHTMAP_NONE, qtrue);
+		s_worldData.terrainShader[4] = R_FindShader(va("textures/terrain/%s_1.tga", s_worldData.baseName), LIGHTMAP_NONE, qtrue);
+		s_worldData.terrainShader[5] = R_FindShader(va("textures/terrain/%s_1to2.tga", s_worldData.baseName), LIGHTMAP_NONE, qtrue);
+		s_worldData.terrainShader[6] = R_FindShader(va("textures/terrain/%s_0to2.tga", s_worldData.baseName), LIGHTMAP_NONE, qtrue);
+		s_worldData.terrainShader[7] = R_FindShader(va("textures/terrain/%s_2.tga", s_worldData.baseName), LIGHTMAP_NONE, qtrue);
+
+		// read the map bounds out of the first submodel (world mesh)
+		for (j=0 ; j<3 ; j++) {
+			s_worldData.bounds[0][j] = LittleFloat (in->mins[j]);
+			s_worldData.bounds[1][j] = LittleFloat (in->maxs[j]);
+		}
+
+		// as the map loads, check the plane normals and update the shader for the various surfaces
+
+	}
+#endif
+
 	R_LoadPlanes( &header->lumps[LUMP_PLANES] );
 	R_LoadFogs( &header->lumps[LUMP_FOGS], &header->lumps[LUMP_BRUSHES], &header->lumps[LUMP_BRUSHSIDES] );
 	R_LoadSurfaces( &header->lumps[LUMP_SURFACES], &header->lumps[LUMP_DRAWVERTS], &header->lumps[LUMP_DRAWINDEXES] );

@@ -507,7 +507,7 @@ static void CMod_LoadEntityString( lump_t *l, const char *name ) {
 }
 
 
-static void CM_SaveEntities() {
+static void CM_SaveEntities( void ) {
 	char entName[MAX_QPATH];
 	size_t entNameLen = 0;
 	Q_strncpyz(entName, cm.name, sizeof(entName));
