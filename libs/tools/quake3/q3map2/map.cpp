@@ -1572,6 +1572,7 @@ void LoadEntityIndexMap( entity_t *e ){
 		b->im = im;
 	for ( p = e->patches; p != NULL; p = p->next )
 		p->im = im;
+	e->im = im;
 }
 
 

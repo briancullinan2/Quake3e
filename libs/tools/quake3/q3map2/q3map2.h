@@ -1016,6 +1016,7 @@ struct epair_t
 struct entity_t
 {
 	Vector3 origin;
+	indexMap_t          *im;
 	brush_t             *brushes, *lastBrush, *colorModBrushes;
 	parseMesh_t         *patches;
 	int mapEntityNum, firstDrawSurf;

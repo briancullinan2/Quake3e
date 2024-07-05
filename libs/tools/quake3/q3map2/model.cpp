@@ -198,6 +198,8 @@ picoModel_t *LoadModel( const char *name, int frame ){
 	return *pm;
 }
 
+byte GetShaderIndexForPoint( const indexMap_t *im, const MinMax& eMinmax, const Vector3& point );
+shaderInfo_t *GetIndexedShader( const shaderInfo_t *parent, const indexMap_t *im, int numPoints, byte *shaderIndexes );
 
 
 /*
@@ -210,7 +212,7 @@ void InsertModel( const char *name, int skin, int frame, const Matrix4& transfor
 	const Matrix4 nTransform( matrix4_for_normal_transform( transform ) );
 	picoModel_t         *model;
 	picoSurface_t       *surface;
-	shaderInfo_t        *si;
+	shaderInfo_t        *si, *parent;
 	mapDrawSurface_t    *ds;
 	const char          *picoShaderName;
 	byte                *color;
@@ -221,6 +223,9 @@ void InsertModel( const char *name, int skin, int frame, const Matrix4& transfor
 	//int ok=0, notok=0;
 	int spf = ( spawnFlags & 8088 );
 	float limDepth=0;
+	byte shaderIndexes[ 256 ];
+	float offsets[ 256 ];
+	bool indexed;
 
 
 	if ( clipDepth < 0 ){
@@ -418,6 +423,37 @@ void InsertModel( const char *name, int skin, int frame, const Matrix4& transfor
 		ds->numIndexes = PicoGetSurfaceNumIndexes( surface );
 		ds->indexes = safe_calloc( ds->numIndexes * sizeof( ds->indexes[ 0 ] ) );
 
+if ( si->indexed && entities[ eNum ].im != NULL ) {
+	MinMax eMinmax;
+	/* indexed */
+	indexed = true;
+//Sys_Printf( "indexed!!!\n" );
+
+	for ( i = 0; i < ds->numVerts; i++ )
+	{
+		/* get vertex */
+		bspDrawVert_t& dv = ds->verts[ i ];
+		dv.xyz = vector3_from_array( PicoGetSurfaceXYZ( surface, i ) );
+		eMinmax.extend( dv.xyz );
+	}
+
+
+	for ( i = 0; i < ds->numVerts; i++ )
+	{
+		bspDrawVert_t& dv = ds->verts[ i ];
+		dv.xyz = vector3_from_array( PicoGetSurfaceXYZ( surface, i ) );
+		shaderIndexes[ i ] = GetShaderIndexForPoint( entities[ eNum ].im, eMinmax, dv.xyz );
+		offsets[ i ] = entities[ eNum ].im->offsets[ shaderIndexes[ i ] ];
+		//%	Sys_Printf( "%f ", offsets[ i ] );
+	}
+
+	parent = si;
+	si = GetIndexedShader( parent, entities[ eNum ].im, ds->numVerts, shaderIndexes );
+
+}
+else{
+	indexed = false;
+}
 		/* copy vertexes */
 		for ( i = 0; i < ds->numVerts; i++ )
 		{
@@ -426,6 +462,10 @@ void InsertModel( const char *name, int skin, int frame, const Matrix4& transfor
 
 			/* xyz and normal */
 			dv.xyz = vector3_from_array( PicoGetSurfaceXYZ( surface, i ) );
+if(indexed) {
+			dv.xyz[2] += offsets[ i ];
+}
+
 			matrix4_transform_point( transform, dv.xyz );
 
 			dv.normal = vector3_from_array( PicoGetSurfaceNormal( surface, i ) );
@@ -462,6 +502,11 @@ void InsertModel( const char *name, int skin, int frame, const Matrix4& transfor
 				{
 					dv.color[ j ] = { color[0], color[1], color[2], color[3] };
 				}
+
+if( indexed ) {
+				dv.color[ j ].alpha() = shaderIndexes[ i ];
+}
+
 			}
 		}
 
@@ -569,6 +614,9 @@ void InsertModel( const char *name, int skin, int frame, const Matrix4& transfor
 					buildBrush->compileFlags = si->compileFlags;
 					buildBrush->contentFlags = si->contentFlags;
 					buildBrush->detail = true;
+if( indexed ) {
+					buildBrush->im = entities[ eNum ].im;
+}
 
 					//snap points before using them for further calculations
 					//precision suffers a lot, when two of normal values are under .00025 (often no collision, knocking up effect in ioq3)
