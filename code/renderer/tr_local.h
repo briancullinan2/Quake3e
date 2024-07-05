@@ -850,6 +850,12 @@ typedef struct {
 	char		baseName[MAX_QPATH];	// ie: tim_dm2
 #ifdef USE_AUTO_TERRAIN
 	shader_t *terrainShader[8];
+	char terrainMaster[MAX_QPATH];
+	char terrainIndex[MAX_QPATH];
+	byte *terrainImage;
+	int terrainLayers;
+	int terrainHeight;
+	int terrainWidth;
 #endif
 	int			dataSize;
 	vec3_t		bounds[2];

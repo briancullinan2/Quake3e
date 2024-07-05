@@ -905,7 +905,7 @@ Loads any of the supported image types into a canonical
 32 bit format.
 =================
 */
-static const char *R_LoadImage( const char *name, byte **pic, int *width, int *height )
+const char *R_LoadImage( const char *name, byte **pic, int *width, int *height )
 {
 	static char localName[ MAX_QPATH ];
 	const char *altName, *ext;
