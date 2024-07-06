@@ -245,6 +245,7 @@ static const keyname_t keynames[] =
 	{"PAD0_PADDLE3", K_PAD0_PADDLE3 },
 	{"PAD0_PADDLE4", K_PAD0_PADDLE4 },
 	{"PAD0_TOUCHPAD", K_PAD0_TOUCHPAD },
+	{"CONSOLE", K_CONSOLE },
 
 	{NULL,0}
 };

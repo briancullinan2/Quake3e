@@ -107,7 +107,7 @@ static void DrawTris (const shaderCommands_t *input) {
 	GL_BindToTMU( tr.whiteImage, TB_COLORMAP );
 
 	GL_State( GLS_POLYMODE_LINE | GLS_DEPTHMASK_TRUE );
-	qglDepthRange( 0, 0 );
+	qglDepthRange( 0.0f, 0.0f );
 
 	{
 		shaderProgram_t *sp = &tr.textureColorShader;
@@ -123,7 +123,7 @@ static void DrawTris (const shaderCommands_t *input) {
 		R_DrawElements(input->numIndexes, input->firstIndex);
 	}
 
-	qglDepthRange( 0, 1 );
+	qglDepthRange( 0.0f, 1.0f );
 }
 
 

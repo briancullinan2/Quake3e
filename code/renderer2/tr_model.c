@@ -1373,6 +1373,11 @@ void R_ModelBounds( qhandle_t handle, vec3_t mins, vec3_t maxs ) {
 
 	model = R_GetModelByHandle( handle );
 
+	if(handle == 0) {
+		VectorCopy( tr.world->bmodels[0].bounds[0], mins );
+		VectorCopy( tr.world->bmodels[0].bounds[1], maxs );
+		return;
+	} else
 	if(model->type == MOD_BRUSH) {
 		VectorCopy( model->bmodel->bounds[0], mins );
 		VectorCopy( model->bmodel->bounds[1], maxs );
