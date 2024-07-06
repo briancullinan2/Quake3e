@@ -56,6 +56,10 @@ static PFN_vkGetInstanceProcAddr qvkGetInstanceProcAddr;
 cvar_t *r_stereoEnabled;
 cvar_t *in_nograb;
 
+
+cvar_t *r_headless;
+
+
 /*
 ===============
 GLimp_Shutdown
@@ -195,6 +199,9 @@ static int GLW_SetMode( int mode, const char *modeFS, qboolean fullscreen, qbool
 	int x;
 	int y;
 	Uint32 flags = SDL_WINDOW_SHOWN;
+	if(r_headless->integer) {
+		flags = SDL_WINDOW_HIDDEN | SDL_WINDOW_BORDERLESS;
+	}
 
 #ifdef USE_VULKAN_API
 	if ( vulkan ) {
@@ -268,7 +275,7 @@ static int GLW_SetMode( int mode, const char *modeFS, qboolean fullscreen, qbool
 	}
 
 	gw_active = qfalse;
-	gw_minimized = qtrue;
+	gw_minimized = r_headless->integer ? qfalse : qtrue;
 
 	if ( fullscreen )
 	{
@@ -277,6 +284,8 @@ static int GLW_SetMode( int mode, const char *modeFS, qboolean fullscreen, qbool
 	else if ( r_noborder->integer )
 	{
 		flags |= SDL_WINDOW_BORDERLESS;
+	} else {
+		flags |= SDL_WINDOW_RESIZABLE;
 	}
 
 	//flags |= SDL_WINDOW_ALLOW_HIGHDPI;
@@ -477,6 +486,9 @@ static int GLW_SetMode( int mode, const char *modeFS, qboolean fullscreen, qbool
 		break;
 	}
 
+	if (SDL_window && r_headless->integer) {
+		SDL_HideWindow(SDL_window);
+	}  else
 	if ( SDL_window )
 	{
 #ifdef USE_ICON
@@ -505,8 +517,7 @@ static int GLW_SetMode( int mode, const char *modeFS, qboolean fullscreen, qbool
 		return RSERR_INVALID_MODE;
 	}
 
-	if ( !fullscreen && r_noborder->integer )
-		SDL_SetWindowHitTest( SDL_window, SDL_HitTestFunc, NULL );
+	SDL_SetWindowHitTest( SDL_window, SDL_HitTestFunc, NULL );
 
 #ifdef USE_VULKAN_API
 	if ( vulkan )
@@ -519,7 +530,9 @@ static int GLW_SetMode( int mode, const char *modeFS, qboolean fullscreen, qbool
 	glw_state.window_width = config->vidWidth;
 	glw_state.window_height = config->vidHeight;
 
-	SDL_WarpMouseInWindow( SDL_window, glw_state.window_width / 2, glw_state.window_height / 2 );
+	if(!r_headless->integer) {
+		SDL_WarpMouseInWindow( SDL_window, glw_state.window_width / 2, glw_state.window_height / 2 );
+	}
 
 	return RSERR_OK;
 }
@@ -603,6 +616,9 @@ void GLimp_Init( glconfig_t *config )
 	r_swapInterval = Cvar_Get( "r_swapInterval", "0", CVAR_ARCHIVE | CVAR_LATCH );
 	r_stereoEnabled = Cvar_Get( "r_stereoEnabled", "0", CVAR_ARCHIVE | CVAR_LATCH );
 	Cvar_SetDescription( r_stereoEnabled, "Enable stereo rendering for techniques like shutter glasses." );
+
+	r_headless = Cvar_Get( "r_headless", "0", CVAR_TEMP );
+
 
 	// Create the window and set up the context
 	err = GLimp_StartDriverAndSetMode( r_mode->integer, r_modeFullscreen->string, r_fullscreen->integer, qfalse );

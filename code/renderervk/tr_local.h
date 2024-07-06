@@ -1500,8 +1500,8 @@ void	GL_Cull( cullType_t cullType );
 #define CLS_TEXCOORD_ARRAY						0x00000002
 #define CLS_NORMAL_ARRAY						0x00000004
 
-void		RE_StretchRaw( int x, int y, int w, int h, int cols, int rows, byte *data, int client, qboolean dirty );
-void		RE_UploadCinematic( int w, int h, int cols, int rows, byte *data, int client, qboolean dirty );
+void		RE_StretchRaw( int x, int y, int w, int h, int cols, int rows, const byte *data, int client, qboolean dirty );
+void		RE_UploadCinematic( int w, int h, int cols, int rows, const byte *data, int client, qboolean dirty );
 
 void		RE_BeginFrame( stereoFrame_t stereoFrame );
 void		RE_BeginRegistration( glconfig_t *glconfig );
@@ -1931,6 +1931,7 @@ typedef enum {
 // the main view, all the 3D icons, etc
 #define	MAX_POLYS		8192
 #define	MAX_POLYVERTS	32768
+#define MAX_POLYBUFFERS	256
 
 // all of the information needed by the back end must be
 // contained in a backEndData_t

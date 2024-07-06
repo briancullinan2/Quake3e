@@ -5,3 +5,10 @@ output/
 *.user
 cmake-*
 .idea
+
+Makefile.local
+/node_modules/
+/code/wasm/darwin/
+docs/demoq3/pak0.pk3dir/.DS_Store
+.DS_Store
+.DS_Store

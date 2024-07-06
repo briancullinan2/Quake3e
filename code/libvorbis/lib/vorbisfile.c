@@ -2280,14 +2280,14 @@ int ov_crosslap(OggVorbis_File *vf1, OggVorbis_File *vf2){
   hs1=ov_halfrate_p(vf1);
   hs2=ov_halfrate_p(vf2);
 
-  lappcm=alloca(sizeof(*lappcm)*vi1->channels);
+  lappcm=malloc(sizeof(*lappcm)*vi1->channels);
   n1=vorbis_info_blocksize(vi1,0)>>(1+hs1);
   n2=vorbis_info_blocksize(vi2,0)>>(1+hs2);
   w1=vorbis_window(&vf1->vd,0);
   w2=vorbis_window(&vf2->vd,0);
 
   for(i=0;i<vi1->channels;i++)
-    lappcm[i]=alloca(sizeof(**lappcm)*n1);
+    lappcm[i]=malloc(sizeof(**lappcm)*n1);
 
   _ov_getlap(vf1,vi1,&vf1->vd,lappcm,n1);
 
@@ -2330,9 +2330,9 @@ static int _ov_64_seek_lap(OggVorbis_File *vf,ogg_int64_t pos,
                                    from this link gets dumped, this
                                    window array continues to exist */
 
-  lappcm=alloca(sizeof(*lappcm)*ch1);
+  lappcm=malloc(sizeof(*lappcm)*ch1);
   for(i=0;i<ch1;i++)
-    lappcm[i]=alloca(sizeof(**lappcm)*n1);
+    lappcm[i]=malloc(sizeof(**lappcm)*n1);
   _ov_getlap(vf,vi,&vf->vd,lappcm,n1);
 
   /* have lapping data; seek and prime the buffer */
@@ -2391,9 +2391,9 @@ static int _ov_d_seek_lap(OggVorbis_File *vf,double pos,
                                    from this link gets dumped, this
                                    window array continues to exist */
 
-  lappcm=alloca(sizeof(*lappcm)*ch1);
+  lappcm=malloc(sizeof(*lappcm)*ch1);
   for(i=0;i<ch1;i++)
-    lappcm[i]=alloca(sizeof(**lappcm)*n1);
+    lappcm[i]=malloc(sizeof(**lappcm)*n1);
   _ov_getlap(vf,vi,&vf->vd,lappcm,n1);
 
   /* have lapping data; seek and prime the buffer */

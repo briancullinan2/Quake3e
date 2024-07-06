@@ -383,6 +383,7 @@ static void SV_ClearServer( void ) {
 	for ( i = 0; i < MAX_CONFIGSTRINGS; i++ ) {
 		if ( sv.configstrings[i] ) {
 			Z_Free( sv.configstrings[i] );
+			sv.configstrings[i] = 0;
 		}
 	}
 
@@ -424,12 +425,16 @@ void SV_SpawnServer( const char *mapname, qboolean killBots ) {
 	// also print some status stuff
 	CL_MapLoading();
 
+#ifndef __WASM__
 	// make sure all the client stuff is unloaded
 	CL_ShutdownAll();
 #endif
+#endif
 
+#ifndef __WASM__
 	// clear the whole hunk because we're (re)loading the server
 	Hunk_Clear();
+#endif
 
 	// clear collision map data
 	CM_ClearMap();
@@ -516,7 +521,7 @@ void SV_SpawnServer( const char *mapname, qboolean killBots ) {
 	sv.pure = sv_pure->integer;
 
 	// get a new checksum feed and restart the file system
-	srand( Com_Milliseconds() );
+	srand( Sys_Milliseconds() );
 	Com_RandomBytes( (byte*)&sv.checksumFeed, sizeof( sv.checksumFeed ) );
 	FS_Restart( sv.checksumFeed );
 
@@ -750,7 +755,8 @@ void SV_Init( void )
 	Cvar_SetDescription( sv_rconPassword, "Password for remote server commands." );
 	sv_privatePassword = Cvar_Get ("sv_privatePassword", "", CVAR_TEMP );
 	Cvar_SetDescription( sv_privatePassword, "Set password for private clients to login with." );
-	sv_fps = Cvar_Get ("sv_fps", "20", CVAR_TEMP );
+	sv_fps = Cvar_Get ("sv_fps", "20", CVAR_TEMP 
+		| (Cvar_VariableIntegerValue("r_headless") ? CVAR_PROTECTED : 0) );
 	Cvar_CheckRange( sv_fps, "10", "125", CV_INTEGER );
 	Cvar_SetDescription( sv_fps, "Set the max frames per second the server sends the client." );
 	sv_timeout = Cvar_Get( "sv_timeout", "200", CVAR_TEMP );
@@ -771,7 +777,9 @@ void SV_Init( void )
 	//sv_master[2] = Cvar_Get( "sv_master3", "master.maverickservers.com", CVAR_INIT | CVAR_ARCHIVE_ND );
 
 	for ( index = 0; index < MAX_MASTER_SERVERS; index++ )
-		sv_master[ index ] = Cvar_Get( va( "sv_master%d", index + 1 ), "", CVAR_ARCHIVE_ND );
+		sv_master[ index ] = Cvar_Get( va( "sv_master%d", index + 1 ), "", CVAR_ARCHIVE_ND 
+		| (Cvar_VariableIntegerValue("r_headless") ? CVAR_PROTECTED : 0) );
+
 
 	sv_reconnectlimit = Cvar_Get( "sv_reconnectlimit", "3", 0 );
 	Cvar_CheckRange( sv_reconnectlimit, "0", "12", CV_INTEGER );
@@ -865,6 +873,7 @@ before Sys_Quit or Sys_Error
 ================
 */
 void SV_Shutdown( const char *finalmsg ) {
+
 	if ( !com_sv_running || !com_sv_running->integer ) {
 		return;
 	}
@@ -912,10 +921,12 @@ void SV_Shutdown( const char *finalmsg ) {
 
 	Com_Printf( "---------------------------\n" );
 
+#ifndef __WASM__
 #ifndef DEDICATED
 	// disconnect any local clients
 	if ( sv_killserver->integer != 2 )
 		CL_Disconnect( qfalse );
+#endif
 #endif
 
 	// clean some server cvars

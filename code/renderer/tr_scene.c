@@ -37,7 +37,10 @@ static int			r_numpolys;
 static int			r_firstScenePoly;
 
 static int			r_numpolyverts;
+static int     r_numindexes;
 
+static int r_firstScenePolybuffer;
+static int r_numpolybuffers;
 
 /*
 ====================
@@ -64,6 +67,10 @@ void R_InitNextFrame( void ) {
 	r_firstScenePoly = 0;
 
 	r_numpolyverts = 0;
+	r_numindexes = 0;
+
+	r_numpolybuffers = 0;
+	r_firstScenePolybuffer = 0;
 }
 
 
@@ -77,6 +84,7 @@ void RE_ClearScene( void ) {
 	r_firstSceneDlight = r_numdlights;
 	r_firstSceneEntity = r_numentities;
 	r_firstScenePoly = r_numpolys;
+	r_firstScenePolybuffer = r_numpolybuffers;
 }
 
 /*
@@ -453,6 +461,9 @@ void RE_RenderScene( const refdef_t *fd ) {
 	tr.refdef.numPolys = r_numpolys - r_firstScenePoly;
 	tr.refdef.polys = &backEndData->polys[r_firstScenePoly];
 
+	tr.refdef.numPolyBuffers = r_numpolybuffers - r_firstScenePolybuffer;
+	tr.refdef.polybuffers = &backEndData->polybuffers[r_firstScenePolybuffer];
+
 	// turn off dynamic lighting globally by clearing all the
 	// dlights if it needs to be disabled
 	if ( r_dynamiclight->integer == 0 || glConfig.hardwareType == GLHW_PERMEDIA2 ) {
@@ -514,6 +525,80 @@ void RE_RenderScene( const refdef_t *fd ) {
 	r_firstSceneEntity = r_numentities;
 	r_firstSceneDlight = r_numdlights;
 	r_firstScenePoly = r_numpolys;
+	r_firstScenePolybuffer = r_numpolybuffers;
 
 	tr.frontEndMsec += ri.Milliseconds() - startTime;
+}
+
+
+/*
+=====================
+R_AddPolygonBufferSurfaces
+
+Adds all the scene's polys into this view's drawsurf list
+=====================
+*/
+void R_AddPolygonBufferSurfaces( void ) {
+	int i;
+	shader_t        *sh;
+	srfPolyBuffer_t *polybuffer;
+
+	tr.currentEntityNum = REFENTITYNUM_WORLD;
+	tr.shiftedEntityNum = tr.currentEntityNum << QSORT_REFENTITYNUM_SHIFT;
+
+	for ( i = 0, polybuffer = tr.refdef.polybuffers; i < tr.refdef.numPolyBuffers ; i++, polybuffer++ ) {
+		sh = R_GetShaderByHandle( polybuffer->pPolyBuffer->shader );
+
+		R_AddDrawSurf( ( void * )polybuffer, sh, polybuffer->fogIndex, 0 );
+	}
+}
+
+
+/*
+=====================
+RE_AddPolyBufferToScene
+
+=====================
+*/
+void RE_AddPolyBufferToScene( polyBuffer_t* pPolyBuffer ) {
+	srfPolyBuffer_t*    pPolySurf;
+	int fogIndex;
+	fog_t*              fog;
+	vec3_t bounds[2];
+	int i;
+
+	if ( r_numpolybuffers >= max_polybuffers 
+		|| r_numpolyverts + pPolyBuffer->numVerts >= max_polyverts 
+	) {
+		ri.Printf( PRINT_DEVELOPER, "WARNING: RE_AddPolyBufferToScene: r_numpolybuffers or r_maxpolyverts reached\n");
+		return;
+	}
+
+	pPolySurf = &backEndData->polybuffers[r_numpolybuffers];
+	r_numpolybuffers++;
+
+	pPolySurf->surfaceType = SF_POLYBUFFER;
+	pPolySurf->pPolyBuffer = pPolyBuffer;
+
+	VectorCopy( pPolyBuffer->xyz[0], bounds[0] );
+	VectorCopy( pPolyBuffer->xyz[0], bounds[1] );
+	for ( i = 1 ; i < pPolyBuffer->numVerts ; i++ ) {
+		AddPointToBounds( pPolyBuffer->xyz[i], bounds[0], bounds[1] );
+	}
+	for ( fogIndex = 1 ; fogIndex < tr.world->numfogs ; fogIndex++ ) {
+		fog = &tr.world->fogs[fogIndex];
+		if ( bounds[1][0] >= fog->bounds[0][0]
+			 && bounds[1][1] >= fog->bounds[0][1]
+			 && bounds[1][2] >= fog->bounds[0][2]
+			 && bounds[0][0] <= fog->bounds[1][0]
+			 && bounds[0][1] <= fog->bounds[1][1]
+			 && bounds[0][2] <= fog->bounds[1][2] ) {
+			break;
+		}
+	}
+	if ( fogIndex == tr.world->numfogs ) {
+		fogIndex = 0;
+	}
+
+	pPolySurf->fogIndex = fogIndex;
 }

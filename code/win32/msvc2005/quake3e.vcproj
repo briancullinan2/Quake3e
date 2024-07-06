@@ -432,6 +432,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\..\qcommon\splines.c"
+				>
+			</File>
+			<File
 				RelativePath="..\..\qcommon\cmd.c"
 				>
 			</File>
@@ -601,6 +605,10 @@
 			</File>
 			<File
 				RelativePath="..\..\server\sv_ccmds.c"
+				>
+			</File>
+			<File
+				RelativePath="..\..\server\sv_bsp_mini.c"
 				>
 			</File>
 			<File

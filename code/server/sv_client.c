@@ -121,7 +121,12 @@ void SV_GetChallenge( const netadr_t *from ) {
 
 	// ignore if we are in single player
 #ifndef DEDICATED
-	if ( Cvar_VariableIntegerValue( "g_gametype" ) == GT_SINGLE_PLAYER || Cvar_VariableIntegerValue("ui_singlePlayerActive")) {
+#ifdef USE_LOCAL_DED
+	// allow people to connect to your single player server
+	if(!com_dedicated->integer)
+#endif
+	if ( Cvar_VariableIntegerValue( "g_gametype" ) == GT_SINGLE_PLAYER 
+		|| Cvar_VariableIntegerValue("ui_singlePlayerActive")) {
 		return;
 	}
 #endif
@@ -1586,8 +1591,19 @@ static void SV_VerifyPaks_f( client_t *cl ) {
 	int nClientChkSum[512];
 	const char *pArg;
 	qboolean bGood = qtrue;
+	char url[MAX_CVAR_VALUE_STRING];
 
-	// if we are pure, we "expect" the client to load certain things from
+	Com_Printf("VerifyPaks: %s\n", Cmd_ArgsFrom(0));
+
+#ifdef USE_MULTIVM_SERVER
+	if(cl->newWorld > 0) {
+		cl->gotCP = qtrue;
+		cl->pureAuthentic = qtrue;
+		return;
+	}
+#endif
+
+	// if we are pure, we "expect" the client to load certain things from 
 	// certain pk3 files, namely we want the client to have loaded the
 	// ui and cgame that we think should be loaded based on the pure setting
 	//
@@ -1596,7 +1612,8 @@ static void SV_VerifyPaks_f( client_t *cl ) {
 		nChkSum1 = nChkSum2 = 0;
 
 		// we run the game, so determine which cgame and ui the client "should" be running
-		bGood = FS_FileIsInPAK( "vm/cgame.qvm", &nChkSum1, NULL );
+		bGood = FS_FileIsInPAK( "vm/cgame.qvm", &nChkSum1, url );
+    Com_Printf("Pure pak: %s\n", url);
 		bGood &= FS_FileIsInPAK( "vm/ui.qvm", &nChkSum2, NULL );
 
 		nClientPaks = Cmd_Argc();
@@ -1610,6 +1627,7 @@ static void SV_VerifyPaks_f( client_t *cl ) {
 		pArg = Cmd_Argv(nCurArg++);
 		if ( !*pArg ) {
 			bGood = qfalse;
+Com_DPrintf("VerifyPaks: No args at all\n");
 		}
 		else
 		{
@@ -1619,7 +1637,7 @@ static void SV_VerifyPaks_f( client_t *cl ) {
 				return;
 			}
 		}
-
+	
 		// we basically use this while loop to avoid using 'goto' :)
 		while (bGood) {
 
@@ -1627,24 +1645,28 @@ static void SV_VerifyPaks_f( client_t *cl ) {
 			// numChecksums is encoded
 			if (nClientPaks < 6) {
 				bGood = qfalse;
+Com_DPrintf("VerifyPaks: Not enough paks %i\n", nClientPaks);
 				break;
 			}
 			// verify first to be the cgame checksum
 			pArg = Cmd_Argv(nCurArg++);
 			if ( !*pArg || *pArg == '@' || atoi(pArg) != nChkSum1 ) {
 				bGood = qfalse;
+Com_DPrintf("VerifyPaks: CGame doesn't match %s != %i (%s)\n", pArg, nChkSum1, url);
 				break;
 			}
 			// verify the second to be the ui checksum
 			pArg = Cmd_Argv(nCurArg++);
 			if ( !*pArg || *pArg == '@' || atoi(pArg) != nChkSum2 ) {
 				bGood = qfalse;
+Com_DPrintf("VerifyPaks: UI doesn't match %s != %i\n", pArg, nChkSum2);
 				break;
 			}
 			// should be sitting at the delimeter now
 			pArg = Cmd_Argv(nCurArg++);
 			if (*pArg != '@') {
 				bGood = qfalse;
+Com_DPrintf("VerifyPaks: Delimiter is off %s\n", pArg);
 				break;
 			}
 			// store checksums since tokenization is not re-entrant
@@ -1663,6 +1685,7 @@ static void SV_VerifyPaks_f( client_t *cl ) {
 						continue;
 					if (nClientChkSum[i] == nClientChkSum[j]) {
 						bGood = qfalse;
+Com_DPrintf("VerifyPaks: Duplicate checksums: %i == %i\n", i, j);
 						break;
 					}
 				}
@@ -1676,6 +1699,7 @@ static void SV_VerifyPaks_f( client_t *cl ) {
 			for ( i = 0; i < nClientPaks; i++ ) {
 				if ( !FS_IsPureChecksum( nClientChkSum[i] ) ) {
 					bGood = qfalse;
+Com_DPrintf("VerifyPaks: Checksum doesn't exist: %i\n", nClientChkSum[i]);
 					break;
 				}
 			}
@@ -1691,6 +1715,7 @@ static void SV_VerifyPaks_f( client_t *cl ) {
 			nChkSum1 ^= nClientPaks;
 			if (nChkSum1 != nClientChkSum[nClientPaks]) {
 				bGood = qfalse;
+Com_DPrintf("VerifyPaks: Number of checksums wrong: %i != %i\n", nChkSum1, nClientChkSum[nClientPaks]);
 				break;
 			}
 
@@ -1701,6 +1726,7 @@ static void SV_VerifyPaks_f( client_t *cl ) {
 		cl->gotCP = qtrue;
 
 		if ( bGood ) {
+      Com_Printf("Client is authentic\n");
 			cl->pureAuthentic = qtrue;
 		} else {
 			cl->pureAuthentic = qfalse;
@@ -2231,7 +2257,9 @@ void SV_ExecuteClientMessage( client_t *cl, msg_t *msg ) {
 
 	cl->messageAcknowledge = MSG_ReadLong( msg );
 
-	//if ( cl->messageAcknowledge < 0 ) {
+#ifdef __WASM__
+	if ( cl->messageAcknowledge < 0 ) // {
+#endif
 	if ( cl->netchan.outgoingSequence - cl->messageAcknowledge <= 0 ) {
 		// usually only hackers create messages like this
 		// it is more annoying for them to let them hanging
@@ -2284,6 +2312,10 @@ void SV_ExecuteClientMessage( client_t *cl, msg_t *msg ) {
 			// send initial gamestate, client may not acknowledge it in next command but start downloading after SV_ClientCommand()
 			if ( !SVC_RateLimit( &cl->gamestate_rate, 2, 1000 ) ) {
 				SV_SendClientGameState( cl );
+#ifdef __WASM__
+				SV_SendClientGameState( cl );
+				SV_SendClientGameState( cl );
+#endif
 			}
 			return;
 		}

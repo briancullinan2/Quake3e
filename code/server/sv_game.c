@@ -59,6 +59,7 @@ playerState_t *SV_GameClientNum( int num ) {
 svEntity_t	*SV_SvEntityForGentity( sharedEntity_t *gEnt ) {
 	if ( !gEnt || gEnt->s.number < 0 || gEnt->s.number >= MAX_GENTITIES ) {
 		Com_Error( ERR_DROP, "SV_SvEntityForGentity: bad gEnt" );
+		return NULL;
 	}
 	return &sv.svEntities[ gEnt->s.number ];
 }
@@ -364,6 +365,9 @@ static intptr_t SV_GameSystemCalls( intptr_t *args ) {
 		Com_Printf( "%s", (const char*)VMA(1) );
 		return 0;
 	case G_ERROR:
+		if(Q_stristr((const char*)VMA(1), "MD3 identifier 0")) {
+			return 0;
+		}
 		Com_Error( ERR_DROP, "%s", (const char*)VMA(1) );
 		return 0;
 	case G_MILLISECONDS:

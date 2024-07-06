@@ -141,6 +141,7 @@ void R_ColorShiftLightingBytes( const byte in[4], byte out[4], qboolean hasAlpha
 	if ( hasAlpha ) {
 		out[3] = in[3];
 	}
+
 }
 
 
@@ -574,6 +575,150 @@ static void GenerateNormals( srfSurfaceFace_t *face )
 #endif // USE_PMLIGHT
 
 
+
+#ifdef USE_AUTO_TERRAIN
+
+
+
+
+/*
+   GetShaderIndexForPoint() - ydnar
+   for shader-indexed surfaces (terrain), find a matching index from the indexmap
+ */
+
+byte GetShaderIndexForPoint( const vec3_t eMinmax[2], const vec3_t point, const float s, const float t ){
+	/* early out if no indexmap */
+if(!s_worldData.terrainImage) {
+	return 0;
+}
+
+	/* this code is really broken */
+#if 0
+	/* legacy precision fudges for terrain */
+	Vector3 mins, maxs;
+	for ( int i = 0; i < 3; i++ )
+	{
+		mins[ i ] = floor( eMinmax.mins[ i ] + 0.1 );
+		maxs[ i ] = floor( eMinmax.maxs[ i ] + 0.1 );
+	}
+	const Vector3 size = maxs - mins;
+
+	/* find st (fixme: support more than just z-axis projection) */
+	const float s = std::clamp( floor( point[ 0 ] + 0.1f - mins[ 0 ] ) / size[ 0 ], 0.0, 1.0 );
+	const float t = std::clamp( floor( maxs[ 1 ] - point[ 1 ] + 0.1f ) / size[ 1 ], 0.0, 1.0 );
+
+	/* make xy */
+	const int x = ( im->w - 1 ) * s;
+	const int y = ( im->h - 1 ) * t;
+#else
+	/* get size */
+	vec3_t size;
+	VectorSubtract(eMinmax[1], eMinmax[0], size);
+
+	/* calc st */
+	const float s2 = ( point[ 0 ] - eMinmax[0][ 0 ] ) / size[ 0 ];
+	const float t2 = ( eMinmax[1][ 1 ] - point[ 1 ] ) / size[ 1 ];
+
+	/* calc xy */
+	int x = s2 * s_worldData.terrainWidth;
+	if(x < 0)
+		x = 0;
+	if(x > s_worldData.terrainWidth - 1 )
+		x = s_worldData.terrainWidth - 1;
+
+
+	int y = t2 * s_worldData.terrainHeight;
+	if(y < 0)
+		y = 0;
+	if(y > s_worldData.terrainHeight - 1 )
+		y = s_worldData.terrainHeight - 1;
+#endif
+
+	/* return index */
+	//Com_Printf("found: %i\n", s_worldData.terrainImage[ y * s_worldData.terrainWidth * 4 + x * 4 ]);
+	if(s_worldData.terrainFlip) {
+		return s_worldData.terrainImage[ (s_worldData.terrainHeight - y) * s_worldData.terrainWidth * 4 + x * 4 ];
+	} else {
+		return s_worldData.terrainImage[ y * s_worldData.terrainWidth * 4 + x * 4 ];
+	}
+}
+
+/*
+   GetIndexedShader() - ydnar
+   for a given set of indexes and an indexmap, get a shader and set the vertex alpha in-place
+   this combines a couple different functions from terrain.c
+ */
+
+shader_t *GetIndexedShader( const shader_t *parent, int numPoints, byte *shaderIndexes ){
+	/* early out if bad data */
+	if ( s_worldData.terrainImage == NULL || numPoints <= 0 || shaderIndexes == NULL ) {
+		return R_FindShader( "default", LIGHTMAP_NONE, qfalse );
+	}
+
+	/* determine min/max index */
+	byte minShaderIndex = 255;
+	byte maxShaderIndex = 0;
+	for ( int i = 0; i < numPoints; i++ )
+	{
+		minShaderIndex = MIN( minShaderIndex, shaderIndexes[ i ] );
+		maxShaderIndex = MAX( maxShaderIndex, shaderIndexes[ i ] );
+	}
+
+	/* set alpha inline */
+	for ( int i = 0; i < numPoints; i++ )
+	{
+		/* straight rip from terrain.c */
+		if ( shaderIndexes[ i ] < maxShaderIndex ) {
+			shaderIndexes[ i ] = 0;
+		}
+		else{
+			shaderIndexes[ i ] = 255;
+		}
+	}
+
+	/* get the shader */
+	shader_t *si = R_FindShader( ( minShaderIndex == maxShaderIndex )?
+	                            va( "textures/%s_%i", s_worldData.terrainMaster, maxShaderIndex ):
+	                            va( "textures/%s_%ito%i", s_worldData.terrainMaster, minShaderIndex, maxShaderIndex ), LIGHTMAP_NONE, qfalse );
+//Com_Printf("shader found: %s\n", si->name);
+	/* inherit a few things from parent shader */
+	/*if ( parent->globalTexture ) {
+		si->globalTexture = true;
+	}
+	if ( parent->forceMeta ) {
+		si->forceMeta = true;
+	}
+	if ( parent->nonplanar ) {
+		si->nonplanar = true;
+	}
+	if ( si->shadeAngleDegrees == 0.0 ) {
+		si->shadeAngleDegrees = parent->shadeAngleDegrees;
+	}
+	if ( parent->tcGen && !si->tcGen ) {
+		// set xy texture projection
+		si->tcGen = true;
+		si->vecs[ 0 ] = parent->vecs[ 0 ];
+		si->vecs[ 1 ] = parent->vecs[ 1 ];
+	}
+	if ( vector3_length( parent->lightmapAxis ) != 0.0f && vector3_length( si->lightmapAxis ) == 0.0f ) {
+		// set lightmap projection axis 
+		si->lightmapAxis = parent->lightmapAxis;
+	}
+	*/
+	//si->defaultShader = parent;
+	si->lightmapIndex = parent->lightmapIndex;
+	si->lightmapSearchIndex = parent->lightmapSearchIndex;
+	si->needsNormal = parent->needsNormal;
+	si->needsST2 = parent->needsST2;
+	si->normalOffset = parent->normalOffset;
+	/* return the shader */
+	return si;
+}
+
+#endif
+
+
+
 /*
 ===============
 ParseFace
@@ -622,11 +767,13 @@ static void ParseFace( const dsurface_t *ds, const drawVert_t *verts, msurface_t
 	cv->numIndices = numIndexes;
 	cv->ofsIndices = ofsIndexes;
 
+	ClearBounds( cv->bounds[0], cv->bounds[1] );
 	verts += LittleLong( ds->firstVert );
 	for ( i = 0 ; i < numPoints ; i++ ) {
 		for ( j = 0 ; j < 3 ; j++ ) {
 			cv->points[i][j] = LittleFloat( verts[i].xyz[j] );
 		}
+		AddPointToBounds( cv->points[i], cv->bounds[0], cv->bounds[1] );
 		for ( j = 0 ; j < 2 ; j++ ) {
 			cv->points[i][3+j] = LittleFloat( verts[i].st[j] );
 			cv->points[i][5+j] = LittleFloat( verts[i].lightmap[j] );
@@ -669,6 +816,41 @@ static void ParseFace( const dsurface_t *ds, const drawVert_t *verts, msurface_t
 	cv->plane.dist = DotProduct( cv->points[0], cv->plane.normal );
 	SetPlaneSignbits( &cv->plane );
 	cv->plane.type = PlaneTypeForNormal( cv->plane.normal );
+
+#ifdef USE_AUTO_TERRAIN
+if(r_autoTerrain->integer) {
+	shader_t        *parent;
+	byte shaderIndexes[ 256 ];
+	float offsets[ 256 ];
+	if((surf->shader->surfaceFlags & SURF_TERRAIN)
+		|| (surf->shader->remappedShader
+		&& surf->shader->remappedShader->surfaceFlags & SURF_TERRAIN)) {
+
+		for ( i = 0; i < numPoints; i++ )
+		{
+			shaderIndexes[ i ] = GetShaderIndexForPoint( s_worldData.bounds, cv->points[i], cv->points[i][3], cv->points[i][4] );
+			offsets[ i ] = 0; // b->im->offsets[ shaderIndexes[ i ] ];
+			//%	Sys_Printf( "%f ", offsets[ i ] );
+		}
+
+		/* get matching shader and set alpha */
+		parent = surf->shader;
+		surf->shader = GetIndexedShader( parent, numPoints, shaderIndexes );
+		if(surf->shader->defaultShader) {
+			surf->shader = parent;
+		}
+
+		for ( i = 0; i < numPoints; i++ )
+		{
+			((byte *)&cv->points[i][7])[3] = shaderIndexes[ i ];
+		}
+	} else {
+		//Com_Printf("terrain %s\n", surf->shader->name);
+	}
+
+	
+}
+#endif
 
 	surf->data = (surfaceType_t *)cv;
 }
@@ -809,12 +991,50 @@ static void ParseTriSurf( const dsurface_t *ds, const drawVert_t *verts, msurfac
 		}
 
 		R_ColorShiftLightingBytes( verts[i].color.rgba, tri->verts[i].color.rgba, qtrue );
+#if 0 //def USE_AUTO_TERRAIN
+{
+			tri->verts[i].color.rgba[3] = (tri->verts[i].xyz[2] - s_worldData.bounds[0][2]) / (s_worldData.bounds[1][2] - s_worldData.bounds[0][2]);
+}
+#endif
 		if ( lightmapNum >= 0 && tr.mergeLightmaps ) {
 			// adjust lightmap coords
 			tri->verts[i].lightmap[0] = tri->verts[i].lightmap[0] * tr.lightmapScale[0] + lightmapX;
 			tri->verts[i].lightmap[1] = tri->verts[i].lightmap[1] * tr.lightmapScale[1] + lightmapY;
 		}
 	}
+
+#if 0 //def USE_AUTO_TERRAIN
+{
+	float oneFifth = (s_worldData.bounds[1][2] - s_worldData.bounds[0][2]) / 8;
+	float center = (tri->bounds[1][2] + (tri->bounds[1][2] - tri->bounds[0][2]) / 2) - s_worldData.bounds[0][2]; // + cv->plane.normal[2] * (cv->plane.dist / 2) - s_worldData.bounds[0][2];
+	Com_Printf("oneFifth: %s\n", surf->shader->name);
+
+	//Com_Printf("plane: %f\n", center);
+	if((surf->shader->surfaceFlags & SURF_TERRAIN)
+		|| surf->shader == s_worldData.terrainShader[0]
+		|| surf->shader == s_worldData.terrainShader[1]) {
+		//Com_Printf("normal: %f > %f\n", cv->points[0][2], oneFifth + s_worldData.bounds[0][2]);
+		if(center > (oneFifth * 7) ) {
+			surf->shader = s_worldData.terrainShader[7];
+		} else 
+		if(center > (oneFifth * 6) && tri->verts[0].normal[2] > 1) {
+			surf->shader = s_worldData.terrainShader[6];
+		} else
+		if(center > (oneFifth * 5)) {
+			surf->shader = s_worldData.terrainShader[5];
+		} else
+		if(center > (oneFifth * 4)) {
+			surf->shader = s_worldData.terrainShader[4];
+		} else 
+		if(center > (oneFifth * 3)) {
+			surf->shader = s_worldData.terrainShader[3];
+		} else {
+			surf->shader = s_worldData.terrainShader[2];
+		} 
+	}
+}
+#endif
+
 
 	// copy indexes
 	indexes += LittleLong( ds->firstIndex );
@@ -2120,7 +2340,7 @@ static void R_LoadEntities( const lump_t *l ) {
 			}
 			*vs++ = '\0';
 			if ( r_vertexLight->integer && tr.vertexLightingAllowed ) {
-				RE_RemapShader(value, s, "0");
+				RE_RemapShader(value, vs, "0");
 			}
 			continue;
 		}
@@ -2133,9 +2353,31 @@ static void R_LoadEntities( const lump_t *l ) {
 				break;
 			}
 			*vs++ = '\0';
-			RE_RemapShader(value, s, "0");
+			RE_RemapShader(value, vs, "0");
 			continue;
 		}
+
+#ifdef USE_AUTO_TERRAIN
+if(r_autoTerrain->integer) {
+		s = "_shader";
+		if (!Q_strncmp(keyname, s, (int)strlen(s)) ) {
+			Q_strncpyz( w->terrainMaster, value, MAX_QPATH );
+			 
+		}
+		s = "_indexmap";
+		if (!Q_strncmp(keyname, s, (int)strlen(s)) ) {
+			Q_strncpyz( w->terrainIndex, value, MAX_QPATH );
+			 
+		}
+		s = "_layers";
+		if (!Q_strncmp(keyname, s, (int)strlen(s)) ) {
+			w->terrainLayers = atoi(value);
+		}
+}
+
+#endif
+
+
 		// check for a different grid size
 		if (!Q_stricmp(keyname, "gridsize")) {
 			//sscanf(value, "%f %f %f", &w->lightGridSize[0], &w->lightGridSize[1], &w->lightGridSize[2] );
@@ -2166,6 +2408,10 @@ qboolean RE_GetEntityToken( char *buffer, int size ) {
 		return qtrue;
 	}
 }
+
+
+
+const char *R_LoadImage( const char *name, byte **pic, int *width, int *height );
 
 
 /*
@@ -2246,6 +2492,55 @@ void RE_LoadWorldMap( const char *name ) {
 	// load into heap
 	R_LoadLightmaps( &header->lumps[LUMP_LIGHTMAPS] );
 	R_LoadShaders( &header->lumps[LUMP_SHADERS] );
+	R_LoadEntities( &header->lumps[LUMP_ENTITIES] );
+
+#ifdef USE_AUTO_TERRAIN
+if(r_autoTerrain->integer) {
+		int j;
+		lump_t *subs = &header->lumps[LUMP_MODELS];
+		const dmodel_t *in = (void *)(fileBase + subs->fileofs);
+
+		// checkout shaders for terrain
+
+if(s_worldData.terrainIndex[0]) {
+		R_LoadImage(s_worldData.terrainIndex, &s_worldData.terrainImage, &s_worldData.terrainWidth, &s_worldData.terrainHeight);
+} 
+if(!s_worldData.terrainImage) {
+		R_LoadImage(va("maps/%s_alphamap.tga", s_worldData.baseName), &s_worldData.terrainImage, &s_worldData.terrainWidth, &s_worldData.terrainHeight);
+}
+if(!s_worldData.terrainImage) {
+		R_LoadImage(va("maps/%s_tracemap.tga", s_worldData.baseName), &s_worldData.terrainImage, &s_worldData.terrainWidth, &s_worldData.terrainHeight);
+	s_worldData.terrainFlip = qtrue;
+}
+
+if(s_worldData.terrainImage) {
+	// if we have an image but no layers default to 3 i guess
+	if(!s_worldData.terrainLayers) {
+		s_worldData.terrainLayers = 3;
+	}
+
+	for ( i = 0; i < s_worldData.terrainHeight * s_worldData.terrainWidth * 4; i++ )
+	{
+		s_worldData.terrainImage[ i ] = ( ( s_worldData.terrainImage[ i ] & 0xFF ) * s_worldData.terrainLayers ) / 256;
+		if ( s_worldData.terrainImage[ i ] >= s_worldData.terrainLayers ) {
+			s_worldData.terrainImage[ i ] = s_worldData.terrainLayers - 1;
+		}
+	}
+	
+}
+
+
+		// read the map bounds out of the first submodel (world mesh)
+		for (j=0 ; j<3 ; j++) {
+			s_worldData.bounds[0][j] = LittleFloat (in->mins[j]);
+			s_worldData.bounds[1][j] = LittleFloat (in->maxs[j]);
+		}
+
+		// as the map loads, check the plane normals and update the shader for the various surfaces
+
+}
+#endif
+
 	R_LoadPlanes( &header->lumps[LUMP_PLANES] );
 	R_LoadFogs( &header->lumps[LUMP_FOGS], &header->lumps[LUMP_BRUSHES], &header->lumps[LUMP_BRUSHSIDES] );
 	R_LoadSurfaces( &header->lumps[LUMP_SURFACES], &header->lumps[LUMP_DRAWVERTS], &header->lumps[LUMP_DRAWINDEXES] );
@@ -2253,7 +2548,6 @@ void RE_LoadWorldMap( const char *name ) {
 	R_LoadNodesAndLeafs( &header->lumps[LUMP_NODES], &header->lumps[LUMP_LEAFS] );
 	R_LoadSubmodels( &header->lumps[LUMP_MODELS] );
 	R_LoadVisibility( &header->lumps[LUMP_VISIBILITY] );
-	R_LoadEntities( &header->lumps[LUMP_ENTITIES] );
 	R_LoadLightGrid( &header->lumps[LUMP_LIGHTGRID] );
 
 #ifdef USE_VBO

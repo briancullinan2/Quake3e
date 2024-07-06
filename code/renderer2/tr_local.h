@@ -382,7 +382,7 @@ typedef enum
 	ST_GLSL
 } stageType_t;
 
-typedef struct {
+typedef struct shaderStage_s {
 	qboolean		active;
 	
 	textureBundle_t	bundle[NUM_TEXTURE_BUNDLES];
@@ -436,6 +436,7 @@ typedef struct {
 
 typedef struct shader_s {
 	char		name[MAX_QPATH];		// game path, including extension
+  int     lastTimeUsed;
 	int			lightmapSearchIndex;	// for a shader to match, both name and lightmapIndex must match
 	int			lightmapIndex;			// for rendering
 
@@ -450,6 +451,8 @@ typedef struct shader_s {
 										// something calls RE_RegisterShader again with
 										// the same name, we don't try looking for it again
 
+	qboolean	noVertexLightingCollapse;
+	qboolean  allowCompress;
 	qboolean	explicitlyDefined;		// found in a .shader file
 
 	int			surfaceFlags;			// if explicitlyDefined, this will have SURF_* flags
@@ -752,6 +755,9 @@ typedef struct {
 	int			numPolys;
 	struct srfPoly_s	*polys;
 
+	int numPolyBuffers;
+	struct srfPolyBuffer_s  *polybuffers;
+
 	int			numDrawSurfs;
 	struct drawSurf_s	*drawSurfs;
 
@@ -804,6 +810,13 @@ typedef struct {
 } fog_t;
 
 typedef enum {
+	PV_NONE = 0,
+	PV_PORTAL, // this view is through a portal
+	PV_MIRROR, // portal + inverted face culling
+	PV_COUNT
+} portalView_t;
+
+typedef enum {
 	VPF_NONE            = 0x00,
 	VPF_NOVIEWMODEL     = 0x01,
 	VPF_SHADOWMAP       = 0x02,
@@ -819,6 +832,8 @@ typedef struct {
 	orientationr_t	or;
 	orientationr_t	world;
 	vec3_t		pvsOrigin;			// may be different than or.origin for portals
+	portalView_t portalView;
+  int       portalEntity;
 	qboolean	isPortal;			// true if this view is through a portal
 	qboolean	isMirror;			// the portal is a mirror, invert the face culling
 	viewParmFlags_t flags;
@@ -860,6 +875,7 @@ typedef enum {
 	SF_IQM,
 	SF_FLARE,
 	SF_ENTITY,				// beams, rails, lightning, etc that can be determined by entity
+	SF_POLYBUFFER,
 	SF_VAO_MDVMESH,
 	SF_VAO_IQM,
 
@@ -888,6 +904,12 @@ typedef struct srfPoly_s {
 	polyVert_t		*verts;
 } srfPoly_t;
 
+
+typedef struct srfPolyBuffer_s {
+	surfaceType_t surfaceType;
+	int fogIndex;
+	polyBuffer_t*   pPolyBuffer;
+} srfPolyBuffer_t;
 
 typedef struct srfFlare_s {
 	surfaceType_t	surfaceType;
@@ -1483,6 +1505,7 @@ typedef struct {
 */
 typedef struct {
 	qboolean				registered;		// cleared at shutdown, set at beginRegistration
+  int							lastRegistrationTime;
 
 	int						visIndex;
 	int						visClusters[MAX_VISCOUNTS];
@@ -1819,7 +1842,7 @@ extern	cvar_t	*r_debugSort;
 
 extern	cvar_t	*r_printShaders;
 
-extern cvar_t	*r_marksOnTriangleMeshes;
+extern  cvar_t	*r_marksOnTriangleMeshes;
 
 //====================================================================
 
@@ -1862,7 +1885,7 @@ void R_AddNullModelSurfaces( trRefEntity_t *e );
 void R_AddBeamSurfaces( trRefEntity_t *e );
 void R_AddRailSurfaces( trRefEntity_t *e, qboolean isUnderwater );
 void R_AddLightningBoltSurfaces( trRefEntity_t *e );
-
+void R_AddPolygonBufferSurfaces( void );
 void R_AddPolygonSurfaces( void );
 
 void R_DecomposeSort( unsigned sort, int *entityNum, shader_t **shader, 
@@ -2241,6 +2264,7 @@ void R_InitNextFrame( void );
 void RE_ClearScene( void );
 void RE_AddRefEntityToScene( const refEntity_t *ent, qboolean intShaderTime );
 void RE_AddPolyToScene( qhandle_t hShader , int numVerts, const polyVert_t *verts, int num );
+void RE_AddPolyBufferToScene( polyBuffer_t* pPolyBuffer );
 void RE_AddLightToScene( const vec3_t org, float intensity, float r, float g, float b );
 void RE_AddAdditiveLightToScene( const vec3_t org, float intensity, float r, float g, float b );
 void RE_BeginScene( const refdef_t *fd );
@@ -2445,6 +2469,7 @@ typedef enum {
 // the main view, all the 3D icons, etc
 #define	MAX_POLYS		600
 #define	MAX_POLYVERTS	3000
+#define MAX_POLYBUFFERS	256
 
 // all of the information needed by the back end must be
 // contained in a backEndData_t
@@ -2454,12 +2479,15 @@ typedef struct {
 	trRefEntity_t	entities[MAX_REFENTITIES];
 	srfPoly_t	*polys;//[MAX_POLYS];
 	polyVert_t	*polyVerts;//[MAX_POLYVERTS];
+	srfPolyBuffer_t *polybuffers; //[MAX_POLYBUFFERS];
+  int	*indexes;//[MAX_POLYVERTS];
 	pshadow_t pshadows[MAX_CALC_PSHADOWS];
 	renderCommandList_t	commands;
 } backEndData_t;
 
 extern	int		max_polys;
 extern	int		max_polyverts;
+extern	int		max_polybuffers;
 
 extern	backEndData_t	*backEndData;	// the second one may not be allocated
 

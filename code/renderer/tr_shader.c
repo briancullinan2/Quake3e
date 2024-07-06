@@ -1478,7 +1478,11 @@ static const infoParm_t infoParms[] = {
 	{"pointlight",	0,	SURF_POINTLIGHT, 0 },	// sample lighting at vertexes
 	{"nolightmap",	0,	SURF_NOLIGHTMAP,0 },	// don't generate a lightmap
 	{"nodlight",	0,	SURF_NODLIGHT, 0 },		// don't ever add dynamic lights
-	{"dust",		0,	SURF_DUST, 0}			// leave a dust trail when walking on this surface
+	{"dust",		0,	SURF_DUST, 0},			// leave a dust trail when walking on this surface
+#ifdef USE_AUTO_TERRAIN
+	{"terrain",		0,	SURF_TERRAIN, 0},			// leave a dust trail when walking on this surface
+#endif
+	{NULL}
 };
 
 
@@ -1896,7 +1900,7 @@ static qboolean ParseShader( const char **text )
 			shader.noPicMip = 1;
 			continue;
 		}
-		else if ( !Q_stricmp( token, "novlcollapse" ) && s_extendedShader )
+		else if ( !Q_stricmp( token, "novlcollapse" ) /* && s_extendedShader */ )
 		{
 			shader.noVLcollapse = 1;
 			continue;
