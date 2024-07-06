@@ -593,6 +593,9 @@ static void GenerateNormals( srfSurfaceFace_t *face )
 
 byte GetShaderIndexForPoint( const vec3_t eMinmax[2], const vec3_t point, const float s, const float t ){
 	/* early out if no indexmap */
+if(!s_worldData.terrainImage) {
+	return 0;
+}
 
 	/* this code is really broken */
 #if 0
@@ -637,8 +640,12 @@ byte GetShaderIndexForPoint( const vec3_t eMinmax[2], const vec3_t point, const 
 #endif
 
 	/* return index */
-	Com_Printf("found: %i\n", s_worldData.terrainImage[ y * s_worldData.terrainWidth * 4 + x * 4 ]);
-	return s_worldData.terrainImage[ y * s_worldData.terrainWidth * 4 + x * 4 ];
+	//Com_Printf("found: %i\n", s_worldData.terrainImage[ y * s_worldData.terrainWidth * 4 + x * 4 ]);
+	if(s_worldData.terrainFlip) {
+		return s_worldData.terrainImage[ (s_worldData.terrainHeight - y) * s_worldData.terrainWidth * 4 + x * 4 ];
+	} else {
+		return s_worldData.terrainImage[ y * s_worldData.terrainWidth * 4 + x * 4 ];
+	}
 }
 
 /*
@@ -703,7 +710,9 @@ shader_t *GetIndexedShader( const shader_t *parent, int numPoints, byte *shaderI
 		si->lightmapAxis = parent->lightmapAxis;
 	}
 	*/
-
+	//si->defaultShader = parent;
+	si->lightmapIndex = parent->lightmapIndex;
+	si->lightmapSearchIndex = parent->lightmapSearchIndex;
 	si->needsNormal = parent->needsNormal;
 	si->needsST2 = parent->needsST2;
 	si->normalOffset = parent->normalOffset;
@@ -820,7 +829,12 @@ static void ParseFace( const dsurface_t *ds, const drawVert_t *verts, msurface_t
 	float offsets[ 256 ];
 	if((surf->shader->surfaceFlags & SURF_TERRAIN)
 		|| surf->shader == s_worldData.terrainShader[0]
-		|| surf->shader == s_worldData.terrainShader[1]) {
+		|| surf->shader == s_worldData.terrainShader[1]
+		|| (surf->shader->remappedShader && (
+		(surf->shader->remappedShader->surfaceFlags & SURF_TERRAIN)
+		|| surf->shader->remappedShader == s_worldData.terrainShader[0]
+		|| surf->shader->remappedShader == s_worldData.terrainShader[1]))) {
+
 		for ( i = 0; i < numPoints; i++ )
 		{
 			shaderIndexes[ i ] = GetShaderIndexForPoint( s_worldData.bounds, cv->points[i], cv->points[i][3], cv->points[i][4] );
@@ -831,11 +845,16 @@ static void ParseFace( const dsurface_t *ds, const drawVert_t *verts, msurface_t
 		/* get matching shader and set alpha */
 		parent = surf->shader;
 		surf->shader = GetIndexedShader( parent, numPoints, shaderIndexes );
+		if(surf->shader->defaultShader) {
+			surf->shader = parent;
+		}
 
 		for ( i = 0; i < numPoints; i++ )
 		{
 			((byte *)&cv->points[i][7])[3] = shaderIndexes[ i ];
 		}
+	} else {
+		//Com_Printf("terrain %s\n", surf->shader->name);
 	}
 
 	
@@ -2510,10 +2529,19 @@ if(s_worldData.terrainIndex[0]) {
 		R_LoadImage(s_worldData.terrainIndex, &s_worldData.terrainImage, &s_worldData.terrainWidth, &s_worldData.terrainHeight);
 } 
 if(!s_worldData.terrainImage) {
-		R_LoadImage(va("%s_tracemap.tga", s_worldData.baseName), &s_worldData.terrainImage, &s_worldData.terrainWidth, &s_worldData.terrainHeight);
+		R_LoadImage(va("maps/%s_alphamap.tga", s_worldData.baseName), &s_worldData.terrainImage, &s_worldData.terrainWidth, &s_worldData.terrainHeight);
+}
+if(!s_worldData.terrainImage) {
+		R_LoadImage(va("maps/%s_tracemap.tga", s_worldData.baseName), &s_worldData.terrainImage, &s_worldData.terrainWidth, &s_worldData.terrainHeight);
+	s_worldData.terrainFlip = qtrue;
 }
 
 if(s_worldData.terrainImage) {
+	// if we have an image but no layers default to 3 i guess
+	if(!s_worldData.terrainLayers) {
+		s_worldData.terrainLayers = 3;
+	}
+
 	for ( i = 0; i < s_worldData.terrainHeight * s_worldData.terrainWidth * 4; i++ )
 	{
 		s_worldData.terrainImage[ i ] = ( ( s_worldData.terrainImage[ i ] & 0xFF ) * s_worldData.terrainLayers ) / 256;

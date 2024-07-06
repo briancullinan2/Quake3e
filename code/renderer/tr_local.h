@@ -853,9 +853,10 @@ typedef struct {
 	char terrainMaster[MAX_QPATH];
 	char terrainIndex[MAX_QPATH];
 	byte *terrainImage;
-	int terrainLayers;
+	int terrainLayers:3;
 	int terrainHeight;
 	int terrainWidth;
+	qboolean terrainFlip;
 #endif
 	int			dataSize;
 	vec3_t		bounds[2];
