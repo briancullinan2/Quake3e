@@ -141,11 +141,6 @@ void R_ColorShiftLightingBytes( const byte in[4], byte out[4], qboolean hasAlpha
 	if ( hasAlpha ) {
 		out[3] = in[3];
 	}
-#if 0 //def USE_AUTO_TERRAIN
-{
-		out[3] = 255;
-}
-#endif
 
 }
 
@@ -823,17 +818,13 @@ static void ParseFace( const dsurface_t *ds, const drawVert_t *verts, msurface_t
 	cv->plane.type = PlaneTypeForNormal( cv->plane.normal );
 
 #ifdef USE_AUTO_TERRAIN
-{
+if(r_autoTerrain->integer) {
 	shader_t        *parent;
 	byte shaderIndexes[ 256 ];
 	float offsets[ 256 ];
 	if((surf->shader->surfaceFlags & SURF_TERRAIN)
-		|| surf->shader == s_worldData.terrainShader[0]
-		|| surf->shader == s_worldData.terrainShader[1]
-		|| (surf->shader->remappedShader && (
-		(surf->shader->remappedShader->surfaceFlags & SURF_TERRAIN)
-		|| surf->shader->remappedShader == s_worldData.terrainShader[0]
-		|| surf->shader->remappedShader == s_worldData.terrainShader[1]))) {
+		|| (surf->shader->remappedShader
+		&& surf->shader->remappedShader->surfaceFlags & SURF_TERRAIN)) {
 
 		for ( i = 0; i < numPoints; i++ )
 		{
@@ -2367,6 +2358,7 @@ static void R_LoadEntities( const lump_t *l ) {
 		}
 
 #ifdef USE_AUTO_TERRAIN
+if(r_autoTerrain->integer) {
 		s = "_shader";
 		if (!Q_strncmp(keyname, s, (int)strlen(s)) ) {
 			Q_strncpyz( w->terrainMaster, value, MAX_QPATH );
@@ -2381,6 +2373,8 @@ static void R_LoadEntities( const lump_t *l ) {
 		if (!Q_strncmp(keyname, s, (int)strlen(s)) ) {
 			w->terrainLayers = atoi(value);
 		}
+}
+
 #endif
 
 
@@ -2501,29 +2495,12 @@ void RE_LoadWorldMap( const char *name ) {
 	R_LoadEntities( &header->lumps[LUMP_ENTITIES] );
 
 #ifdef USE_AUTO_TERRAIN
-{
+if(r_autoTerrain->integer) {
 		int j;
 		lump_t *subs = &header->lumps[LUMP_MODELS];
 		const dmodel_t *in = (void *)(fileBase + subs->fileofs);
 
 		// checkout shaders for terrain
-		s_worldData.terrainShader[0] = R_FindShader("textures/common/terrain", LIGHTMAP_NONE, qtrue);
-		s_worldData.terrainShader[1] = R_FindShader("textures/common/terrain2", LIGHTMAP_NONE, qtrue);
-if(s_worldData.terrainMaster[0]) {
-		s_worldData.terrainShader[2] = R_FindShader(va("textures/%s_0.tga", s_worldData.terrainMaster), LIGHTMAP_NONE, qtrue);
-		s_worldData.terrainShader[3] = R_FindShader(va("textures/%s_0to1.tga", s_worldData.terrainMaster), LIGHTMAP_NONE, qtrue);
-		s_worldData.terrainShader[4] = R_FindShader(va("textures/%s_1.tga", s_worldData.terrainMaster), LIGHTMAP_NONE, qtrue);
-		s_worldData.terrainShader[5] = R_FindShader(va("textures/%s_1to2.tga", s_worldData.terrainMaster), LIGHTMAP_NONE, qtrue);
-		s_worldData.terrainShader[6] = R_FindShader(va("textures/%s_0to2.tga", s_worldData.terrainMaster), LIGHTMAP_NONE, qtrue);
-		s_worldData.terrainShader[7] = R_FindShader(va("textures/%s_2.tga", s_worldData.terrainMaster), LIGHTMAP_NONE, qtrue);
-} else {
-		s_worldData.terrainShader[2] = R_FindShader(va("textures/terrain/%s_0.tga", s_worldData.baseName), LIGHTMAP_NONE, qtrue);
-		s_worldData.terrainShader[3] = R_FindShader(va("textures/terrain/%s_0to1.tga", s_worldData.baseName), LIGHTMAP_NONE, qtrue);
-		s_worldData.terrainShader[4] = R_FindShader(va("textures/terrain/%s_1.tga", s_worldData.baseName), LIGHTMAP_NONE, qtrue);
-		s_worldData.terrainShader[5] = R_FindShader(va("textures/terrain/%s_1to2.tga", s_worldData.baseName), LIGHTMAP_NONE, qtrue);
-		s_worldData.terrainShader[6] = R_FindShader(va("textures/terrain/%s_0to2.tga", s_worldData.baseName), LIGHTMAP_NONE, qtrue);
-		s_worldData.terrainShader[7] = R_FindShader(va("textures/terrain/%s_2.tga", s_worldData.baseName), LIGHTMAP_NONE, qtrue);
-}
 
 if(s_worldData.terrainIndex[0]) {
 		R_LoadImage(s_worldData.terrainIndex, &s_worldData.terrainImage, &s_worldData.terrainWidth, &s_worldData.terrainHeight);

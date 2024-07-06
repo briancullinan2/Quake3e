@@ -189,6 +189,12 @@ int		max_polys;
 int		max_polyverts;
 int		max_polybuffers;
 
+
+#ifdef USE_AUTO_TERRAIN
+cvar_t	*r_autoTerrain;
+#endif
+
+
 static char gl_extensions[ 32768 ];
 
 #define GLE( ret, name, ... ) ret ( APIENTRY * q##name )( __VA_ARGS__ );
@@ -1736,6 +1742,11 @@ static void R_Register( void )
 	ri.Cvar_SetDescription( r_aviMotionJpegQuality, "Controls quality of Jpeg video capture when \\cl_aviMotionJpeg 1." );
 	r_screenshotJpegQuality = ri.Cvar_Get( "r_screenshotJpegQuality", "90", CVAR_ARCHIVE_ND );
 	ri.Cvar_SetDescription( r_screenshotJpegQuality, "Controls quality of Jpeg screenshots when using screenshotJpeg." );
+
+#ifdef USE_AUTO_TERRAIN
+	r_autoTerrain = ri.Cvar_Get( "r_autoTerrain", "90", CVAR_ARCHIVE_ND );
+	ri.Cvar_SetDescription( r_autoTerrain, "Allow mappers to request the renderer automatically re-apply alpha maps (aka the old way) to world geometry as it loads. For example, chaning seasons during gameplay." );
+#endif
 
 	if ( glConfig.vidWidth )
 		return;
