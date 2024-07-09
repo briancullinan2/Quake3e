@@ -537,7 +537,6 @@ void RE_RenderScene( const refdef_t *fd )
 	Com_Memset( &parms, 0, sizeof( parms ) );
 
 #ifdef USE_MULTIVM_RENDERER
-	rwi = world;
 	parms.newWorld = world;
 
 	parms.viewportX = tr.refdef.x * dvrXScale + (dvrXOffset * glConfig.vidWidth);

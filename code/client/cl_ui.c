@@ -34,7 +34,7 @@ GetClientState
 ====================
 */
 static void GetClientState( uiClientState_t *state ) {
-#ifdef USE_MULTIVM_CLIENT
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
 	int igs = cgvmi_ref;
 #endif
 	state->connectPacketCount = clc.connectPacketCount;
@@ -719,7 +719,7 @@ GetConfigString
 static int GetConfigString(int index, char *buf, int size)
 {
 	int		offset;
-#ifdef USE_MULTIVM_CLIENT
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
 	int igs = cgvmi_ref;
 #endif
 
@@ -839,7 +839,7 @@ static intptr_t CL_UISystemCalls( intptr_t *args ) {
 
 	case UI_CVAR_INFOSTRINGBUFFER:
 		VM_CHECKBOUNDS( uivm, args[2], args[3] );
-#ifdef USE_MULTIVM_CLIENT
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
     Cvar_InfoStringBuffer( args[1], VMA(2), args[3] );
 #else
 		Cvar_InfoStringBuffer( args[1], VMA(2), args[3] );

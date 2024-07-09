@@ -35,7 +35,7 @@ static cvar_t		*cl_graphheight;
 static cvar_t		*cl_graphscale;
 static cvar_t		*cl_graphshift;
 
-#ifdef USE_MULTIVM_CLIENT
+#if defined(USE_MULTIVM_RENDERER) || defined(USE_MULTIVM_CLIENT)
 float clientScreens[MAX_NUM_VMS][4] = {
 	{0,0,0,0},    {-1,-1,-1,-1},
 	{-1,-1,-1,-1},{-1,-1,-1,-1},
@@ -616,7 +616,7 @@ void CL_AddLagometerSnapshotInfo(clSnapshot_t *snapshot) {
 static void CL_CalculatePing( int ms ) {
 	int count, i, v;
   int			offset;
-#ifdef USE_MULTIVM_CLIENT
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
 	int igs = cgvmi_ref;
 #endif
 	cls.meanPing = 0;
@@ -633,7 +633,7 @@ static void CL_CalculatePing( int ms ) {
 		cls.meanPing /= count;
 	}
 
-#ifdef USE_MULTIVM_CLIENT
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
 	offset = cl.serverTimes[0 /*cgvmi_ref*/] - cl.snap.serverTime;
 #else
 	offset = cl.serverTime - cl.snap.serverTime;
@@ -814,7 +814,7 @@ static void SCR_DrawFPS( int t ) {
 }
 
 
-#ifdef USE_MULTIVM_CLIENT
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
 // draw a box around the current view where keypresses and mouse input is being sent
 void SCR_DrawCurrentView( void ) {
 	float	yf, wf;
@@ -999,7 +999,7 @@ void SCR_UpdateScreen( qboolean fromVM ) {
 
 	if(fromVM) {
 #ifdef USE_LAZY_MEMORY
-#ifdef USE_MULTIVM_CLIENT
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
 		re.SetDvrFrame(clientScreens[0 /*cgvmi_ref*/][0], clientScreens[0 /*cgvmi_ref*/][1], clientScreens[0 /*cgvmi_ref*/][2], clientScreens[0 /*cgvmi_ref*/][3]);
 #endif
 #endif
@@ -1032,7 +1032,7 @@ void SCR_UpdateScreen( qboolean fromVM ) {
 
 		CL_CalculatePing(ms);
 
-#ifdef USE_MULTIVM_CLIENT
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
 #ifdef USE_LAZY_MEMORY
     if(!re.SetDvrFrame) {
       Com_Error(ERR_FATAL, "WARNING: Renderer compiled without multiworld support!");
@@ -1055,7 +1055,7 @@ void SCR_UpdateScreen( qboolean fromVM ) {
 			VM_Call( uivm, 1, UI_REFRESH, cls.realtime );
 		}
 
-#ifdef USE_MULTIVM_CLIENT
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
 		if(clientScreens[0 /*cgvmi_ref*/][0] == 0
 			&& clientScreens[0 /*cgvmi_ref*/][1] == 0
 			&& clientScreens[0 /*cgvmi_ref*/][2] == 0
@@ -1075,13 +1075,13 @@ void SCR_UpdateScreen( qboolean fromVM ) {
 
 donewithupdate:
 
-#ifdef USE_MULTIVM_CLIENT
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
 #ifdef USE_LAZY_MEMORY
 	re.SetDvrFrame(0, 0, 1, 1);
 #endif
 #endif
 
-#ifdef USE_MULTIVM_CLIENT
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
 	if(cl_mvHighlight && cl_mvHighlight->integer)
 	 SCR_DrawCurrentView();
 #endif

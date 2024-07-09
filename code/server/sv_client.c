@@ -2112,8 +2112,6 @@ void SV_PrintLocations_f( client_t *client ) {
 }
 
 
-void CL_InitCGame( void );
-void CL_SendPureChecksums( void );
 
 
 
@@ -2152,20 +2150,6 @@ void SV_LoadVM( client_t *cl ) {
 		Com_Printf( "Can't find map %s\n", expanded );
 		return;
 	}
-
-	// looks like it's going to go through, shut down client just like SpawnServer
-	// New strategy, if client and server are the same process
-	//   shutdown the client to the mark to load a new map
-	//   regregister graphics after the server has set a new mark for the client to clear to
-	//   all other video processes remain the same
-#if 0
-#ifndef DEDICATED
-	CL_ShutdownAll();
-#endif
-	// but only clear to mark like client would and leave current map running
-	Hunk_ClearToMark();
-#endif
-
 
 	Sys_SetStatus( "Loading map %s\n", mapname );
 	Cvar_Get( va("mapname_%i", gvmi), mapname, CVAR_SERVERINFO | CVAR_ROM | CVAR_TAGGED_SPECIFIC );
@@ -2222,17 +2206,6 @@ void SV_LoadVM( client_t *cl ) {
 	gvmi = 0;
 	CM_SwitchMap(gameWorlds[gvmi]);
 	SV_SetAASgvm(gvmi);
-	// set new mark from above for client to clear to
-	Hunk_SetMark();
-
-#if 0 //ndef DEDICATED
-	CL_StartHunkUsers();
-
-	if(com_cl_running->integer) {
-		CL_InitCGame();
-		CL_SendPureChecksums();
-	}
-#endif
 }
 #endif
 
