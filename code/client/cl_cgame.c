@@ -75,7 +75,12 @@ static void CL_GetGlconfig( glconfig_t *glconfig ) {
 CL_GetUserCmd
 ====================
 */
-static qboolean CL_GetUserCmd( int cmdNumber, usercmd_t *ucmd, int *world ) {
+#ifdef USE_MULTIVM_CLIENT
+static qboolean CL_GetUserCmd( int cmdNumber, usercmd_t *ucmd, int *world ) 
+#else
+static qboolean CL_GetUserCmd( int cmdNumber, usercmd_t *ucmd ) 
+#endif
+{
 #ifdef USE_MULTIVM_CLIENT
 	int igs = cgvmi_ref;
 #endif
@@ -626,7 +631,7 @@ static intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 		// We can't call Com_EventLoop here, a restart will crash and this _does_ happen
 		// if there is a map change while we are downloading at pk3.
 		// ZOID
-#ifdef USE_MULTIVM_RENDERER
+#ifdef USE_MULTIVM_CLIENT
 		if(clientScreens[cgvmi_ref][0] > -1)
 #endif
 		SCR_UpdateScreen( qtrue );
@@ -940,7 +945,7 @@ static intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 
 	// engine extensions
 	case CG_R_ADDREFENTITYTOSCENE2:
-#ifdef USE_MULTIVM_RENDERER
+#ifdef USE_MULTIVM_CLIENT
 		if(clientScreens[cgvmi_ref][0] > -1)
 		re.AddRefEntityToScene( VMA(1), qtrue, worldMaps[cgvmi_ref] );
 #else
@@ -1231,8 +1236,10 @@ static void CL_FirstSnapshot( void ) {
 	}
 	cls.state = CA_ACTIVE;
 
+#ifdef USE_MULTIVM_CLIENT
 	Com_Printf("------------------ snap (%i) ----------------\n", igs);
-// clear old game so we will not switch back to old mod on disconnect
+#endif
+	// clear old game so we will not switch back to old mod on disconnect
 	CL_ResetOldGame();
 
 	// set the timedelta so we are exactly on this first frame

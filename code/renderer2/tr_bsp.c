@@ -302,6 +302,7 @@ static	void R_LoadLightmaps( const lump_t *l, const lump_t *surfs ) {
 			textureInternalFormat = GL_RGBA16;
 	}
 
+#if !defined(__WASM__) && !defined(USE_MULTIVM_SERVER) && !defined(USE_MULTIVM_RENDERER)
 	if (r_mergeLightmaps->integer)
 	{
 		int width  = tr.fatLightmapCols * tr.lightmapSize;
@@ -315,6 +316,8 @@ static	void R_LoadLightmaps( const lump_t *l, const lump_t *surfs ) {
 				tr.deluxemaps[i] = R_CreateImage(va("_fatdeluxemap%d", i), NULL, width, height, IMGTYPE_DELUXE, imgFlags, 0);
 		}
 	}
+#endif
+
 
 	for(i = 0; i < numLightmaps; i++)
 	{
@@ -322,6 +325,7 @@ static	void R_LoadLightmaps( const lump_t *l, const lump_t *surfs ) {
 		int lightmapnum = i;
 		// expand the 24 bit on-disk to 32 bit
 
+#if !defined(__WASM__) && !defined(USE_MULTIVM_SERVER) && !defined(USE_MULTIVM_RENDERER)
 		if (r_mergeLightmaps->integer)
 		{
 			int lightmaponpage = i % numLightmapsPerPage;
@@ -330,6 +334,7 @@ static	void R_LoadLightmaps( const lump_t *l, const lump_t *surfs ) {
 
 			lightmapnum /= numLightmapsPerPage;
 		}
+#endif
 
 		// if (tr.worldLightmapping)
 		{
@@ -469,9 +474,11 @@ static	void R_LoadLightmaps( const lump_t *l, const lump_t *surfs ) {
 				}
 			}
 
+#if !defined(__WASM__) && !defined(USE_MULTIVM_SERVER) && !defined(USE_MULTIVM_RENDERER)
 			if (r_mergeLightmaps->integer)
 				R_UpdateSubImage(tr.lightmaps[lightmapnum], image, xoff, yoff, tr.lightmapSize, tr.lightmapSize, textureInternalFormat);
 			else
+#endif
 				tr.lightmaps[i] = R_CreateImage(va("*lightmap%d", i), image, tr.lightmapSize, tr.lightmapSize, IMGTYPE_COLORALPHA, imgFlags, textureInternalFormat );
 
 			if (hdrLightmap)
@@ -498,9 +505,11 @@ static	void R_LoadLightmaps( const lump_t *l, const lump_t *surfs ) {
 				image[j*4+3] = 255;
 			}
 
+#if !defined(__WASM__) && !defined(USE_MULTIVM_SERVER) && !defined(USE_MULTIVM_RENDERER)
 			if (r_mergeLightmaps->integer)
 				R_UpdateSubImage(tr.deluxemaps[lightmapnum], image, xoff, yoff, tr.lightmapSize, tr.lightmapSize, GL_RGBA8 );
 			else
+#endif
 				tr.deluxemaps[i] = R_CreateImage(va("*deluxemap%d", i), image, tr.lightmapSize, tr.lightmapSize, IMGTYPE_DELUXE, imgFlags, 0 );
 		}
 	}

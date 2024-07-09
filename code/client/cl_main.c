@@ -1853,16 +1853,6 @@ doesn't know what graphics to reload
 */
 static void CL_Vid_Restart( refShutdownCode_t shutdownCode ) {
 
-/*
-#ifdef __WASM__
-  char *arg = Cmd_Argv(1);
-  if (!strcmp(arg, "fast")) {
-    CL_Vid_Restart_Fast();
-    return;
-  }
-#endif
-*/
-
 	// Settings may have changed so stop recording now
 	if ( CL_VideoRecording() )
 		CL_CloseAVI( qfalse );
@@ -2322,8 +2312,10 @@ and determine if we need to download them
 =================
 */
 void CL_InitDownloads( void ) {
+#ifdef USE_MULTIVM_CLIENT
 #ifdef USE_CURL
 	int igs = cgvmi_ref;
+#endif
 #endif
 
 	if ( !(cl_allowDownload->integer & DLF_ENABLE) )

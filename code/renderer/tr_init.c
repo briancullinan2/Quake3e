@@ -1532,8 +1532,8 @@ static void R_Register( void )
 	r_texturebits = ri.Cvar_Get( "r_texturebits", "0", CVAR_ARCHIVE_ND | CVAR_LATCH );
 	ri.Cvar_SetDescription( r_texturebits, "Number of texture bits per texture." );
 
-#ifdef __WASM__
-	r_mergeLightmaps = ri.Cvar_Get( "r_mergeLightmaps", "0", CVAR_ARCHIVE_ND | CVAR_LATCH );
+#if defined(__WASM__) || defined(USE_MULTIVM_SERVER) || defined(USE_MULTIVM_RENDERER)
+	r_mergeLightmaps = ri.Cvar_Get( "r_mergeLightmaps", "0", 0 );
 #else
 	r_mergeLightmaps = ri.Cvar_Get( "r_mergeLightmaps", "1", CVAR_ARCHIVE_ND | CVAR_LATCH );
 #endif

@@ -523,7 +523,11 @@ void RE_RenderScene( const refdef_t *fd )
 		ri.Error (ERR_DROP, "R_RenderScene: NULL worldmodel");
 	}
 
+#ifdef USE_MULTIVM_RENDERER
 	RE_BeginScene(fd, world);
+#else
+	RE_BeginScene(fd);
+#endif
 
 	// SmileTheory: playing with shadow mapping
 	if (!( fd->rdflags & RDF_NOWORLDMODEL ) && tr.refdef.num_dlights && r_dlightMode->integer >= 2)
