@@ -16,7 +16,7 @@ function initEnvironment(ENGINE) {
 	}
 	if(!ENV.memory) {
 		ENV.memory = new WebAssembly.Memory({ 
-			initial: 2100, 
+			initial: 2800, 
 			maximum: 16000,
 			/* 'shared': true */
 		})

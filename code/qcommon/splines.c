@@ -590,7 +590,7 @@ static void getActiveSegmentInfo(int segment, vec3_t origin, vec3_t direction, f
 */
 
 
-static idInterpolatedPosition *initInterpolatedPosition(vec3_t start, vec3_t end, long time) {
+static idInterpolatedPosition *initInterpolatedPosition(const vec3_t start, const vec3_t end, long time) {
 	idInterpolatedPosition *result = Z_Malloc(sizeof(idInterpolatedPosition));
 	result->pos.time = time;
 	result->pos.type = CP_INTERPOLATED;

@@ -2381,7 +2381,7 @@ static image_t *R_CreateImage3( const char *name, byte *pic, GLenum picFormat, i
 }
 
 
-Q_EXPORT void R_FinishImage3( image_t *image, GLenum picFormat, int numMips ) {
+void R_FinishImage3( image_t *image, GLenum picFormat, int numMips ) {
 	int      glWrapClampMode, mipWidth, mipHeight, miplevel;
 	qboolean mipmap = !!(image->flags & IMGFLAG_MIPMAP);
 	qboolean lastMip = qfalse;
@@ -2499,12 +2499,11 @@ void R_LoadPNG_Remote( const char *name, byte **pic, int *width, int *height );
 static const imageExtToLoaderMap_t imageLoaders[ ] =
 {
 	{ "tga",  R_LoadTGA },
-#ifndef __WASM__
+#ifndef __WASM__ // because it has these longjmps for error handling I would have to rewrite
 	{ "png",  R_LoadPNG },
-#endif
 	{ "jpg",  R_LoadJPG },
 	{ "jpeg", R_LoadJPG },
-//#endif
+#endif
 	{ "pcx",  R_LoadPCX },
 	{ "bmp",  R_LoadBMP }
 #ifdef __WASM__

@@ -67,7 +67,7 @@ RENDERER_DEFAULT=opengl2
 WASM=1
 CROSS_COMPILING=1
 BUILD_SERVER=0
-USE_SYSTEM_JPEG=0
+USE_SYSTEM_JPEG=1
 USE_IPV6=0
 USE_SDL=0
 USE_CURL=0
@@ -435,6 +435,7 @@ SHLIBLDFLAGS = -Wl,--no-entry $(LDFLAGS) \
 
 #  -fno-builtin -nostdlib 
 # -shared not supported
+#  -Wl,--export=CL_Try_LoadJPG,--export=CL_Fail_LoadJPG \
 
 CLIENT_LDFLAGS  = $(LDFLAGS) code/wasm/stack_ops.S \
 	-Wl,--export=sprintf       -Wl,--export=malloc  \
@@ -443,12 +444,11 @@ CLIENT_LDFLAGS  = $(LDFLAGS) code/wasm/stack_ops.S \
 	-Wl,--export=errno,--export=R_FindPalette \
   -Wl,--export=Key_ClearStates,--export=Key_GetCatcher \
   -Wl,--export=Key_SetCatcher,--export=CL_PacketEvent \
-  -Wl,--export=CL_Try_LoadJPG,--export=CL_Fail_LoadJPG \
   -Wl,--export=s_soundStarted,--export=s_soundMuted,--export=s_knownSfx \
   -Wl,--export=stackRestore,--export=stackSave,--export=stackAlloc \
   -Wl,--export=dma,--export=S_SoundInfo,--export=Cbuf_ExecuteText \
   -Wl,--export=Cbuf_AddText,--export=gw_minimized \
-  -Wl,--export=gw_active,--export=Z_Free \
+  -Wl,--export=gw_active,--export=Z_Free,--export=CL_R_FinishImage3 \
   -Wl,--export=CL_NextDownload,--export=com_fullyInitialized \
   -Wl,--export=Z_Malloc,--export=Sys_QueEvent,--export=MSG_Init \
   -Wl,--export=Com_RunAndTimeServerPacket,--export=Com_Frame \

@@ -361,20 +361,6 @@ rescan:
 
 /*
 ====================
-CL_CM_LoadMap
-
-Just adds default parameters that cgame doesn't need to know about
-====================
-*/
-static void CL_CM_LoadMap( const char *mapname ) {
-	int		checksum;
-
-	CM_LoadMap( mapname, qtrue, &checksum );
-}
-
-
-/*
-====================
 CL_ShutdonwCGame
 
 ====================
@@ -548,8 +534,11 @@ static intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 		SCR_UpdateScreen();
 		return 0;
 	case CG_CM_LOADMAP:
-		CL_CM_LoadMap( VMA(1) );
+	{
+		int checksum;
+		CM_LoadMap( VMA(1), qtrue, &checksum );
 		return 0;
+	}
 	case CG_CM_NUMINLINEMODELS:
 		return CM_NumInlineModels();
 	case CG_CM_INLINEMODEL:
