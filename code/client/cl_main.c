@@ -4051,7 +4051,7 @@ void CL_LoadVM_f( void ) {
 
 
 	} else 
-#ifdef USE_MULTIVM_CLIENT
+#if 0 //def USE_MULTIVM_CLIENT
 	if ( !Q_stricmp( name, "cgame" )
     || !Q_stricmp( name, "demo" )) {
 		if(Cmd_Argc() > 3) {

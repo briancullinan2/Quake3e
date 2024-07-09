@@ -39,13 +39,8 @@ int worldMaps[MAX_NUM_VMS] = {
 };
 #endif
 
-#ifdef USE_MULTIVM_CLIENT
-
-extern refdef_t views[MAX_NUM_VMS];
-#else
 #if defined(USE_MULTIVM_SERVER) || defined(USE_MULTIVM_RENDERER)
 int clientMap;
-#endif
 #endif
 
 vec3_t clientCameras[MAX_NUM_VMS];
@@ -604,9 +599,6 @@ static intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 		return FS_VM_SeekFile( args[1], args[2], args[3], H_CGAME );
 
 	case CG_SENDCONSOLECOMMAND: {
-//#if 0 //def USE_MULTIVM_CLIENT
-//		Cbuf_ExecuteTagged( EXEC_APPEND, VMA(1), -1 );
-//#else
 		const char *cmd = VMA(1);
 		Cbuf_NestedAdd( cmd );
 		return 0;
