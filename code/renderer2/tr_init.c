@@ -215,6 +215,13 @@ int		max_polys;
 int		max_polyverts;
 int		max_polybuffers;
 
+#ifdef USE_MULTIVM_RENDERER
+float dvrXScale = 1;
+float dvrYScale = 1;
+float dvrXOffset = 0;
+float dvrYOffset = 0;
+#endif
+
 #ifdef __WASM__
 cvar_t  *r_paletteMode;
 #endif
@@ -1218,7 +1225,7 @@ static void R_Register( void )
 	ri.Cvar_SetDescription( r_dlightMode, "Dynamic light mode:\n 0: VQ3 'fake' dynamic lights\n 1: High-quality per-pixel dynamic lights, slightly faster than VQ3's on modern hardware\n 2: Same as 1 but applies to all MD3 models too" );
 	r_pshadowDist = ri.Cvar_Get( "r_pshadowDist", "128", CVAR_ARCHIVE );
 #ifdef __WASM__
-	r_mergeLightmaps = ri.Cvar_Get( "r_mergeLightmaps", "0", 0 );
+	r_mergeLightmaps = ri.Cvar_Get( "r_mergeLightmaps", "0", CVAR_ROM );
 #else
 	r_mergeLightmaps = ri.Cvar_Get( "r_mergeLightmaps", "1", CVAR_ARCHIVE | CVAR_LATCH );
 #endif
@@ -1449,9 +1456,16 @@ void R_Init( void ) {
 	ri.Printf( PRINT_ALL, "----- R_Init -----\n" );
 
 	// clear all our internal state
+#ifdef USE_MULTIVM_RENDERER
+	Com_Memset( &trWorlds, 0, sizeof( trWorlds ) );
+	Com_Memset( &backEnd, 0, sizeof( backEnd ) );
+	Com_Memset( &tess, 0, sizeof( tess ) );
+	Com_Memset( &glState, 0, sizeof( glState ) );
+#else
 	Com_Memset( &tr, 0, sizeof( tr ) );
 	Com_Memset( &backEnd, 0, sizeof( backEnd ) );
 	Com_Memset( &tess, 0, sizeof( tess ) );
+#endif
 
 	if(sizeof(glconfig_t) != 11332)
 		ri.Error( ERR_FATAL, "Mod ABI incompatible: sizeof(glconfig_t) == %u != 11332", (unsigned int) sizeof(glconfig_t));
@@ -1620,6 +1634,24 @@ static void RE_EndRegistration( void ) {
 }
 
 
+#ifdef USE_LAZY_MEMORY
+#ifdef USE_MULTIVM_RENDERER
+void RE_SetDvrFrame(float x, float y, float width, float height) {
+	dvrXScale = width;
+	dvrYScale = height;
+	dvrXOffset = x;
+	dvrYOffset = y;
+}
+#endif
+#endif
+
+
+static const cplane_t *RE_GetFrustum( void )
+{
+	return tr.viewParms.frustum;
+}
+
+
 /*
 @@@@@@@@@@@@@@@@@@@@@
 GetRefAPI
@@ -1693,8 +1725,12 @@ refexport_t *GetRefAPI ( int apiVersion, refimport_t *rimp ) {
 
 	re.AddPolyBufferToScene =   RE_AddPolyBufferToScene;
 
-#ifdef __WASM__
+#if defined(USE_MULTIVM_RENDERER) || defined(USE_MULTIVM_SERVER) || defined(__WASM__)
 	re.InitShaders = R_InitShaders;
+#endif
+
+#ifdef USE_MULTIVM_RENDERER
+	re.SetDvrFrame = RE_SetDvrFrame;
 #endif
 
 	return &re;

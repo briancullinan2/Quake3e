@@ -95,6 +95,9 @@ void Netchan_Setup( netsrc_t sock, netchan_t *chan, const netadr_t *adr, int por
 	chan->challenge = challenge;
 	chan->compat = compat;
 	chan->isLANAddress = Sys_IsLANAddress( adr );
+#ifdef USE_MULTIVM_SERVER
+	chan->remoteAddress.netWorld = 0;
+#endif
 }
 
 
@@ -723,7 +726,6 @@ void NET_OutOfBandCompress( netsrc_t sock, const netadr_t *adr, const byte *data
 	NET_SendPacket( sock, mbuf.cursize, mbuf.data, adr );
 }
 
-
 char *NET_ParseProtocol(const char *s, char *protocol)
 {
 	if ( !Q_stricmpn( s, "ws://", 5 ) ) {
@@ -764,6 +766,10 @@ int NET_StringToAdr( const char *s, netadr_t *a, netadrtype_t family )
 		// as NA_LOOPBACK doesn't require ports report port was given.
 		return 1;
 	}
+
+#ifdef USE_MULTIVM_SERVER
+	a->netWorld = 0;
+#endif
 
 	a->protocol[0] = 0;
 	search = NET_ParseProtocol(s, a->protocol);

@@ -30,10 +30,26 @@ typedef struct {
 	byte *data;
 	int maxsize;
 	int cursize;
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
+	qboolean filtered;
+	int tag;
+#endif
 } cmd_t;
 
 static int   cmd_wait;
+int    insCmdI = 0;
+int    execCmdI = 0;
+
+#define MAX_NUM_CMDS MAX_NUM_VMS*3
+/*#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
+
+static cmd_t cmd_text[MAX_NUM_CMDS];
+
+#define cmd_text cmd_text[insCmdI]
+
+#else */
 static cmd_t cmd_text;
+//#endif
 static byte  cmd_text_buf[MAX_CMD_BUFFER];
 
 
@@ -246,6 +262,26 @@ void Cbuf_ExecuteText( cbufExec_t exec_when, const char *text )
 }
 
 
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
+
+void Cbuf_ExecuteTagged( cbufExec_t exec_when, const char *text, int tag )
+{
+	if(cmd_text.filtered == qtrue
+		&& cmd_text.tag == tag) {
+		// use same buffer
+	} else {
+		insCmdI++;
+		if(insCmdI == MAX_NUM_CMDS) {
+			insCmdI = 0;
+		}
+	}
+	cmd_text.filtered = qtrue;
+	cmd_text.tag = tag;
+	Cbuf_ExecuteText( exec_when, text );
+}
+
+#endif
+
 /*
 ============
 Cbuf_Execute
@@ -263,6 +299,22 @@ void Cbuf_Execute( void )
 		cmd_wait--;
 		return;
 	}
+
+/*#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
+
+#undef cmd_text
+#define cmd_text cmd_text[execCmdI]
+
+	insCmdI++;
+	if(insCmdI == MAX_NUM_CMDS) {
+		insCmdI = 0;
+	}
+
+	while(execCmdI != insCmdI) {
+
+
+#endif*/
+
 
 	// This will keep // style comments all on one line by not breaking on
 	// a semicolon.  It will keep /* ... */ style comments all on one line by not
@@ -349,6 +401,23 @@ void Cbuf_Execute( void )
 			break;
 		}
 	}
+
+/*#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
+
+		cmd_text.cursize = 0;
+		cmd_text.data[0] = 0;
+
+#undef cmd_text
+#define cmd_text cmd_text[insCmdI]
+
+		execCmdI++;
+		if(execCmdI == MAX_NUM_CMDS) {
+			execCmdI = 0;
+		}
+	}
+
+
+#endif*/
 }
 
 

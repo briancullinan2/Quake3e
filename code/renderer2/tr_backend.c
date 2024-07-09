@@ -1743,6 +1743,32 @@ static const void *RB_ExportCubemaps(const void *data)
 }
 
 
+#ifdef USE_MULTIVM_RENDERER
+/*
+=============
+RB_SetWorld
+=============
+*/
+static const void *RB_SetWorld( const void *data ) {
+	const setWorldCommand_t	*cmd;
+	cmd = (const setWorldCommand_t *)data;
+
+//Com_Printf("switching world: %i -> %i", rwi, cmd->world);
+	//rwi = cmd->world;
+	// TODO: skip world options
+	if(cmd->next) {
+		if(qtrue && ((const setWorldCommand_t *)data)) {
+
+		}
+
+		//return cmd->next;
+	}
+
+	return (const void *)(cmd + 1);
+}
+#endif
+
+
 /*
 ====================
 RB_ExecuteRenderCommands
@@ -1757,6 +1783,13 @@ void RB_ExecuteRenderCommands( const void *data ) {
 		data = PADP(data, sizeof(void *));
 
 		switch ( *(const int *)data ) {
+
+#ifdef USE_MULTIVM_RENDERER
+		case RC_SET_WORLD:
+			data = RB_SetWorld( data );
+			break;
+#endif
+
 		case RC_SET_COLOR:
 			data = RB_SetColor( data );
 			break;

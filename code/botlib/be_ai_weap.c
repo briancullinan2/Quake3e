@@ -125,8 +125,15 @@ typedef struct bot_weaponstate_s
 	int *weaponweightindex;							//weapon weight index
 } bot_weaponstate_t;
 
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
+static bot_weaponstate_t *botweaponstatesWorlds[MAX_NUM_VMS][MAX_CLIENTS+1];
+#define botweaponstates botweaponstatesWorlds[aasgvm]
+static weaponconfig_t *weaponconfigWorlds[MAX_NUM_VMS];
+#define weaponconfig weaponconfigWorlds[aasgvm]
+#else
 static bot_weaponstate_t *botweaponstates[MAX_CLIENTS+1];
 static weaponconfig_t *weaponconfig;
+#endif
 
 //========================================================================
 //

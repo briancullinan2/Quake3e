@@ -8,11 +8,14 @@ let soundEffects = {}
 // So that we don't keep retrying missing sounds
 const REMOTE_SOUNDS = {}
 function S_CodecLoad (name, info) {
+  if(!SND.inited) {
+    return 0
+  }
   let filenameStr = addressToString(name)
   if(filenameStr.length == 0) {
     return 0
   }
- if(!filenameStr.endsWith('.ogg')) {
+  if(!filenameStr.endsWith('.ogg')) {
     filenameStr = filenameStr.replace(/\..*?$/, '.ogg')
   }
   let existing = Object.values(soundEffects)
@@ -65,6 +68,7 @@ function S_CodecLoad (name, info) {
 
 let SND = {
   SNDDMA_Init: function () {
+    SND.inited = true
     if(HEAPU32[first_click >> 2]) {
       return 0
     }
@@ -280,6 +284,9 @@ function S_Base_StartLocalSound(sfx, channel) {
 const entities = {}
 
 function S_Base_StartSound(origin, entityNum, entchannel, sfx) {
+  if(!SND.inited) {
+    return
+  }
   if(HEAPU32[first_click >> 2]) {
     return
   }
@@ -319,6 +326,9 @@ function S_Base_StartSound(origin, entityNum, entchannel, sfx) {
 const looping = []
 
 function S_Base_AddLoopingSound(entityNum, origin, velocity, sfx) {
+  if(!SND.inited) {
+    return
+  }
   if(HEAPU32[first_click >> 2]) {
     return
   }

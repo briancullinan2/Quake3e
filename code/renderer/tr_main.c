@@ -27,7 +27,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include <string.h> // memcpy
 #endif
 
-#ifdef USE_MULTIVM_CLIENT
+#ifdef USE_MULTIVM_RENDERER
 trGlobals_t		trWorlds[MAX_NUM_WORLDS];
 #else
 trGlobals_t		tr;
@@ -772,41 +772,6 @@ static void R_PlaneForSurface( const surfaceType_t *surfType, cplane_t *plane, v
 }
 
 
-#if 0
-static qboolean InsidePolygon(vec2_t *polygon,int N,vec2_t p)
-{
-  int counter = 0;
-  int i;
-  double xinters;
-  vec2_t p1,p2;
-
-  p1[0] = polygon[0][0];
-	p1[1] = polygon[0][1];
-  for (i=1;i<=N;i++) {
-    p2[0] = polygon[i % N][0];
-		p2[1] = polygon[i % N][1];
-    if (p[1] > MIN(p1[1],p2[1])) {
-      if (p[1] <= MAX(p1[1],p2[1])) {
-        if (p[0] <= MAX(p1[0],p2[0])) {
-          if (p1[1] != p2[1]) {
-            xinters = (p[1]-p1[1])*(p2[0]-p1[0])/(p2[1]-p1[1])+p1[0];
-            if (p1[0] == p2[0] || p[0] <= xinters)
-              counter++;
-          }
-        }
-      }
-    }
-    p1[0] = p2[0];
-    p1[1] = p2[1];
-  }
-
-  if (counter % 2 == 0)
-    return qfalse;
-  else
-    return qtrue;
-}
-#endif
-
 
 /*
 =================
@@ -823,7 +788,7 @@ static qboolean R_GetPortalOrientations( const drawSurf_t *drawSurf, int entityN
 							 vec3_t pvsOrigin, portalView_t *portalView, 
 							 trRefEntity_t *e, qboolean isMirror, 
 							 int *portalEntity
-#ifdef USE_MULTIVM_CLIENT
+#ifdef USE_MULTIVM_RENDERER
 							 , int *world 
 #endif
 							 ) {
@@ -849,7 +814,7 @@ static qboolean R_GetPortalOrientations( const drawSurf_t *drawSurf, int entityN
 	VectorSubtract( vec3_origin, camera->axis[0], camera->axis[0] );
 	VectorSubtract( vec3_origin, camera->axis[1], camera->axis[1] );
 
-#ifdef USE_MULTIVM_CLIENT
+#ifdef USE_MULTIVM_RENDERER
 	*world = e->e.oldframe >> 8;
 #else
 	if((e->e.oldframe >> 8) > 0) {
@@ -962,42 +927,7 @@ static qboolean IsMirror( const drawSurf_t *drawSurf, int entityNum,
 			//PerpendicularVector( transformed, transformed );
 		//} else {
 			d = DotProduct( e->e.origin, plane.normal ) - originalPlane.dist;
-		/* Com_Printf("trace (%i): %f, %f, %f <= %f, %f, %f >= %f, %f, %f - %f\n", 
-			*drawSurf->surface,
-			mins[0],
-			mins[1],
-			mins[2],
-			e->e.origin[0],
-			e->e.origin[1],
-			e->e.origin[2],
-			maxs[0],
-			maxs[1],
-			maxs[2],
-			d); */
-			/*
-			VectorCopy( plane.normal, transformed );
-			//PerpendicularVector( transformed, plane.normal );
 		//}
-		VectorMA( e->e.origin, -128, transformed, end );
-#ifdef USE_MULTIVM_CLIENT
-		ri.Trace( &trace, e->e.origin, NULL, NULL, end, ENTITYNUM_NONE, -1, rwi );
-#else
-		ri.Trace( &trace, e->e.origin, NULL, NULL, end, ENTITYNUM_NONE, -1 );
-#endif
-		VectorSubtract( trace.endpos, e->e.origin, vec );
-		Com_Printf("trace (%i): %f, %f, %f <= %f, %f, %f >= %f, %f, %f - %f\n", 
-			*drawSurf->surface,
-			mins[0],
-			mins[1],
-			mins[2],
-			trace.endpos[0],
-			trace.endpos[1],
-			trace.endpos[2],
-			maxs[0],
-			maxs[1],
-			maxs[2],
-			VectorLength(vec));
-			*/
 		// TODO: only use mins and maxs and cache this surface/entity matching somewhere
 		if ( /* d > 64 || d < -64
 			|| */ !(e->e.origin[0] >= mins[0] && e->e.origin[0] <= maxs[0])
@@ -1101,7 +1031,7 @@ static qboolean SurfIsOffscreen( const drawSurf_t *drawSurf, qboolean *isMirror,
 	if ( pointAnd )
 	{
 		tess.numIndexes = 0;
-		//return qtrue;
+		return qtrue;
 	}
 
 	// determine if this surface is backfaced and also determine the distance
@@ -1132,7 +1062,7 @@ static qboolean SurfIsOffscreen( const drawSurf_t *drawSurf, qboolean *isMirror,
 	tess.numIndexes = 0;
 	if ( !numTriangles )
 	{
-		//return qtrue;
+		return qtrue;
 	}
 
 	// mirrors can early out at this point, since we don't do a fade over distance
@@ -1235,13 +1165,10 @@ R_MirrorViewBySurface
 Returns qtrue if another view has been rendered
 ========================
 */
-#ifdef USE_MULTIVM_CLIENT
+#ifdef USE_MULTIVM_RENDERER
 void R_SetWorld(viewParms_t *oldParms, viewParms_t *newParms);
-extern int r_numdlightWorlds[MAX_NUM_WORLDS];
-#define r_numdlights r_numdlightWorlds[rwi]
-#else
-extern int r_numdlights;
 #endif
+extern int r_numdlights;
 static qboolean R_MirrorViewBySurface( const drawSurf_t *drawSurf, int entityNum ) {
 	viewParms_t		newParms;
 	viewParms_t		oldParms;
@@ -1292,23 +1219,12 @@ static qboolean R_MirrorViewBySurface( const drawSurf_t *drawSurf, int entityNum
 		newParms.pvsOrigin, &newParms.portalView, 
 		entity, isMirror, 
 		&newParms.portalEntity
-#ifdef USE_MULTIVM_CLIENT
+#ifdef USE_MULTIVM_RENDERER
 		, &newParms.newWorld
 #endif
 		) ) {
 		return qfalse;		// bad portal, no portalentity
 	}
-#ifdef USE_MULTIVM_CLIENT
-	if(newParms.newWorld != oldParms.newWorld) {
-		viewParms_t		newerParms;
-		newerParms = trWorlds[newParms.newWorld].viewParms;
-		VectorCopy(newParms.pvsOrigin, newerParms.pvsOrigin);
-		newerParms.portalEntity = newParms.portalEntity;
-		newerParms.newWorld = newParms.newWorld;
-		newerParms.portalView = newParms.portalView;
-		newParms = newerParms;
-	}
-#endif
 
 	if(oldParms.portalView + 1 == PV_MIRROR || oldParms.portalView + 1 == PV_COUNT)
 		return qfalse;
@@ -1353,33 +1269,35 @@ static qboolean R_MirrorViewBySurface( const drawSurf_t *drawSurf, int entityNum
 
 	// OPTIMIZE: restrict the viewport on the mirrored view
 
-#ifdef USE_MULTIVM_CLIENT
+#ifdef USE_MULTIVM_RENDERER
 	if(newParms.newWorld != oldParms.newWorld
 		&& rwi != newParms.newWorld) {
 		if(newParms.newWorld < 0 || newParms.newWorld >= MAX_NUM_WORLDS
-			|| !trWorlds[ri.worldMaps[newParms.newWorld]].world
+			|| !trWorlds[newParms.newWorld].world
 		//	|| !tr.refdef.num_entities
 		) {
-			return qfalse; // world isn't loaded?
-		}
+			// maybe they want to show a working camera inside a 
+			//  miniature in the same offset as the intermission skycam?
+			//return qfalse; // world isn't loaded?
+		} else {
 
-		R_SetWorld(&oldParms, &newParms);
-		return qtrue;
-		// TODO: fix multiplexing cmd table and replace the view angle in scene
+			R_SetWorld(&oldParms, &newParms);
+			return qtrue;
+			// TODO: fix multiplexing cmd table and replace the view angle in scene
+		}
 	}
 #else
-	if(entity->e.oldframe >> 8) {
-		return qfalse;
-	}
+	// maybe they want to show a working camera inside a 
+	//  miniature in the same offset as the intermission skycam?
+	//if(entity->e.oldframe >> 8) {
+	//	return qfalse;
+	//}
 #endif
 
 	// render the mirror view
 	R_RenderView( &newParms );
 
 	tr.viewParms = oldParms;
-#ifdef USE_MULTIVM_CLIENT
-	rwi = ri.worldMaps[oldParms.newWorld];
-#endif
 
 	return qtrue;
 }
@@ -1621,7 +1539,7 @@ R_DecomposeLitSort
 */
 void R_DecomposeLitSort( unsigned sort, int *entityNum, shader_t **shader, int *fogNum ) {
 	*fogNum = ( sort >> QSORT_FOGNUM_SHIFT ) & FOGNUM_MASK;
-#ifdef USE_MULTIVM_CLIENT
+#ifdef USE_MULTIVM_RENDERER
 	*shader = trWorlds[0].sortedShaders[ ( sort >> QSORT_SHADERNUM_SHIFT ) & SHADERNUM_MASK ];
 #else
 	*shader = tr.sortedShaders[ ( sort >> QSORT_SHADERNUM_SHIFT ) & SHADERNUM_MASK ];
@@ -1643,6 +1561,16 @@ void R_AddDrawSurf( surfaceType_t *surface, shader_t *shader,
 				   int fogIndex, int dlightMap ) {
 	int			index;
 
+#ifdef USE_MULTIVM_RENDERER
+	index = trWorlds[0].refdef.numDrawSurfs & DRAWSURF_MASK;
+	// the sort data is packed into a single 32 bit value so it can be
+	// compared quickly during the qsorting process
+	trWorlds[0].refdef.drawSurfs[index].sort = (shader->sortedIndex << QSORT_SHADERNUM_SHIFT) 
+		| trWorlds[0].shiftedEntityNum | ( fogIndex << QSORT_FOGNUM_SHIFT ) | (int)dlightMap;
+	trWorlds[0].refdef.drawSurfs[index].surface = surface;
+	trWorlds[0].refdef.numDrawSurfs++;
+
+#else
 	// instead of checking for overflow, we just mask the index
 	// so it wraps around
 	index = tr.refdef.numDrawSurfs & DRAWSURF_MASK;
@@ -1652,6 +1580,7 @@ void R_AddDrawSurf( surfaceType_t *surface, shader_t *shader,
 		| tr.shiftedEntityNum | ( fogIndex << QSORT_FOGNUM_SHIFT ) | (int)dlightMap;
 	tr.refdef.drawSurfs[index].surface = surface;
 	tr.refdef.numDrawSurfs++;
+#endif
 }
 
 
@@ -1663,7 +1592,7 @@ R_DecomposeSort
 void R_DecomposeSort( unsigned sort, int *entityNum, shader_t **shader, 
 					 int *fogNum, int *dlightMap ) {
 	*fogNum = ( sort >> QSORT_FOGNUM_SHIFT ) & FOGNUM_MASK;
-#ifdef USE_MULTIVM_CLIENT
+#ifdef USE_MULTIVM_RENDERER
 	*shader = trWorlds[0].sortedShaders[ ( sort >> QSORT_SHADERNUM_SHIFT ) & SHADERNUM_MASK ];
 #else
 	*shader = tr.sortedShaders[ ( sort >> QSORT_SHADERNUM_SHIFT ) & SHADERNUM_MASK ];
@@ -1760,6 +1689,7 @@ static void R_AddEntitySurfaces( void ) {
 		return;
 	}
 
+
 	for ( tr.currentEntityNum = 0;
 			tr.currentEntityNum < tr.refdef.num_entities;
 			tr.currentEntityNum++ ) {
@@ -1778,6 +1708,12 @@ static void R_AddEntitySurfaces( void ) {
 		if ( (ent->e.renderfx & RF_FIRST_PERSON) && (tr.viewParms.portalView != PV_NONE) ) {
 			continue;
 		}
+
+#ifdef USE_MULTIVM_RENDERER
+		if(ent->world != tr.viewParms.newWorld) {
+			continue;
+		}
+#endif
 
 		// simple generated models, like sprites and beams, are not culled
 		switch ( ent->e.reType ) {
@@ -1836,6 +1772,10 @@ static void R_AddEntitySurfaces( void ) {
 		}
 	}
 
+#ifdef USE_MULTIVM_RENDERER
+	rwi = 0;
+#endif
+
 }
 
 
@@ -1890,8 +1830,17 @@ void R_RenderView( const viewParms_t *parms ) {
 	tr.viewParms = *parms;
 	tr.viewParms.frameSceneNum = tr.frameSceneNum;
 	tr.viewParms.frameCount = tr.frameCount;
-#ifdef USE_MULTIVM_CLIENT
-	tr.viewParms.newWorld = rwi;
+#ifdef USE_MULTIVM_RENDERER
+	//tr.viewParms.newWorld = rwi;
+	world_t *previous = tr.world;
+	//Com_Printf("Rendering %i -> %i.\n", rwi, tr.viewParms.newWorld);
+	if(tr.viewParms.newWorld != rwi && 
+		trWorlds[tr.viewParms.newWorld].world) {
+		//Com_Printf("Substituting world model.\n");
+		tr.world = trWorlds[tr.viewParms.newWorld].world;
+	} else {
+	}
+
 #endif
 
 	firstDrawSurf = tr.refdef.numDrawSurfs;
@@ -1912,4 +1861,11 @@ void R_RenderView( const viewParms_t *parms ) {
 	}
 
 	R_SortDrawSurfs( tr.refdef.drawSurfs + firstDrawSurf, numDrawSurfs - firstDrawSurf );
+
+#ifdef USE_MULTIVM_RENDERER
+	//tr.viewParms.newWorld = rwi;
+	if(tr.viewParms.newWorld != rwi) {
+		tr.world = previous;
+	}
+#endif
 }

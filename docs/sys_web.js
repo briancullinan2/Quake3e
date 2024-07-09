@@ -218,16 +218,17 @@ function Sys_Return() {
 	if(returnUrl) {
 		window.location = returnUrl
 	}
+	// brian cullinan added this feature for Tig
 	// client mode
-	let reconnect = addressToString(Cvar_VariableString(stringToAddress('cl_reconnectArgs')))
-	if(reconnect) {
-		window.location = '/games/' + reconnect
-	}
+	//let reconnect = addressToString(Cvar_VariableString(stringToAddress('cl_reconnectArgs')))
+	//if(reconnect) {
+	//	window.location = '/games/' + reconnect
+	//}
 	// single player mode
-	let mapname = addressToString(Cvar_VariableString(stringToAddress('mapname')))
-	if(mapname && mapname != 'nomap') {
-		window.location = '/maps/' + mapname
-	}
+	//let mapname = addressToString(Cvar_VariableString(stringToAddress('mapname')))
+	//if(mapname && mapname != 'nomap') {
+	//	window.location = '/maps/' + mapname
+	//}
 }
 
 

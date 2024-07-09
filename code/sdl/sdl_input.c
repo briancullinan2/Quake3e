@@ -1282,7 +1282,7 @@ void HandleEvents( void )
 						break;
 					case SDL_WINDOWEVENT_RESIZED:
 						if ( !gw_minimized && !glw_state.isFullscreen ) {
-							glconfig_t *glConfig = re.GetConfig();
+							glconfig_t *glConfig = (glconfig_t *)re.GetConfig();
 							cvar_t *aspect = Cvar_Get("r_customAspect", "", 0);
 							glw_state.config->vidHeight = e.window.data2;
 							glw_state.config->vidWidth = e.window.data1;

@@ -35,7 +35,15 @@ be returned, otherwise a custom box tree will be constructed.
 clipHandle_t SV_ClipHandleForEntity( const sharedEntity_t *ent ) {
 	if ( ent->r.bmodel ) {
 		// explicit hulls in the BSP model
+#ifdef USE_MULTIVM_SERVER
+    return CM_InlineModel( ent->s.modelindex, 3, gvmi );
+#else
+#if defined(USE_MULTIVM_RENDERER) || defined(USE_MULTIVM_CLIENT)
+		return CM_InlineModel( ent->s.modelindex, 3, 0 );
+#else
 		return CM_InlineModel( ent->s.modelindex );
+#endif
+#endif
 	}
 	if ( ent->r.svFlags & SVF_CAPSULE ) {
 		// create a temp capsule from bounding box sizes
@@ -71,8 +79,17 @@ typedef struct worldSector_s {
 #define	AREA_DEPTH	4
 #define	AREA_NODES	64
 
+
+#ifdef USE_MULTIVM_SERVER
+worldSector_t	sv_worldSectors[MAX_NUM_VMS][AREA_NODES];
+int			      sv_numworldSectors[MAX_NUM_VMS];
+#define sv_worldSectors    sv_worldSectors[gvmi]
+#define sv_numworldSectors sv_numworldSectors[gvmi]
+#else
 static worldSector_t	sv_worldSectors[AREA_NODES];
 static int			sv_numworldSectors;
+#endif
+
 
 
 /*
@@ -152,7 +169,15 @@ void SV_ClearWorld( void ) {
 	sv_numworldSectors = 0;
 
 	// get world map bounds
+#ifdef USE_MULTIVM_SERVER
+  h = CM_InlineModel( 0, 2, gvmi );
+#else
+#if defined(USE_MULTIVM_RENDERER) || defined(USE_MULTIVM_CLIENT)
+	h = CM_InlineModel( 0, 2, 0 );
+#else
 	h = CM_InlineModel( 0 );
+#endif
+#endif
 	CM_ModelBounds( h, mins, maxs );
 	SV_CreateworldSector( 0, mins, maxs );
 }

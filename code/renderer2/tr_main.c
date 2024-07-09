@@ -25,7 +25,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include <string.h> // memcpy
 
-#ifdef USE_MULTIVM_CLIENT
+#ifdef USE_MULTIVM_RENDERER
 trGlobals_t		trWorlds[MAX_NUM_WORLDS];
 #else
 trGlobals_t		tr;
@@ -1048,7 +1048,11 @@ static qboolean R_GetPortalOrientations( const drawSurf_t *drawSurf, int entityN
 							 orientation_t *surface, orientation_t *camera,
 							 vec3_t pvsOrigin, portalView_t *portalView, 
 							 trRefEntity_t *e, qboolean isMirror, 
-							 int *portalEntity ) {
+							 int *portalEntity 
+#ifdef USE_MULTIVM_RENDERER
+							 , int *world 
+#endif
+							 ) {
 	float		d;
 	vec3_t		transformed;
 
@@ -1071,7 +1075,7 @@ static qboolean R_GetPortalOrientations( const drawSurf_t *drawSurf, int entityN
 	VectorSubtract( vec3_origin, camera->axis[0], camera->axis[0] );
 	VectorSubtract( vec3_origin, camera->axis[1], camera->axis[1] );
 
-#ifdef USE_MULTIVM_CLIENT
+#ifdef USE_MULTIVM_RENDERER
 	*world = e->e.oldframe >> 8;
 #else
 	if((e->e.oldframe >> 8) > 0) {
@@ -1319,6 +1323,9 @@ R_MirrorViewBySurface
 Returns qtrue if another view has been rendered
 ========================
 */
+#ifdef USE_MULTIVM_RENDERER
+void R_SetWorld(viewParms_t *oldParms, viewParms_t *newParms);
+#endif
 static qboolean R_MirrorViewBySurface (const drawSurf_t *drawSurf, int entityNum) {
 	viewParms_t		newParms;
 	viewParms_t		oldParms;
@@ -1357,7 +1364,11 @@ static qboolean R_MirrorViewBySurface (const drawSurf_t *drawSurf, int entityNum
 	if ( !R_GetPortalOrientations( drawSurf, entityNum, &surface, &camera, 
 		newParms.pvsOrigin, &newParms.portalView, 
 		entity, isMirror, 
-		&newParms.portalEntity ) ) {
+		&newParms.portalEntity
+#ifdef USE_MULTIVM_RENDERER
+		, &newParms.newWorld
+#endif
+	) ) {
 		return qfalse;		// bad portal, no portalentity
 	}
 
@@ -1373,6 +1384,24 @@ static qboolean R_MirrorViewBySurface (const drawSurf_t *drawSurf, int entityNum
 	R_MirrorVector (oldParms.or.axis[1], &surface, &camera, newParms.or.axis[1]);
 	R_MirrorVector (oldParms.or.axis[2], &surface, &camera, newParms.or.axis[2]);
 
+#ifdef USE_MULTIVM_RENDERER
+	if(newParms.newWorld != oldParms.newWorld
+		&& rwi != newParms.newWorld) {
+		if(newParms.newWorld < 0 || newParms.newWorld >= MAX_NUM_WORLDS
+			|| !trWorlds[newParms.newWorld].world
+		//	|| !tr.refdef.num_entities
+		) {
+			// maybe they want to show a working camera inside a 
+			//  miniature in the same offset as the intermission skycam?
+			//return qfalse; // world isn't loaded?
+		} else {
+
+			R_SetWorld(&oldParms, &newParms);
+			return qtrue;
+			// TODO: fix multiplexing cmd table and replace the view angle in scene
+		}
+	}
+#endif
 	// OPTIMIZE: restrict the viewport on the mirrored view
 
 	// render the mirror view
@@ -1490,6 +1519,17 @@ void R_AddDrawSurf( surfaceType_t *surface, shader_t *shader,
 				   int fogIndex, int dlightMap, int pshadowMap, int cubemap ) {
 	int			index;
 
+#ifdef USE_MULTIVM_RENDERER
+	index = trWorlds[0].refdef.numDrawSurfs & DRAWSURF_MASK;
+	// the sort data is packed into a single 32 bit value so it can be
+	// compared quickly during the qsorting process
+	trWorlds[0].refdef.drawSurfs[index].sort = (shader->sortedIndex << QSORT_SHADERNUM_SHIFT) 
+		| trWorlds[0].shiftedEntityNum | ( fogIndex << QSORT_FOGNUM_SHIFT ) | (int)dlightMap;
+	trWorlds[0].refdef.drawSurfs[index].surface = surface;
+	trWorlds[0].refdef.numDrawSurfs++;
+
+#else
+
 	// instead of checking for overflow, we just mask the index
 	// so it wraps around
 	index = tr.refdef.numDrawSurfs & DRAWSURF_MASK;
@@ -1501,6 +1541,7 @@ void R_AddDrawSurf( surfaceType_t *surface, shader_t *shader,
 	tr.refdef.drawSurfs[index].cubemapIndex = cubemap;
 	tr.refdef.drawSurfs[index].surface = surface;
 	tr.refdef.numDrawSurfs++;
+#endif
 }
 
 /*
@@ -1511,7 +1552,11 @@ R_DecomposeSort
 void R_DecomposeSort( unsigned sort, int *entityNum, shader_t **shader, 
 					 int *fogNum, int *dlightMap, int *pshadowMap ) {
 	*fogNum = ( sort >> QSORT_FOGNUM_SHIFT ) & 31;
+#ifdef USE_MULTIVM_RENDERER
+	*shader = trWorlds[0].sortedShaders[ ( sort >> QSORT_SHADERNUM_SHIFT ) & (MAX_SHADERS-1) ];
+#else
 	*shader = tr.sortedShaders[ ( sort >> QSORT_SHADERNUM_SHIFT ) & (MAX_SHADERS-1) ];
+#endif
 	*entityNum = ( sort >> QSORT_REFENTITYNUM_SHIFT ) & REFENTITYNUM_MASK;
 	*pshadowMap = (sort >> QSORT_PSHADOW_SHIFT ) & 1;
 	*dlightMap = sort & 1;
@@ -1600,6 +1645,13 @@ static void R_AddEntitySurface (int entityNum)
 	if ( (ent->e.renderfx & RF_FIRST_PERSON) && (tr.viewParms.flags & VPF_NOVIEWMODEL)) {
 		return;
 	}
+
+#ifdef USE_MULTIVM_RENDERER
+	if(ent->world != tr.viewParms.newWorld) {
+		return;
+	}
+#endif
+
 
 	// simple generated models, like sprites and beams, are not culled
 	switch ( ent->e.reType ) {
@@ -1783,8 +1835,12 @@ void R_RenderView (const viewParms_t *parms) {
 	tr.viewParms = *parms;
 	tr.viewParms.frameSceneNum = tr.frameSceneNum;
 	tr.viewParms.frameCount = tr.frameCount;
-#ifdef USE_MULTIVM_CLIENT
-	tr.viewParms.newWorld = rwi;
+#ifdef USE_MULTIVM_RENDERER
+	world_t *previous = tr.world;
+	if(tr.viewParms.newWorld != rwi && 
+		trWorlds[tr.viewParms.newWorld].world) {
+		tr.world = trWorlds[tr.viewParms.newWorld].world;
+	}
 #endif
 
 	firstDrawSurf = tr.refdef.numDrawSurfs;
@@ -1810,6 +1866,13 @@ void R_RenderView (const viewParms_t *parms) {
 
 	// draw main system development information (surface outlines, etc)
 	R_DebugGraphics();
+
+#ifdef USE_MULTIVM_RENDERER
+	//tr.viewParms.newWorld = rwi;
+	if(tr.viewParms.newWorld != rwi) {
+		tr.world = previous;
+	}
+#endif
 }
 
 
@@ -2073,7 +2136,11 @@ void R_RenderPshadowMaps(const refdef_t *fd)
 
 		VectorSet(lightDir, 0.57735f, 0.57735f, 0.57735f);
 #if 1
+#ifdef USE_MULTIVM_RENDERER
+		R_LightForPoint(shadow->viewOrigin, ambientLight, directedLight, lightDir, tr.viewParms.newWorld);
+#else
 		R_LightForPoint(shadow->viewOrigin, ambientLight, directedLight, lightDir);
+#endif
 
 		// sometimes there's no light
 		if (DotProduct(lightDir, lightDir) < 0.9f)
@@ -2646,7 +2713,11 @@ void R_RenderCubemapSide( int cubemapIndex, int cubemapSide, qboolean subscene )
 
 	if (!subscene)
 	{
+#ifdef USE_MULTIVM_RENDERER
+		RE_BeginScene(&refdef, tr.viewParms.newWorld);
+#else
 		RE_BeginScene(&refdef);
+#endif
 
 		// FIXME: sun shadows aren't rendered correctly in cubemaps
 		// fix involves changing r_FBufScale to fit smaller cubemap image size, or rendering cubemap to framebuffer first
@@ -2663,7 +2734,11 @@ void R_RenderCubemapSide( int cubemapIndex, int cubemapSide, qboolean subscene )
 		vec3_t ambient, directed, lightDir;
 		float scale;
 
+#ifdef USE_MULTIVM_RENDERER
+		R_LightForPoint(tr.refdef.vieworg, ambient, directed, lightDir, tr.viewParms.newWorld);
+#else
 		R_LightForPoint(tr.refdef.vieworg, ambient, directed, lightDir);
+#endif
 		scale = directed[0] + directed[1] + directed[2] + ambient[0] + ambient[1] + ambient[2] + 1.0f;
 
 		// only print message for first side
@@ -2675,6 +2750,9 @@ void R_RenderCubemapSide( int cubemapIndex, int cubemapSide, qboolean subscene )
 
 	Com_Memset( &parms, 0, sizeof( parms ) );
 
+#ifdef USE_MULTIVM_RENDERER
+	parms.newWorld = tr.viewParms.newWorld;
+#endif
 	parms.viewportX = 0;
 	parms.viewportY = 0;
 	parms.viewportWidth = tr.renderCubeFbo->width;

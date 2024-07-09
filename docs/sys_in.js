@@ -38,6 +38,32 @@ function GLimp_StartDriverAndSetMode(mode, modeFS, fullscreen, fallback) {
   return 0 // no error
 }
 
+function CopyBiases() {
+
+	if ( GL.canvas.clientWidth * 480 > GL.canvas.clientHeight * 640 ) {
+		// wide screen, scale by height
+		GL.screenXScale = GL.screenYScale = GL.canvas.clientHeight * (1.0/480.0);
+		GL.screenXBias = 0.5 * ( GL.canvas.clientWidth - ( GL.canvas.clientHeight * (640.0/480.0) ) );
+	}
+	else {
+		// no wide screen, scale by width
+		GL.screenXScale = GL.screenYScale = GL.canvas.clientWidth * (1.0/640.0);
+		GL.screenYBias = 0.5 * ( GL.canvas.clientHeight - ( GL.canvas.clientWidth * (480.0/640.0) ) );
+	}
+
+	GL.screenXmin = 0.0 - (GL.screenXBias / GL.screenXScale);
+	GL.screenXmax = 640.0 + (GL.screenXBias / GL.screenXScale);
+
+	GL.screenYmin = 0.0 - (GL.screenYBias / GL.screenYScale);
+	GL.screenYmax = 480.0 + (GL.screenYBias / GL.screenYScale);
+
+	GL.cursorScaleR = 1.0 / GL.screenXScale;
+	if ( GL.cursorScaleR < 0.5 ) {
+		GL.cursorScaleR = 0.5;
+	}
+}
+
+
 function updateVideoCmd() {
   GL.canvas.setAttribute('width', GL.canvas.clientWidth)
   GL.canvas.setAttribute('height', GL.canvas.clientHeight)
@@ -54,6 +80,9 @@ function updateVideoCmd() {
   HEAP32[(INPUT.aspect >> 2) + 6]++;
   HEAP32[cvar_modifiedFlags >> 2] |= 0x40000000 // CVAR_MODIFIED
   */
+ 	
+  CopyBiases();
+
   WindowResize(GL.canvas.width, GL.canvas.height)
 }
 
@@ -115,6 +144,7 @@ function InputPushFocusEvent(evt) {
     //HEAP32[gw_active >> 2] = true;
     HEAP32[gw_minimized >> 2] = false;
   }
+  CopyBiases();
 }
 
 
@@ -374,10 +404,8 @@ function InputPushMouseEvent(evt) {
           getMovementX(evt), getMovementY(evt), 0, null);
       } else {
         Sys_QueEvent(Sys_Milliseconds(), SE_MOUSE_ABS,
-        //(evt.clientX + 20) * 640/480, 
-        //(evt.clientY + 20) * GL.canvas.clientWidth / GL.canvas.clientHeight * 640/480,
-        (evt.clientX * 2 + 20) * 480/640, 
-        (evt.clientY * 2 + 20) * 480/640,
+        (evt.clientX * GL.screenXScale * GL.cursorScaleR), 
+        (evt.clientY * GL.screenYScale * GL.cursorScaleR),
          0, null);
       }
     } else {
@@ -465,6 +493,8 @@ const CV_INTEGER = 2
 function IN_Init() {
 
   console.log('\n------- Input Initialization -------\n')
+
+  CopyBiases()
 
   INPUT.aspect = Cvar_Get(stringToAddress('r_customAspect'), stringToAddress(''), 0);
   INPUT.fpsUnfocused = Cvar_Get(stringToAddress('com_maxfpsUnfocused'), stringToAddress('60'), 0);

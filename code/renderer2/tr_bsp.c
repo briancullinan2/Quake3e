@@ -37,7 +37,16 @@ void RE_LoadWorldMap( const char *name );
 
 */
 
+#ifdef USE_MULTIVM_RENDERER
+static 		world_t		s_worldDatas[MAX_NUM_WORLDS];
+int       rwi = 0; // render world, should match number of loaded clip maps, 
+                   //   since they are reusable
+int 			rwi_ref = 0;
+#define s_worldData s_worldDatas[rwi]
+#else
 static	world_t		s_worldData;
+#endif
+
 static	byte		*fileBase;
 
 static int	c_gridVerts;
@@ -251,6 +260,8 @@ static	void R_LoadLightmaps( const lump_t *l, const lump_t *surfs ) {
 		numLightmaps >>= 1;
 
 	// Use fat lightmaps of an appropriate size.
+#if !defined(__WASM__) && !defined(USE_MULTIVM_SERVER) && !defined(USE_MULTIVM_RENDERER)
+
 	if (r_mergeLightmaps->integer)
 	{
 		int maxLightmapsPerAxis = glConfig.maxTextureSize / tr.lightmapSize;
@@ -270,6 +281,7 @@ static	void R_LoadLightmaps( const lump_t *l, const lump_t *surfs ) {
 		tr.numLightmaps = (numLightmaps + (numLightmapsPerPage - 1)) / numLightmapsPerPage;
 	}
 	else
+#endif
 	{
 		tr.numLightmaps = numLightmaps;
 	}
@@ -2708,7 +2720,12 @@ RE_LoadWorldMap
 Called directly from cgame
 =================
 */
-void RE_LoadWorldMap( const char *name ) {
+#ifdef USE_MULTIVM_RENDERER
+int RE_LoadWorldMap( const char *name )
+#else
+void RE_LoadWorldMap( const char *name ) 
+#endif
+{
 	int			i;
 	dheader_t	*header;
 	union {
@@ -2717,13 +2734,35 @@ void RE_LoadWorldMap( const char *name ) {
 	} buffer;
 	byte		*startMarker;
 
+	R_IssuePendingRenderCommands();
+
+	RE_ClearScene();
+
+#ifdef USE_MULTIVM_RENDERER
+	int j, empty = -1;
+	for(j = 0; j < MAX_NUM_WORLDS; j++) {
+		if ( !Q_stricmp( s_worldDatas[j].name, name ) ) {
+			// TODO: PRINT_DEVELOPER
+			rwi = 0;
+			ri.Printf( PRINT_ALL, "RE_LoadWorldMap (%i): Already loaded %s\n", j, name );
+			return j;
+		} else if (s_worldDatas[j].name[0] == '\0' && empty == -1) {
+			// load additional world in to next slot
+			empty = j;
+		}
+	}
+	rwi = empty;
+	// TODO: if (empty == -1) FreeOldestClipmap
+
+#else
 	if ( tr.worldMapLoaded ) {
-#ifdef __WASM__
+#if defined(__WASM__) || defined(USE_MULTIVM_RENDERER) || defined(USE_LAZY_MEMORY)
   	ri.Printf( PRINT_WARNING, "ERROR: attempted to redundantly load world map\n" );
 #else
 		ri.Error( ERR_DROP, "ERROR: attempted to redundantly load world map" );
 #endif
 	}
+#endif
 
 	// set default map light scale
 	tr.sunShadowScale = 0.5f;
@@ -3025,4 +3064,9 @@ void RE_LoadWorldMap( const char *name ) {
 	}
 
     ri.FS_FreeFile( buffer.v );
+
+#ifdef USE_MULTIVM_RENDERER
+	rwi = 0;
+	return empty;
+#endif
 }

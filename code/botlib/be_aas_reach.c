@@ -62,6 +62,49 @@ extern botlib_import_t botimport;
 //area flag used for weapon jumping
 #define AREA_WEAPONJUMP						8192	//valid area to weapon jump to
 //number of reachabilities of each type
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
+int reach_swimWorlds[MAX_NUM_VMS];			//swim
+#define reach_swim reach_swimWorlds[aasgvm]
+int reach_equalfloorWorlds[MAX_NUM_VMS];	//walk on floors with equal height
+#define reach_equalfloor reach_equalfloorWorlds[aasgvm]
+int reach_stepWorlds[MAX_NUM_VMS];			//step up
+#define reach_step reach_stepWorlds[aasgvm]
+int reach_walkWorlds[MAX_NUM_VMS];			//walk of step
+#define reach_walk reach_walkWorlds[aasgvm]
+int reach_barrierWorlds[MAX_NUM_VMS];		//jump up to a barrier
+#define reach_barrier reach_barrierWorlds[aasgvm]
+int reach_waterjumpWorlds[MAX_NUM_VMS];	//jump out of water
+#define reach_waterjump reach_waterjumpWorlds[aasgvm]
+int reach_walkoffledgeWorlds[MAX_NUM_VMS];	//walk of a ledge
+#define reach_walkoffledge reach_walkoffledgeWorlds[aasgvm]
+int reach_jumpWorlds[MAX_NUM_VMS];			//jump
+#define reach_jump reach_jumpWorlds[aasgvm]
+int reach_ladderWorlds[MAX_NUM_VMS];		//climb or descent a ladder
+#define reach_ladder reach_ladderWorlds[aasgvm]
+int reach_teleportWorlds[MAX_NUM_VMS];		//teleport
+#define reach_teleport reach_teleportWorlds[aasgvm]
+int reach_elevatorWorlds[MAX_NUM_VMS];		//use an elevator
+#define reach_elevator reach_elevatorWorlds[aasgvm]
+int reach_funcbobWorlds[MAX_NUM_VMS];		//use a func bob
+#define reach_funcbob reach_funcbobWorlds[aasgvm]
+int reach_grappleWorlds[MAX_NUM_VMS];		//grapple hook
+#define reach_grapple reach_grappleWorlds[aasgvm]
+int reach_doublejumpWorlds[MAX_NUM_VMS];	//double jump
+#define reach_doublejump reach_doublejumpWorlds[aasgvm]
+int reach_rampjumpWorlds[MAX_NUM_VMS];		//ramp jump
+#define reach_rampjump reach_rampjumpWorlds[aasgvm]
+int reach_strafejumpWorlds[MAX_NUM_VMS];	//strafe jump (just normal jump but further)
+#define reach_strafejump reach_strafejumpWorlds[aasgvm]
+int reach_rocketjumpWorlds[MAX_NUM_VMS];	//rocket jump
+#define reach_rocketjump reach_rocketjumpWorlds[aasgvm]
+int reach_bfgjumpWorlds[MAX_NUM_VMS];		//bfg jump
+#define reach_bfgjump reach_bfgjumpWorlds[aasgvm]
+int reach_jumppadWorlds[MAX_NUM_VMS];		//jump pads
+#define reach_jumppad reach_jumppadWorlds[aasgvm]
+//if true grapple reachabilities are skipped
+int calcgrapplereachWorlds[MAX_NUM_VMS];
+#define calcgrapplereach calcgrapplereachWorlds[aasgvm]
+#else
 static int reach_swim;			//swim
 static int reach_equalfloor;	//walk on floors with equal height
 static int reach_step;			//step up
@@ -85,6 +128,7 @@ static int reach_rocketjump;	//rocket jump
 static int reach_jumppad;		//jump pads
 //if true grapple reachabilities are skipped
 int calcgrapplereach;
+#endif
 //linked reachability
 typedef struct aas_lreachability_s
 {

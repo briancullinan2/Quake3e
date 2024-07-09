@@ -1188,6 +1188,7 @@ Q3OBJ = \
   $(B)/client/sv_main.o \
   $(B)/client/sv_net_chan.o \
   $(B)/client/sv_snapshot.o \
+  $(B)/client/sv_teleport.o \
   $(B)/client/sv_world.o \
   \
   $(B)/client/q_math.o \
@@ -1428,6 +1429,7 @@ Q3DOBJ = \
   $(B)/ded/sv_main.o \
   $(B)/ded/sv_net_chan.o \
   $(B)/ded/sv_snapshot.o \
+  $(B)/ded/sv_teleport.o \
   $(B)/ded/sv_world.o \
   \
   $(B)/ded/cm_load.o \

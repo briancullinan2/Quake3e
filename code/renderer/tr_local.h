@@ -43,6 +43,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "iqm.h"
 #include "qgl.h"
 
+
 #define GL_INDEX_TYPE		GL_UNSIGNED_INT
 
 typedef uint32_t glIndex_t;
@@ -97,6 +98,9 @@ typedef struct {
 	vec3_t		shadowLightDir;	// normalized direction towards light
 #endif
 	qboolean	intShaderTime;
+#ifdef USE_MULTIVM_RENDERER
+	int world;
+#endif
 } trRefEntity_t;
 
 
@@ -372,6 +376,7 @@ typedef struct {
 
 typedef struct shader_s {
 	char		name[MAX_QPATH];		// game path, including extension
+  int     lastTimeUsed;
 	int			lightmapSearchIndex;	// for a shader to match, both name and lightmapIndex must match
 	int			lightmapIndex;			// for rendering
 
@@ -480,6 +485,7 @@ typedef struct {
 	struct dlight_s	*dlights;
 
 	int			numPolys;
+
 	struct srfPoly_s	*polys;
 
 	int numPolyBuffers;
@@ -568,6 +574,11 @@ typedef struct {
 	vec3_t		pvsOrigin;			// may be different than or.origin for portals
 	portalView_t portalView;
   int       portalEntity;
+
+#ifdef USE_MULTIVM_RENDERER
+	int       newWorld;  // switch to a different world when rendering a camera view
+#endif
+
 	int			frameSceneNum;		// copied from tr.frameSceneNum
 	int			frameCount;			// copied from tr.frameCount
 	cplane_t	portalPlane;		// clip anything behind this if mirroring
@@ -609,6 +620,8 @@ typedef enum {
 	SF_ENTITY,				// beams, rails, lightning, etc that can be determined by entity
 	SF_POLYBUFFER,
 
+	SF_DECAL,               // ydnar: decal surfaces
+
 	SF_NUM_SURFACE_TYPES,
 	SF_MAX = 0x7fffffff			// ensures that sizeof( surfaceType_t ) == sizeof( int )
 } surfaceType_t;
@@ -640,7 +653,6 @@ typedef struct srfPoly_s {
 	int				numVerts;
 	polyVert_t		*verts;
 } srfPoly_t;
-
 
 typedef struct srfPolyBuffer_s {
 	surfaceType_t surfaceType;
@@ -1094,6 +1106,8 @@ typedef struct {
 
 } backEndState_t;
 
+
+
 /*
 ** trGlobals_t 
 **
@@ -1104,6 +1118,7 @@ typedef struct {
 */
 typedef struct {
 	qboolean				registered;		// cleared at shutdown, set at beginRegistration
+  int							lastRegistrationTime;
 	qboolean				inited;			// cleared at shutdown, set at InitOpenGL
 
 	int						visCount;		// incremented every time a new vis cluster is entered
@@ -1208,7 +1223,22 @@ typedef struct {
 } trGlobals_t;
 
 extern backEndState_t	backEnd;
+
+
+#ifdef USE_MULTIVM_RENDERER
+
+#define MAX_NUM_WORLDS MAX_NUM_VMS
+
+extern float dvrXScale;
+extern float dvrYScale;
+extern float dvrXOffset;
+extern float dvrYOffset;
+extern int     rwi;
+extern trGlobals_t	trWorlds[MAX_NUM_WORLDS];
+#define tr trWorlds[rwi]
+#else
 extern trGlobals_t	tr;
+#endif
 
 extern int					gl_clamp_mode;
 
@@ -1342,6 +1372,19 @@ extern	cvar_t	*r_printShaders;
 
 extern cvar_t	*r_marksOnTriangleMeshes;
 
+extern cvar_t	*r_developer;
+
+extern cvar_t	*r_fogDepth;
+extern cvar_t	*r_fogColor;
+
+extern  cvar_t  *r_paletteMode;
+extern  cvar_t  *r_seeThroughWalls;
+
+extern  cvar_t	*r_maxpolys;
+extern  cvar_t	*r_maxpolyverts;
+extern  cvar_t	*r_maxpolybuffers;
+
+
 #ifdef USE_AUTO_TERRAIN
 extern cvar_t	*r_autoTerrain;
 #endif
@@ -1358,6 +1401,7 @@ void R_AddBeamSurfaces( trRefEntity_t *e );
 void R_AddRailSurfaces( trRefEntity_t *e, qboolean isUnderwater );
 void R_AddLightningBoltSurfaces( trRefEntity_t *e );
 void R_AddPolygonBufferSurfaces( void );
+
 void R_AddPolygonSurfaces( void );
 
 void R_DecomposeSort( unsigned sort, int *entityNum, shader_t **shader, 
@@ -1446,7 +1490,15 @@ void		RE_UploadCinematic( int w, int h, int cols, int rows, const byte *data, in
 
 void		RE_BeginFrame( stereoFrame_t stereoFrame );
 void		RE_BeginRegistration( glconfig_t *glconfig );
+
+#ifdef USE_MULTIVM_RENDERER
+int		RE_LoadWorldMap( const char *mapname );
+void    RE_SetDvrFrame( float x, float y, float width, float height );
+
+#else
 void		RE_LoadWorldMap( const char *mapname );
+#endif
+
 void		RE_SetWorldVisData( const byte *vis );
 qhandle_t	RE_RegisterModel( const char *name );
 qhandle_t	RE_RegisterSkin( const char *name );
@@ -1483,9 +1535,13 @@ shader_t	*R_FindShader( const char *name, int lightmapIndex, qboolean mipRawImag
 shader_t	*R_GetShaderByHandle( qhandle_t hShader );
 shader_t	*R_GetShaderByState( int index, long *cycleTime );
 shader_t	*R_FindShaderByName( const char *name );
+
 void		R_InitShaders( void );
 void		R_ShaderList_f( void );
 void		RE_RemapShader(const char *oldShader, const char *newShader, const char *timeOffset);
+#if defined(USE_RMLUI) || defined(USE_ASYNCHRONOUS)
+qhandle_t RE_CreateShaderFromRaw(const char* name, const byte *pic, int width, int height);
+#endif
 
 
 //
@@ -1558,7 +1614,22 @@ typedef struct shaderCommands_s
 
 } shaderCommands_t;
 
+
+#ifdef USE_MULTIVM_RENDERER
+
+typedef struct {
+	int		commandId;
+	int 	world;
+	const void *next;
+} setWorldCommand_t;
+
+extern	shaderCommands_t	tessWorlds[MAX_NUM_WORLDS];
+#define tess tessWorlds[rwi]
+#else
 extern	shaderCommands_t	tess;
+#endif
+
+
 
 void RB_BeginSurface( shader_t *shader, int fogNum );
 void RB_EndSurface( void );
@@ -1612,7 +1683,11 @@ LIGHTS
 void R_DlightBmodel( bmodel_t *bmodel );
 void R_SetupEntityLighting( const trRefdef_t *refdef, trRefEntity_t *ent );
 void R_TransformDlights( int count, dlight_t *dl, orientationr_t *or );
+#ifdef USE_MULTIVM_RENDERER
+int R_LightForPoint( vec3_t point, vec3_t ambientLight, vec3_t directedLight, vec3_t lightDir, int world );
+#else
 int R_LightForPoint( vec3_t point, vec3_t ambientLight, vec3_t directedLight, vec3_t lightDir );
+#endif
 
 #ifdef USE_PMLIGHT
 void ARB_SetupLightParams( void );
@@ -1712,6 +1787,20 @@ SCENE GENERATION
 void R_InitNextFrame( void );
 
 void RE_ClearScene( void );
+
+#ifdef USE_MULTIVM_RENDERER
+
+void RE_AddRefEntityToScene( const refEntity_t *ent, qboolean intShaderTime, int world );
+void RE_AddPolyToScene( qhandle_t hShader , int numVerts, const polyVert_t *verts, int num, int world );
+void RE_AddPolyBufferToScene( polyBuffer_t* pPolyBuffer, int world );
+void RE_AddLightToScene( const vec3_t org, float intensity, float r, float g, float b, int world );
+void RE_AddAdditiveLightToScene( const vec3_t org, float intensity, float r, float g, float b, int world );
+void RE_AddLinearLightToScene( const vec3_t start, const vec3_t end, float intensity, float r, float g, float b, int world );
+
+void RE_RenderScene( const refdef_t *fd, int world );
+
+#else
+
 void RE_AddRefEntityToScene( const refEntity_t *ent, qboolean intShaderTime );
 void RE_AddPolyToScene( qhandle_t hShader , int numVerts, const polyVert_t *verts, int num );
 void RE_AddPolyBufferToScene( polyBuffer_t* pPolyBuffer );
@@ -1720,6 +1809,8 @@ void RE_AddAdditiveLightToScene( const vec3_t org, float intensity, float r, flo
 void RE_AddLinearLightToScene( const vec3_t start, const vec3_t end, float intensity, float r, float g, float b );
 
 void RE_RenderScene( const refdef_t *fd );
+
+#endif
 
 /*
 =============================================================
@@ -1880,6 +1971,11 @@ typedef struct
 typedef enum {
 	RC_END_OF_LIST,
 	RC_SET_COLOR,
+
+#ifdef USE_MULTIVM_RENDERER
+	RC_SET_WORLD,
+#endif
+
 	RC_STRETCH_PIC,
 	RC_DRAW_SURFS,
 	RC_DRAW_BUFFER,
@@ -1896,10 +1992,15 @@ typedef enum {
 // these are sort of arbitrary limits.
 // the limits apply to the sum of all scenes in a frame --
 // the main view, all the 3D icons, etc
+#ifdef USE_MULTIVM_RENDERER
+#define	MAX_POLYS		20480
+#define	MAX_POLYVERTS	102400
+#define MAX_POLYBUFFERS	512
+#else
 #define	MAX_POLYS		8192
 #define	MAX_POLYVERTS	32768
 #define MAX_POLYBUFFERS	256
-
+#endif
 // all of the information needed by the back end must be
 // contained in a backEndData_t
 typedef struct {
@@ -1914,7 +2015,7 @@ typedef struct {
 	trRefEntity_t	entities[MAX_REFENTITIES];
 	srfPoly_t	*polys;//[MAX_POLYS];
 	polyVert_t	*polyVerts;//[MAX_POLYVERTS];
-	srfPolyBuffer_t *polybuffers; //[MAX_POLYBUFFERS];
+	srfPolyBuffer_t *polybuffers; //[MAX_POLYS];
   int	*indexes;//[MAX_POLYVERTS];
 	renderCommandList_t	commands;
 } backEndData_t;
@@ -1923,7 +2024,9 @@ extern	int		max_polys;
 extern	int		max_polyverts;
 extern	int		max_polybuffers;
 
+
 extern	backEndData_t	*backEndData;
+
 
 void RB_ExecuteRenderCommands( const void *data );
 void RB_TakeScreenshot( int x, int y, int width, int height, const char *fileName );

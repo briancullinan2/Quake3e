@@ -20,6 +20,12 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
 // common.c -- misc functions used in client and server
+#ifdef _DEBUG
+#include <execinfo.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#endif
 
 #include "q_shared.h"
 #include "qcommon.h"
@@ -38,12 +44,24 @@ const int demo_protocols[] = { 66, 67, OLD_PROTOCOL_VERSION, NEW_PROTOCOL_VERSIO
 
 #define USE_MULTI_SEGMENT // allocate additional zone segments on demand
 
+
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+#define MIN_COMHUNKMEGS		256
+#define DEF_COMHUNKMEGS		1024
+#else
+#ifdef USE_MULTIVM_SERVER
+#define MIN_COMHUNKMEGS		128
+#define DEF_COMHUNKMEGS		512
+#else
+
 #ifdef DEDICATED
 #define MIN_COMHUNKMEGS		48
 #define DEF_COMHUNKMEGS		56
 #else
 #define MIN_COMHUNKMEGS		64
 #define DEF_COMHUNKMEGS		128
+#endif
+#endif
 #endif
 
 #ifdef USE_MULTI_SEGMENT
@@ -2341,6 +2359,15 @@ The server calls this before shutting down or loading a new map
 */
 void Hunk_Clear( void ) {
 
+#ifdef _DEBUG
+//	if ( sig == SIGSEGV || sig == SIGILL || sig == SIGBUS )
+	{
+		void *syms[10];
+		const size_t size = backtrace( syms, ARRAY_LEN( syms ) );
+		backtrace_symbols_fd( syms, size, STDERR_FILENO );
+	}
+#endif
+
 #ifndef DEDICATED
 	CL_ShutdownCGame();
 	CL_ShutdownUI();
@@ -3143,7 +3170,11 @@ void Com_GameRestart( int checksumFeed, qboolean clientRestart )
 #ifndef DEDICATED
 		// Reparse pure paks and update cvars before FS startup
 		if ( CL_GameSwitch() )
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+			CL_SystemInfoChanged( qfalse, 0 );
+#else
 			CL_SystemInfoChanged( qfalse );
+#endif
 #endif
 
 		FS_Restart( checksumFeed );
@@ -3976,7 +4007,11 @@ void Com_Init( char *commandLine ) {
 	// init commands and vars
 	//
 #ifndef DEDICATED
+#if defined(USE_MULTIVM_RENDERER) || defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
+	com_maxfps = Cvar_Get( "com_maxfps", "250", 0 ); // try to force that in some light way
+#else
 	com_maxfps = Cvar_Get( "com_maxfps", "125", 0 ); // try to force that in some light way
+#endif
 	com_maxfpsUnfocused = Cvar_Get( "com_maxfpsUnfocused", "60", CVAR_ARCHIVE_ND | (Cvar_VariableIntegerValue("r_headless") ? CVAR_PROTECTED : 0) );
 	Cvar_CheckRange( com_maxfps, "0", "1000", CV_INTEGER );
 	Cvar_SetDescription( com_maxfps, "Sets maximum frames per second." );

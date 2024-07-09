@@ -117,7 +117,12 @@ RE_AddPolyToScene
 
 =====================
 */
-void RE_AddPolyToScene( qhandle_t hShader, int numVerts, const polyVert_t *verts, int numPolys ) {
+#ifdef USE_MULTIVM_RENDERER
+void RE_AddPolyToScene( qhandle_t hShader, int numVerts, const polyVert_t *verts, int numPolys, int world ) 
+#else
+void RE_AddPolyToScene( qhandle_t hShader, int numVerts, const polyVert_t *verts, int numPolys ) 
+#endif
+{
 	srfPoly_t	*poly;
 	int			i, j;
 	int			fogIndex;
@@ -208,14 +213,23 @@ RE_AddRefEntityToScene
 
 =====================
 */
-void RE_AddRefEntityToScene( const refEntity_t *ent, qboolean intShaderTime ) {
+#ifdef USE_MULTIVM_RENDERER
+void RE_AddRefEntityToScene( const refEntity_t *ent, qboolean intShaderTime, int world ) 
+#else
+void RE_AddRefEntityToScene( const refEntity_t *ent, qboolean intShaderTime ) 
+#endif
+{
 	vec3_t cross;
 
 	if ( !tr.registered ) {
 		return;
 	}
 	if ( r_numentities >= MAX_REFENTITIES ) {
+#ifdef USE_MULTIVM_RENDERER
+		ri.Printf( PRINT_DEVELOPER, "RE_AddRefEntityToScene (%i): Dropping refEntity, reached MAX_REFENTITIES\n", rwi );
+#else
 		ri.Printf(PRINT_DEVELOPER, "RE_AddRefEntityToScene: Dropping refEntity, reached MAX_REFENTITIES\n");
+#endif
 		return;
 	}
 	if ( Q_isnan(ent->origin[0]) || Q_isnan(ent->origin[1]) || Q_isnan(ent->origin[2]) ) {
@@ -233,6 +247,9 @@ void RE_AddRefEntityToScene( const refEntity_t *ent, qboolean intShaderTime ) {
 	backEndData->entities[r_numentities].e = *ent;
 	backEndData->entities[r_numentities].lightingCalculated = qfalse;
 	backEndData->entities[r_numentities].intShaderTime = intShaderTime;
+#ifdef USE_MULTIVM_RENDERER
+	backEndData->entities[r_numentities].world = world;
+#endif
 
 	CrossProduct(ent->axis[0], ent->axis[1], cross);
 	backEndData->entities[r_numentities].mirrored = (DotProduct(ent->axis[2], cross) < 0.f);
@@ -278,7 +295,12 @@ RE_AddLightToScene
 
 =====================
 */
-void RE_AddLightToScene( const vec3_t org, float intensity, float r, float g, float b ) {
+#ifdef USE_MULTIVM_RENDERER
+void RE_AddLightToScene( const vec3_t org, float intensity, float r, float g, float b, int world ) 
+#else
+void RE_AddLightToScene( const vec3_t org, float intensity, float r, float g, float b ) 
+#endif
+{
 	RE_AddDynamicLightToScene( org, intensity, r, g, b, qfalse );
 }
 
@@ -288,12 +310,21 @@ RE_AddAdditiveLightToScene
 
 =====================
 */
-void RE_AddAdditiveLightToScene( const vec3_t org, float intensity, float r, float g, float b ) {
+#ifdef USE_MULTIVM_RENDERER
+void RE_AddAdditiveLightToScene( const vec3_t org, float intensity, float r, float g, float b, int world ) 
+#else
+void RE_AddAdditiveLightToScene( const vec3_t org, float intensity, float r, float g, float b ) 
+#endif
+{
 	RE_AddDynamicLightToScene( org, intensity, r, g, b, qtrue );
 }
 
 
+#ifdef USE_MULTIVM_RENDERER
+void RE_BeginScene(const refdef_t *fd, int world)
+#else
 void RE_BeginScene(const refdef_t *fd)
+#endif
 {
 	Com_Memcpy( tr.refdef.text, fd->text, sizeof( tr.refdef.text ) );
 
@@ -468,7 +499,12 @@ Rendering a scene may require multiple views to be rendered
 to handle mirrors,
 @@@@@@@@@@@@@@@@@@@@@
 */
-void RE_RenderScene( const refdef_t *fd ) {
+#ifdef USE_MULTIVM_RENDERER
+void RE_RenderScene( const refdef_t *fd, int world ) 
+#else
+void RE_RenderScene( const refdef_t *fd ) 
+#endif
+{
 	viewParms_t		parms;
 	int				startTime;
 
@@ -487,7 +523,7 @@ void RE_RenderScene( const refdef_t *fd ) {
 		ri.Error (ERR_DROP, "R_RenderScene: NULL worldmodel");
 	}
 
-	RE_BeginScene(fd);
+	RE_BeginScene(fd, world);
 
 	// SmileTheory: playing with shadow mapping
 	if (!( fd->rdflags & RDF_NOWORLDMODEL ) && tr.refdef.num_dlights && r_dlightMode->integer >= 2)
@@ -552,10 +588,20 @@ void RE_RenderScene( const refdef_t *fd ) {
 	// convert to GL's 0-at-the-bottom space
 	//
 	Com_Memset( &parms, 0, sizeof( parms ) );
+
+#ifdef USE_MULTIVM_RENDERER
+	parms.newWorld = world;
+
+	parms.viewportX = tr.refdef.x * dvrXScale + (dvrXOffset * glConfig.vidWidth);
+	parms.viewportY = glConfig.vidHeight - ( (tr.refdef.y * dvrYScale + (dvrYOffset * glConfig.vidHeight)) + (tr.refdef.height * dvrYScale) );
+	parms.viewportWidth = tr.refdef.width * dvrXScale;
+	parms.viewportHeight = tr.refdef.height * dvrYScale;
+#else
 	parms.viewportX = tr.refdef.x;
 	parms.viewportY = glConfig.vidHeight - ( tr.refdef.y + tr.refdef.height );
 	parms.viewportWidth = tr.refdef.width;
 	parms.viewportHeight = tr.refdef.height;
+#endif
 	parms.isPortal = qfalse;
 
 	parms.fovX = tr.refdef.fov_x;
@@ -615,7 +661,12 @@ RE_AddPolyBufferToScene
 
 =====================
 */
-void RE_AddPolyBufferToScene( polyBuffer_t* pPolyBuffer ) {
+#ifdef USE_MULTIVM_RENDERER
+void RE_AddPolyBufferToScene( polyBuffer_t* pPolyBuffer, int world ) 
+#else
+void RE_AddPolyBufferToScene( polyBuffer_t* pPolyBuffer ) 
+#endif
+{
 	srfPolyBuffer_t*    pPolySurf;
 	int fogIndex;
 	fog_t*              fog;

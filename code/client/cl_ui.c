@@ -34,6 +34,9 @@ GetClientState
 ====================
 */
 static void GetClientState( uiClientState_t *state ) {
+#ifdef USE_MULTIVM_CLIENT
+	int igs = cgvmi_ref;
+#endif
 	state->connectPacketCount = clc.connectPacketCount;
 	state->connState = cls.state;
 	Q_strncpyz( state->servername, cls.servername, sizeof( state->servername ) );
@@ -716,6 +719,9 @@ GetConfigString
 static int GetConfigString(int index, char *buf, int size)
 {
 	int		offset;
+#ifdef USE_MULTIVM_CLIENT
+	int igs = cgvmi_ref;
+#endif
 
 	if (index < 0 || index >= MAX_CONFIGSTRINGS)
 		return qfalse;
@@ -833,7 +839,11 @@ static intptr_t CL_UISystemCalls( intptr_t *args ) {
 
 	case UI_CVAR_INFOSTRINGBUFFER:
 		VM_CHECKBOUNDS( uivm, args[2], args[3] );
+#ifdef USE_MULTIVM_CLIENT
+    Cvar_InfoStringBuffer( args[1], VMA(2), args[3] );
+#else
 		Cvar_InfoStringBuffer( args[1], VMA(2), args[3] );
+#endif
 		return 0;
 
 	case UI_ARGC:
@@ -854,7 +864,11 @@ static intptr_t CL_UISystemCalls( intptr_t *args ) {
 			Com_Printf (S_COLOR_YELLOW "turning EXEC_NOW '%.11s' into EXEC_INSERT\n", (const char*)VMA(2));
 			args[1] = EXEC_INSERT;
 		}
+#if 0 //def USE_MULTIVM_CLIENT
+    Cbuf_ExecuteTagged( args[1], VMA(2), uivmi );
+#else
 		Cbuf_ExecuteText( args[1], VMA(2) );
+#endif
 		return 0;
 
 	case UI_FS_FOPENFILE:
@@ -895,19 +909,35 @@ static intptr_t CL_UISystemCalls( intptr_t *args ) {
 		return 0;
 
 	case UI_R_ADDREFENTITYTOSCENE:
+#ifdef USE_MULTIVM_RENDERER
+		re.AddRefEntityToScene( VMA(1), qfalse, 0 );
+#else
 		re.AddRefEntityToScene( VMA(1), qfalse );
+#endif
 		return 0;
 
 	case UI_R_ADDPOLYTOSCENE:
+#ifdef USE_MULTIVM_RENDERER
+		re.AddPolyToScene( args[1], args[2], VMA(3), 1, 0 );
+#else
 		re.AddPolyToScene( args[1], args[2], VMA(3), 1 );
+#endif
 		return 0;
 
 	case UI_R_ADDLIGHTTOSCENE:
+#ifdef USE_MULTIVM_RENDERER
+		re.AddLightToScene( VMA(1), VMF(2), VMF(3), VMF(4), VMF(5), 0 );
+#else
 		re.AddLightToScene( VMA(1), VMF(2), VMF(3), VMF(4), VMF(5) );
+#endif
 		return 0;
 
 	case UI_R_RENDERSCENE:
+#ifdef USE_MULTIVM_RENDERER
+		re.RenderScene( VMA(1), 0 );
+#else
 		re.RenderScene( VMA(1) );
+#endif
 		return 0;
 
 	case UI_R_SETCOLOR:
@@ -923,7 +953,7 @@ static intptr_t CL_UISystemCalls( intptr_t *args ) {
 		return 0;
 
 	case UI_UPDATESCREEN:
-		SCR_UpdateScreen();
+		SCR_UpdateScreen( qtrue );
 		return 0;
 
 	case UI_CM_LERPTAG:
@@ -1165,12 +1195,20 @@ static intptr_t CL_UISystemCalls( intptr_t *args ) {
 
 	// engine extensions
 	case UI_R_ADDREFENTITYTOSCENE2:
+#ifdef USE_MULTIVM_RENDERER
+		re.AddRefEntityToScene( VMA(1), qtrue, 0 );
+#else
 		re.AddRefEntityToScene( VMA(1), qtrue );
+#endif
 		return 0;
 
 	// engine extensions
 	case UI_R_ADDLINEARLIGHTTOSCENE:
+#ifdef USE_MULTIVM_RENDERER
+		re.AddLinearLightToScene( VMA(1), VMA(2), VMF(3), VMF(4), VMF(5), VMF(6), 0 );
+#else
 		re.AddLinearLightToScene( VMA(1), VMA(2), VMF(3), VMF(4), VMF(5), VMF(6) );
+#endif
 		return 0;
 
 	case UI_TRAP_GETVALUE:
@@ -1235,7 +1273,8 @@ CL_InitUI
 */
 #define UI_OLD_API_VERSION	4
 
-void CL_InitUI( void ) {
+void CL_InitUI( void ) 
+{
 	int		v;
 	vmInterpret_t		interpret;
 
