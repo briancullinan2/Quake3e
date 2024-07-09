@@ -1802,7 +1802,10 @@ static void CL_Rcon_f( void ) {
 CL_SendPureChecksums
 =================
 */
-static void CL_SendPureChecksums( void ) {
+#if !defined(USE_MULTIVM_SERVER) && !defined(USE_MULTIVM_CLIENT)
+static
+#endif
+void CL_SendPureChecksums( void ) {
 	char cMsg[ MAX_STRING_CHARS-1 ];
 	int len;
 
@@ -2131,8 +2134,12 @@ static void CL_DownloadsComplete( void ) {
 	// this will also (re)load the UI
 	// if this is a local client then only the client part of the hunk
 	// will be cleared, note that this is done after the hunk mark has been set
+#ifndef USE_MULTIVM_CLIENT
 	CL_FlushMemory();
-
+#else
+	CL_ShutdownAll();
+	CL_StartHunkUsers();
+#endif
 
 	// initialize the CGame
 	cls.cgameStarted = qtrue;

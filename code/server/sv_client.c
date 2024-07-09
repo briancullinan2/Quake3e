@@ -2112,6 +2112,8 @@ void SV_PrintLocations_f( client_t *client ) {
 }
 
 
+void CL_InitCGame( void );
+void CL_SendPureChecksums( void );
 
 
 
@@ -2156,12 +2158,13 @@ void SV_LoadVM( client_t *cl ) {
 	//   shutdown the client to the mark to load a new map
 	//   regregister graphics after the server has set a new mark for the client to clear to
 	//   all other video processes remain the same
+#if 0
 #ifndef DEDICATED
 	CL_ShutdownAll();
 #endif
 	// but only clear to mark like client would and leave current map running
 	Hunk_ClearToMark();
-
+#endif
 
 
 	Sys_SetStatus( "Loading map %s\n", mapname );
@@ -2221,6 +2224,15 @@ void SV_LoadVM( client_t *cl ) {
 	SV_SetAASgvm(gvmi);
 	// set new mark from above for client to clear to
 	Hunk_SetMark();
+
+#if 0 //ndef DEDICATED
+	CL_StartHunkUsers();
+
+	if(com_cl_running->integer) {
+		CL_InitCGame();
+		CL_SendPureChecksums();
+	}
+#endif
 }
 #endif
 

@@ -3546,57 +3546,11 @@ static shader_t *FinishShader( void ) {
 	//
 	// if we are in r_vertexLight mode, never use a lightmap texture
 	//
-#if 1 //ndef __WASM__
 	if ( stage > 1 && ( (r_vertexLight->integer && tr.vertexLightingAllowed) || glConfig.hardwareType == GLHW_PERMEDIA2 ) ) {
 		VertexLightingCollapse();
 		hasLightmapStage = qfalse;
 	}
-#else
-	if ( stage > 1 ) {
-		//VertexLightingCollapse();
-		hasLightmapStage = qfalse;
 
-		for ( stage = 0; stage < MAX_SHADER_STAGES; stage++ ) {
-			shaderStage_t *pStage = &stages[stage];
-
-			if ( !pStage->active ) {
-				continue;
-			}
-			if(pStage->bundle[0].numTexMods) {
-				continue;
-			}
-			if ( pStage->bundle[0].tcGen == TCGEN_TEXTURE ) {
-				if(pStage->bundle[0].numTexMods) {
-					pStage->rgbGen = CGEN_LIGHTING_DIFFUSE;
-				} else {
-					if(shader.lightmapIndex == LIGHTMAP_NONE) {
-						//pStage->rgbGen = CGEN_EXACT_VERTEX;
-						continue;
-					}
-					pStage->rgbGen = CGEN_LIGHTING_DIFFUSE;
-				}
-				//pStage->rgbGen = CGEN_LIGHTING_DIFFUSE;
-			}
-			if ( pStage->bundle[0].isLightmap ) {
-				//pStage->active = qfalse;
-				if ( shader.lightmapIndex == LIGHTMAP_NONE ) {
-					pStage->rgbGen = CGEN_LIGHTING_DIFFUSE;
-				} else {
-					pStage->rgbGen = CGEN_EXACT_VERTEX;
-				}
-				continue;
-			} else {
-				if ( pStage->bundle[0].tcGen == TCGEN_TEXTURE ) {
-					pStage->rgbGen = CGEN_EXACT_VERTEX;
-				}
-				//pStage->rgbGen = CGEN_EXACT_VERTEX;
-				//pStage->rgbGen = CGEN_LIGHTING_DIFFUSE;
-			}
-			//stages[0].stateBits &= ~( GLS_DSTBLEND_BITS | GLS_SRCBLEND_BITS );
-			//stages[0].stateBits |= GLS_DEPTHMASK_TRUE;
-		}
-	}
-#endif
 
 	//
 	// look for multitexture potential
@@ -3771,9 +3725,6 @@ shader_t *R_FindShader( const char *name, int lightmapIndex, qboolean mipRawImag
 		// have to check all default shaders otherwise for every call to R_FindShader
 		// with that same strippedName a new default shader is created.
 		if ( (sh->lightmapSearchIndex == lightmapIndex || sh->defaultShader) 
-#ifdef __WASM__
-			&& sh->lastTimeUsed == tr.lastRegistrationTime
-#endif
 			&&	!Q_stricmp(sh->name, strippedName)
 		) {
 			// match found
@@ -4464,7 +4415,7 @@ R_InitShaders
 */
 void R_InitShaders( void ) {
 	ri.Printf( PRINT_ALL, "Initializing Shaders\n" );
-#if defined(USE_MULTIVM_RENDERER) || defined(USE_MULTIVM_SERVER) || defined(__WASM__)
+#if defined(USE_MULTIVM_RENDERER) || defined(USE_MULTIVM_SERVER)
  	int i;
 	tr.lastRegistrationTime = ri.Milliseconds();
 
