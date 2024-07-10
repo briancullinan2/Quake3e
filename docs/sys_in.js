@@ -398,8 +398,12 @@ function InputPushMouseEvent(evt) {
     return
   }
 
-  if (!(Key_GetCatcher() & KEYCATCH_CONSOLE)
-    || HEAPU32[first_click >> 2]) {
+  if (Key_GetCatcher() === 0 && HEAPU32[(INPUT.in_joystick>>2) + 8]) {
+    return
+  }
+
+
+  if (!(Key_GetCatcher() & KEYCATCH_CONSOLE) || HEAPU32[first_click >> 2]) {
     if (evt.type == 'mousemove') {
       if (Key_GetCatcher() === 0) {
         Sys_QueEvent(Sys_Milliseconds(), SE_MOUSE,
@@ -438,9 +442,7 @@ function InputPushMouseEvent(evt) {
   }
 
   // TODO: fix this maybe?
-  //if(!mouseActive || in_joystick->integer) {
-  //  return;
-  //}
+
   // Basically, whenever the requestPointerLock() is finally triggered when cgame starts,
   //   the unfocusedFPS is cancelled and changed to real FPS, 200+!
   if (down && document.pointerLockElement != GL.canvas) {
@@ -481,6 +483,7 @@ function Sys_ConsoleInput() {
 }
 
 
+const CVAR_ROM = 0x0040
 const CVAR_ARCHIVE = 0x0001
 const CVAR_NODEFAULT = 0x4000
 const CVAR_LATCH = 0x0020
@@ -579,22 +582,22 @@ function InputPushTouchEvent(id, evt, data) {
   INPUT.cancelBackspace = false
   if (id == 1) {
     if (data.vector && data.vector.y > .4) {
-      InputPushKeyEvent({ type: 'keydown', repeat: true, keyCode: 87 })
+      InputPushKeyEvent({ type: 'keydown', repeat: false, keyCode: 87 })
     } else {
       InputPushKeyEvent({ type: 'keyup', keyCode: 87 })
     }
     if (data.vector && data.vector.y < -.4) {
-      InputPushKeyEvent({ type: 'keydown', repeat: true, keyCode: 83 })
+      InputPushKeyEvent({ type: 'keydown', repeat: false, keyCode: 83 })
     } else {
       InputPushKeyEvent({ type: 'keyup', keyCode: 83 })
     }
     if (data.vector && data.vector.x < -.4) {
-      InputPushKeyEvent({ type: 'keydown', repeat: true, keyCode: 65 })
+      InputPushKeyEvent({ type: 'keydown', repeat: false, keyCode: 65 })
     } else {
       InputPushKeyEvent({ type: 'keyup', keyCode: 65 })
     }
     if (data.vector && data.vector.x > .4) {
-      InputPushKeyEvent({ type: 'keydown', repeat: true, keyCode: 68 })
+      InputPushKeyEvent({ type: 'keydown', repeat: false, keyCode: 68 })
     } else {
       InputPushKeyEvent({ type: 'keyup', keyCode: 68 })
     }
@@ -602,22 +605,22 @@ function InputPushTouchEvent(id, evt, data) {
 
   if (id == 2) {
     if (data.vector && data.vector.y > .4) {
-      InputPushKeyEvent({ type: 'keydown', repeat: true, keyCode: 40 })
+      InputPushKeyEvent({ type: 'keydown', repeat: false, keyCode: 32 }) // 40
     } else {
-      InputPushKeyEvent({ type: 'keyup', keyCode: 40 })
+      InputPushKeyEvent({ type: 'keyup', keyCode: 32 })
     }
     if (data.vector && data.vector.y < -.4) {
-      InputPushKeyEvent({ type: 'keydown', repeat: true, keyCode: 38 })
+      InputPushKeyEvent({ type: 'keydown', repeat: false, keyCode: 67 }) // 38
     } else {
-      InputPushKeyEvent({ type: 'keyup', keyCode: 38 })
+      InputPushKeyEvent({ type: 'keyup', keyCode: 67 })
     }
     if (data.vector && data.vector.x < -.4) {
-      InputPushKeyEvent({ type: 'keydown', repeat: true, keyCode: 37 })
+      InputPushKeyEvent({ type: 'keydown', repeat: false, keyCode: 37 })
     } else {
       InputPushKeyEvent({ type: 'keyup', keyCode: 37 })
     }
     if (data.vector && data.vector.x > .4) {
-      InputPushKeyEvent({ type: 'keydown', repeat: true, keyCode: 39 })
+      InputPushKeyEvent({ type: 'keydown', repeat: false, keyCode: 39 })
     } else {
       InputPushKeyEvent({ type: 'keyup', keyCode: 39 })
     }
@@ -634,12 +637,16 @@ function InputPushTouchEvent(id, evt, data) {
     if ((Key_GetCatcher() & KEYCATCH_UI) && id == 3) {
       Sys_QueEvent(Sys_Milliseconds(), SE_MOUSE_ABS, x, y, 0, null);
     }
-    Sys_QueEvent(Sys_Milliseconds(), SE_FINGER_DOWN, INPUT.keystrings['MOUSE1'], id, 0, null);
+    if(Key_GetCatcher() !== 0) {
+      Sys_QueEvent(Sys_Milliseconds(), SE_FINGER_DOWN, INPUT.keystrings['MOUSE1'], id, 0, null);
+    }
   }
 
   if (evt.type == 'end') {
     //Sys_QueEvent( in_eventTime+1, SE_KEY, K_MOUSE1, qfalse, 0, null );
-    Sys_QueEvent(Sys_Milliseconds(), SE_FINGER_UP, INPUT.keystrings['MOUSE1'], id, 0, null);
+    if(Key_GetCatcher() !== 0) {
+      Sys_QueEvent(Sys_Milliseconds(), SE_FINGER_UP, INPUT.keystrings['MOUSE1'], id, 0, null);
+    }
     INPUT.touchhats[id][0] = 0;
     INPUT.touchhats[id][1] = 0;
   }
@@ -689,7 +696,33 @@ function InitNippleJoysticks() {
   if (navigator && navigator.userAgent && navigator.userAgent.match(/mobile/i)) {
     joy = true
   }
-  Cvar_Get(stringToAddress('in_joystick'), stringToAddress(joy ? '1' : '0'), CVAR_ARCHIVE)
+  Cvar_Get(stringToAddress('in_mobile'), stringToAddress(joy ? '1' : '0'), CVAR_ROM)
+  INPUT.in_joystick = Cvar_Get(stringToAddress('in_joystick'), stringToAddress(joy ? '1' : '0'), CVAR_ARCHIVE)
+
+  let originalKeybindings = `
+bind w "+forward"
+bind a "+moveleft"
+bind s "+back"
+bind d "+moveright"
+bind c "+movedown"
+bind SPACE "+moveup"
+bind UPARROW "+forward"
+bind DOWNARROW "+back"
+bind LEFTARROW "+left"
+bind RIGHTARROW "+right"
+`
+  let keybindings = `
+bind w "+forward"
+bind a "+moveleft"
+bind s "+back"
+bind d "+moveright"
+bind c "+movedown"
+bind SPACE "+moveup"
+bind UPARROW "+forward"
+bind DOWNARROW "+back"
+bind LEFTARROW "+left"
+bind RIGHTARROW "+right"
+`
 
   if (!Cvar_VariableIntegerValue(stringToAddress('in_joystick'))) {
     return
