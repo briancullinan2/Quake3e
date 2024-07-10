@@ -1074,9 +1074,9 @@ static qboolean R_GetPortalOrientations( const drawSurf_t *drawSurf, int entityN
 #ifdef USE_MULTIVM_CLIENT
 	*world = e->e.oldframe >> 8;
 #else
-	if((e->e.oldframe >> 8) > 0) {
-		return qfalse;
-	}
+//	if((e->e.oldframe >> 8) > 0) {
+//		return qfalse;
+//	}
 #endif
 	if(e->e.oldframe & 12) { // special indication meaning portal and frames are entity nums not rotations
 		*portalEntity = e->e.frame;
