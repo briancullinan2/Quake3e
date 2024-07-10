@@ -405,18 +405,7 @@ function InputPushMouseEvent(evt) {
         Sys_QueEvent(Sys_Milliseconds(), SE_MOUSE,
           getMovementX(evt), getMovementY(evt), 0, null);
       } else {
-        if ( GL.canvas.clientWidth * 480 > GL.canvas.clientHeight * 640 ) {
-          Sys_QueEvent(Sys_Milliseconds(), SE_MOUSE_ABS,
-          (evt.clientX - GL.screenXBias) * (GL.canvas.width + GL.screenXmin)/(GL.canvas.height) - GL.screenXmin * 2, 
-          (evt.clientY - GL.screenYBias) * (GL.canvas.width + GL.screenXmin)/(GL.canvas.height) - GL.screenYmin * 2,
-           0, null);
-        } else {
-          Sys_QueEvent(Sys_Milliseconds(), SE_MOUSE_ABS,
-          (evt.clientX - GL.screenXBias) * (GL.canvas.height - GL.screenYmin)/(GL.canvas.width) - GL.screenXmin * 2, 
-          (evt.clientY - GL.screenYBias) * (GL.canvas.height - GL.screenYmin)/(GL.canvas.width) - GL.screenYmin * 2,
-           0, null);
-        }
-
+        Sys_QueEvent(Sys_Milliseconds(), SE_MOUSE_ABS, evt.clientX, evt.clientY, 0, null)
       }
     } else {
       INPUT.editorActive = false
@@ -460,7 +449,6 @@ function InputPushMouseEvent(evt) {
     createTemporaryText()
     TEMPORARY_TEXT.focus()
     GL.canvas.requestPointerLock()
-    InitNippleJoysticks()
     document.body.classList.add('captured')
     document.body.classList.remove('released')
 
@@ -562,7 +550,7 @@ function IN_Init() {
 
   document.addEventListener('pointerlockchange', InputPushFocusEvent, false)
 
-  //InitNippleJoysticks()
+  InitNippleJoysticks()
   /*
   let nipple handle touch events
   GL.canvas.addEventListener('touchstart', InputPushTouchEvent, false)
@@ -724,6 +712,7 @@ function InitNippleJoysticks() {
     size: 100,
     catchDistance: 50,
     maxNumberOfNipples: 1,
+    dynamicPage: false,
     position: { bottom: '50px', left: '50px' },
   })
   INPUT.joysticks[1] = nipplejs.create({
@@ -733,6 +722,7 @@ function InitNippleJoysticks() {
     size: 100,
     catchDistance: 50,
     maxNumberOfNipples: 1,
+    dynamicPage: false,
     position: { bottom: '50px', right: '50px' },
   })
   INPUT.joysticks[2] = nipplejs.create({
@@ -742,6 +732,7 @@ function InitNippleJoysticks() {
     mode: 'dynamic',
     size: 2,
     catchDistance: 2,
+    dynamicPage: false,
     maxNumberOfNipples: 1,
   })
   INPUT.joysticks[0].on('start end move', InputPushTouchEvent.bind(INPUT.joysticks[0], 1))
@@ -774,11 +765,11 @@ function SDL_ShowCursor() {
     document.webkitExitPointerLock()
   else if (document.mozExitPointerLock)
     document.mozExitPointerLock()
-  if(INPUT.joysticks.length) {
-    INPUT.joysticks[0].destroy()
-    INPUT.joysticks[1].destroy()
-    INPUT.joysticks[2].destroy()
-  }
+  //if(INPUT.joysticks.length) {
+  //  INPUT.joysticks[0].destroy()
+  //  INPUT.joysticks[1].destroy()
+  //  INPUT.joysticks[2].destroy()
+  //}
 }
 
 function GLimp_Shutdown(destroy) {
