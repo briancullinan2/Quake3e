@@ -1545,7 +1545,7 @@ void R_Init( void ) {
 		ri.Printf (PRINT_ALL, "glGetError() = 0x%x\n", err);
 
 	// print info
-	GfxInfo_f();
+	//GfxInfo_f();
 	ri.Printf( PRINT_ALL, "----- finished R_Init -----\n" );
 }
 
