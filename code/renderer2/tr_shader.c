@@ -2128,6 +2128,11 @@ static qboolean ParseShader( const char **text )
 			shader.noPicMip = qtrue;
 			continue;
 		}
+		else if ( !Q_stricmp( token, "novlcollapse" ) /* && s_extendedShader */ )
+		{
+			shader.noVLcollapse = 1;
+			continue;
+		}
 		// polygonOffset
 		else if ( !Q_stricmp( token, "polygonOffset" ) )
 		{
@@ -3505,7 +3510,7 @@ static shader_t *FinishShader( void ) {
 	//
 	// if we are in r_vertexLight mode, never use a lightmap texture
 	//
-	if ( stage > 1 && ( (r_vertexLight->integer && tr.vertexLightingAllowed) || glConfig.hardwareType == GLHW_PERMEDIA2 ) ) {
+	if ( stage > 1 && ( (r_vertexLight->integer && tr.vertexLightingAllowed && !shader.noVLcollapse ) || glConfig.hardwareType == GLHW_PERMEDIA2 ) ) {
 		VertexLightingCollapse();
 		hasLightmapStage = qfalse;
 	}
