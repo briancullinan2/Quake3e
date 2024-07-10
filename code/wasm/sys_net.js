@@ -627,6 +627,7 @@ function CL_Download(cmd, name, auto) {
   let dlURL = addressToString(Cvar_VariableString(stringToAddress('cl_dlURL')))
   let gamedir = addressToString(FS_GetCurrentGameDir())
   let nameStr = addressToString(name)
+  let basegame = addressToString(Cvar_VariableString(stringToAddress('fs_basegame')))
   let localName = nameStr
   if (localName[0] == '/')
     localName = localName.substring(1)
@@ -689,7 +690,17 @@ function CL_Download(cmd, name, auto) {
               nameStr = 'maps/' + nameStr + '.bsp'
             }
             return responseData
-          })])).filter(f => f)[0]
+          }),
+          await Com_DL_Begin(localName + '.bsp', basegame + '/pak0.pk3dir/maps/' + localName + '.bsp')
+          .then(responseData => {
+            if(responseData && !nameStr.match(/\.bsp$/)) {
+              mapname = nameStr
+              nameStr = 'maps/' + nameStr + '.bsp'
+            }
+            return responseData
+          }),
+          
+        ])).filter(f => f)[0]
       } else {
         // valid from disk
         responseData = result.contents

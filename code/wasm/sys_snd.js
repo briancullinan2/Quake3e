@@ -15,6 +15,11 @@ function S_CodecLoad (name, info) {
   if(filenameStr.length == 0) {
     return 0
   }
+  if(typeof REMOTE_SOUNDS[filenameStr] != 'undefined'
+    && !REMOTE_SOUNDS[filenameStr]
+  ) {
+    return 0
+  }
   if(!filenameStr.endsWith('.ogg')) {
     filenameStr = filenameStr.replace(/\..*?$/, '.ogg')
   }
@@ -58,6 +63,9 @@ function S_CodecLoad (name, info) {
     Promise.resolve(Com_DL_Begin(gamedir + '/' + remoteFile, '/' + gamedir + '/' + remoteFile + '?alt')
         .then(function (responseData) {
           Com_DL_Perform(gamedir + '/' + remoteFile, remoteFile, responseData)
+          if(!responseData) {
+            REMOTE_SOUNDS[filenameStr] = false
+          }
         }))
   }
 
