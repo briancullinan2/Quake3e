@@ -235,7 +235,7 @@ function Sys_Return() {
 
 function Sys_Exit(code) {
 	SYS.exited = true
-	GLimp_Shutdown()
+	GLimp_Shutdown(true)
 	NET_Shutdown()
 	if(SYS.frameInterval) {
 		clearInterval(SYS.frameInterval)
@@ -244,7 +244,6 @@ function Sys_Exit(code) {
 	if(code == 0) {
 		Sys_Return()
 	}
-	SDL_ShowCursor()
 	if(	GL.canvas ) {
 		GL.canvas.remove()
 	}
