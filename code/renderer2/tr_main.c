@@ -1078,9 +1078,9 @@ static qboolean R_GetPortalOrientations( const drawSurf_t *drawSurf, int entityN
 #ifdef USE_MULTIVM_RENDERER
 	*world = e->e.oldframe >> 8;
 #else
-	if((e->e.oldframe >> 8) > 0) {
-		return qfalse;
-	}
+//	if((e->e.oldframe >> 8) > 0) {
+//		return qfalse;
+//	}
 #endif
 	if(e->e.oldframe & 12) { // special indication meaning portal and frames are entity nums not rotations
 		*portalEntity = e->e.frame;
@@ -1259,7 +1259,7 @@ static qboolean SurfIsOffscreen( const drawSurf_t *drawSurf, qboolean *isMirror,
 	// trivially reject
 	if ( pointAnd )
 	{
-		//return qtrue;
+		return qtrue;
 	}
 
 	// determine if this surface is backfaced and also determine the distance

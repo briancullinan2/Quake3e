@@ -142,6 +142,9 @@ void GLimp_InitExtraExtensions( void )
 
 #ifndef __WASM__
 	if (q_gl_version_at_least_3_0 || GLimp_HaveExtension(extension))
+#else
+	if(qtrue)
+#endif
 	{
 		glRefConfig.framebufferObject = !!r_ext_framebuffer_object->integer;
 		glRefConfig.framebufferBlit = qtrue;
@@ -155,7 +158,6 @@ void GLimp_InitExtraExtensions( void )
 		ri.Printf(PRINT_ALL, result[glRefConfig.framebufferObject], extension);
 	}
 	else
-#endif
 	{
 		ri.Printf(PRINT_ALL, result[2], extension);
 	}
@@ -338,6 +340,9 @@ void GLimp_InitExtraExtensions( void )
 	glRefConfig.directStateAccess = qfalse;
 #ifndef __WASM__
 	if (GLimp_HaveExtension(extension))
+#else
+	if(qtrue)
+#endif
 	{
 		glRefConfig.directStateAccess = !!r_ext_direct_state_access->integer;
 
@@ -350,7 +355,6 @@ void GLimp_InitExtraExtensions( void )
 		ri.Printf(PRINT_ALL, result[glRefConfig.directStateAccess], extension);
 	}
 	else
-#endif
 	{
 		ri.Printf(PRINT_ALL, result[2], extension);
 	}

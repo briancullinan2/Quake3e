@@ -960,10 +960,11 @@ static qboolean R_LoadMDR( model_t *mod, void *buffer, int filesize, const char 
 ** RE_BeginRegistration
 */
 void RE_BeginRegistration( glconfig_t *glconfigOut ) {
+#ifdef USE_MULTIVM_RENDERER
 if(rwi != 0) {
 	Com_Error(ERR_FATAL, "World not zero.");
 }
-
+#endif
 
 	R_Init();
 
