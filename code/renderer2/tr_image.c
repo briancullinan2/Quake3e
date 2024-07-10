@@ -2284,7 +2284,9 @@ static image_t *R_CreateImage2( const char *name, byte *pic, int width, int heig
 				dataType = GL_UNSIGNED_BYTE;
 				break;
 			case GL_RGB:
+#ifndef __WASM__
 			case GL_RGB8:
+#endif
 				internalFormat = GL_RGB;
 				dataFormat = GL_RGB;
 				dataType = GL_UNSIGNED_BYTE;
@@ -2295,7 +2297,9 @@ static image_t *R_CreateImage2( const char *name, byte *pic, int width, int heig
 				dataType = GL_UNSIGNED_SHORT_5_6_5;
 				break;
 			case GL_RGBA:
+#ifndef __WASM__
 			case GL_RGBA8:
+#endif
 				internalFormat = GL_RGBA;
 				dataFormat = GL_RGBA;
 				dataType = GL_UNSIGNED_BYTE;

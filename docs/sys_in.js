@@ -39,6 +39,8 @@ function GLimp_StartDriverAndSetMode(mode, modeFS, fullscreen, fallback) {
 }
 
 function CopyBiases() {
+	GL.screenXBias = 0.0;
+	GL.screenYBias = 0.0;
 
 	if ( GL.canvas.clientWidth * 480 > GL.canvas.clientHeight * 640 ) {
 		// wide screen, scale by height
@@ -403,10 +405,18 @@ function InputPushMouseEvent(evt) {
         Sys_QueEvent(Sys_Milliseconds(), SE_MOUSE,
           getMovementX(evt), getMovementY(evt), 0, null);
       } else {
-        Sys_QueEvent(Sys_Milliseconds(), SE_MOUSE_ABS,
-        (evt.clientX * GL.screenXScale * GL.cursorScaleR), 
-        (evt.clientY * GL.screenYScale * GL.cursorScaleR),
-         0, null);
+        if ( GL.canvas.clientWidth * 480 > GL.canvas.clientHeight * 640 ) {
+          Sys_QueEvent(Sys_Milliseconds(), SE_MOUSE_ABS,
+          (evt.clientX - GL.screenXBias) * (GL.canvas.width + GL.screenXmin)/(GL.canvas.height) - GL.screenXmin * 2, 
+          (evt.clientY - GL.screenYBias) * (GL.canvas.width + GL.screenXmin)/(GL.canvas.height) - GL.screenYmin * 2,
+           0, null);
+        } else {
+          Sys_QueEvent(Sys_Milliseconds(), SE_MOUSE_ABS,
+          (evt.clientX - GL.screenXBias) * (GL.canvas.height - GL.screenYmin)/(GL.canvas.width) - GL.screenXmin * 2, 
+          (evt.clientY - GL.screenYBias) * (GL.canvas.height - GL.screenYmin)/(GL.canvas.width) - GL.screenYmin * 2,
+           0, null);
+        }
+
       }
     } else {
       INPUT.editorActive = false
