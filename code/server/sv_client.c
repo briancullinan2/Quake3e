@@ -2147,6 +2147,13 @@ void SV_LoadVM( client_t *cl ) {
 	Com_sprintf( expanded, sizeof( expanded ), "maps/%s.bsp", mapname );
 	len = FS_FOpenFileRead( expanded, NULL, qfalse );
 	if ( len == -1 ) {
+#ifdef __WASM__
+		qboolean	CL_Download( const char *cmd, const char *pakname, qboolean autoDownload );
+		static char alreadyTried[MAX_OSPATH];
+		if(Q_stricmp(alreadyTried, mapname) != 0 && CL_Download( "load game", mapname, qtrue )) {
+			Q_strncpyz(alreadyTried, mapname, sizeof(alreadyTried));
+		} else
+#endif
 		Com_Printf( "Can't find map %s\n", expanded );
 		return;
 	}

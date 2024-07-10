@@ -4424,11 +4424,13 @@ void R_InitShaders( void ) {
 
 		CreateInternalShaders();
 
+#if defined(USE_MULTIVM_RENDERER)
 for(i = 1; i < MAX_NUM_WORLDS; i++) {
 	trWorlds[i].defaultShader = tr.defaultShader;
 	trWorlds[i].shadowShader = tr.shadowShader;
 	trWorlds[i].numShaders = 2;
 }
+#endif
 
 		ScanAndLoadShaderFiles();
 

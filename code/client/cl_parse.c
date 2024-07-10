@@ -684,7 +684,10 @@ static void CL_ParseGamestate( msg_t *msg ) {
 
 	clc.eventMask |= EM_GAMESTATE;
 
-	clc.selectedClient = clc.clientNum = MSG_ReadLong(msg);
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+	clc.selectedClient = 
+#endif
+	clc.clientNum = MSG_ReadLong(msg);
 
 	// read the checksum feed
 	clc.checksumFeed = MSG_ReadLong( msg );

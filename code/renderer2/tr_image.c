@@ -543,6 +543,7 @@ static void RGBAtoNormal(const byte *in, byte *out, int width, int height, qbool
 	}
 }
 
+
 #define COPYSAMPLE(a,b) *(unsigned int *)(a) = *(unsigned int *)(b)
 
 // based on Fast Curve Based Interpolation

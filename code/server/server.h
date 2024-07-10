@@ -288,7 +288,7 @@ typedef struct client_s {
 	char			tld[3]; // "XX\0"
 	const char		*country;
 
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+#ifdef USE_MULTIVM_SERVER
 	int gameWorld;
 	int newWorld;
 	struct {

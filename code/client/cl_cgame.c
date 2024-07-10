@@ -74,7 +74,12 @@ static void CL_GetGlconfig( glconfig_t *glconfig ) {
 CL_GetUserCmd
 ====================
 */
-static qboolean CL_GetUserCmd( int cmdNumber, usercmd_t *ucmd, int *world ) {
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+static qboolean CL_GetUserCmd( int cmdNumber, usercmd_t *ucmd, int *world ) 
+#else
+static qboolean CL_GetUserCmd( int cmdNumber, usercmd_t *ucmd ) 
+#endif
+{
 #if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
 	int igs = cgvmi_ref;
 #endif
@@ -1223,7 +1228,9 @@ static void CL_FirstSnapshot( void ) {
 	}
 	cls.state = CA_ACTIVE;
 
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
 	Com_Printf("------------------ snap (%i) ----------------\n", igs);
+#endif
 // clear old game so we will not switch back to old mod on disconnect
 	CL_ResetOldGame();
 
