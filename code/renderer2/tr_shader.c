@@ -3682,12 +3682,7 @@ shader_t *R_FindShader( const char *name, int lightmapIndex, qboolean mipRawImag
 		// then a default shader is created with lightmapIndex == LIGHTMAP_NONE, so we
 		// have to check all default shaders otherwise for every call to R_FindShader
 		// with that same strippedName a new default shader is created.
-		if ( (sh->lightmapSearchIndex == lightmapIndex || sh->defaultShader) 
-#ifdef __WASM__
-			&& sh->lastTimeUsed == tr.lastRegistrationTime
-#endif
-			&&	!Q_stricmp(sh->name, strippedName)
-		) {
+		if ( (sh->lightmapSearchIndex == lightmapIndex || sh->defaultShader) &&	!Q_stricmp(sh->name, strippedName)) {
 			// match found
 			return sh;
 		}
