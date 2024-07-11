@@ -508,6 +508,7 @@ typedef struct image_s {
 
 	GLint		internalFormat;
 	int			TMU;				// only needed for voodoo2
+	struct image_s *palette;
 
 } image_t;
 
@@ -1341,6 +1342,10 @@ extern	cvar_t	*r_debugSort;
 extern	cvar_t	*r_printShaders;
 
 extern cvar_t	*r_marksOnTriangleMeshes;
+
+
+extern  cvar_t  *r_paletteMode;
+
 
 #ifdef USE_AUTO_TERRAIN
 extern cvar_t	*r_autoTerrain;

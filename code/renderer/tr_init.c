@@ -190,6 +190,9 @@ int		max_polyverts;
 int		max_polybuffers;
 
 
+cvar_t  *r_paletteMode;
+
+
 #ifdef USE_AUTO_TERRAIN
 cvar_t	*r_autoTerrain;
 #endif
@@ -1530,6 +1533,7 @@ static void R_Register( void )
 	r_mapGreyScale = ri.Cvar_Get( "r_mapGreyScale", "0", CVAR_ARCHIVE_ND | CVAR_LATCH );
 	ri.Cvar_CheckRange( r_mapGreyScale, "-1", "1", CV_FLOAT );
 	ri.Cvar_SetDescription(r_mapGreyScale, "Desaturate world map textures only, works independently from \\r_greyscale, negative values only desaturate lightmaps.");
+  r_paletteMode = ri.Cvar_Get("r_paletteMode", "0", CVAR_ARCHIVE);
 
 	r_subdivisions = ri.Cvar_Get( "r_subdivisions", "4", CVAR_ARCHIVE_ND | CVAR_LATCH );
 	ri.Cvar_SetDescription(r_subdivisions, "Distance to subdivide bezier curved surfaces. Higher values mean less subdivision and less geometric complexity.");

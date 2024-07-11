@@ -33,6 +33,19 @@ GLint	gl_filter_max = GL_LINEAR;
 #define FILE_HASH_SIZE		1024
 static	image_t*		hashTable[FILE_HASH_SIZE];
 
+typedef struct palette_s {
+	char		*imgName;
+	struct palette_s *next;
+	int  a;
+	int  r;
+	int  g;
+	int  b;
+	struct image_s *image;
+} palette_t;
+
+
+static	palette_t*		paletteTable[FILE_HASH_SIZE];
+
 /*
 ================
 return a hash value for the filename
@@ -981,6 +994,69 @@ const char *R_LoadImage( const char *name, byte **pic, int *width, int *height )
 	return localName;
 }
 
+void R_AddPalette(const char *name, int a, int r, int g, int b) {
+	int hash;
+	palette_t *palette;
+	char normalName[MAX_OSPATH];
+	const char *s;
+	if((s = Q_stristr(name, ".pk3dir/"))) {
+		name = s + 8;
+	}
+	COM_StripExtension(name, normalName, MAX_OSPATH);
+	hash = generateHashValue(normalName);
+	//Com_Printf("palette: %s\n", name);
+	int namelen = strlen(normalName);
+	for (palette=paletteTable[hash]; palette; palette=palette->next) {
+		if ( !Q_stricmp( normalName, palette->imgName ) ) {
+			return; // found
+		}
+	}
+
+	palette = ri.Hunk_Alloc( sizeof( *palette ) + namelen + 1, h_low );
+	palette->imgName = (char *)( palette + 1 );
+	strcpy( palette->imgName, normalName );
+	palette->a = a;
+	palette->r = r;
+	palette->g = g;
+	palette->b = b;
+	palette->next = paletteTable[hash];
+	paletteTable[hash] = palette;
+}
+
+
+Q_EXPORT byte *R_FindPalette(const char *name) {
+	palette_t *palette;
+	long	hash;
+	char normalName[MAX_OSPATH];
+	COM_StripExtension(name, normalName, MAX_OSPATH);
+	hash = generateHashValue(normalName);
+	for (palette=paletteTable[hash]; palette; palette=palette->next) {
+		if ( palette->imgName[0] && !Q_stricmp( normalName, palette->imgName ) ) {
+			//if(!palette->image) {
+				static byte	data[16][16][4];
+				for(int x = 0; x < 16; x++) {
+					for(int y = 0; y < 16; y++) {
+						//if(r_seeThroughWalls->integer) {
+						//	data[x][y][3] = palette->a * 0.5;
+						//} else {
+							data[x][y][3] = palette->a;
+						//}
+						data[x][y][2] = palette->b;
+						data[x][y][1] = palette->g;
+						data[x][y][0] = palette->r;
+					}
+				}
+				//palette->image = R_CreateImage2(
+				//	va("*pal%i-%i-%i-%i", palette->r, palette->g, palette->b, palette->a), 
+				//	(byte *)data, 16, 16, GL_RGBA8, IMGTYPE_COLORALPHA, 0, IMGFLAG_NONE, GL_RGBA8);
+				return &data[0][0][0];
+			//}
+		}
+	}
+	return NULL;
+}
+
+
 
 /*
 ===============
@@ -1039,7 +1115,19 @@ image_t	*R_FindImageFile( const char *name, imgFlags_t flags )
 	// load the pic from disk
 	//
 	localName = R_LoadImage( name, &pic, &width, &height );
+	byte* pal = R_FindPalette(name);
+	image_t *palette = NULL;
+	if(pal) {
+		palette = R_CreateImage( 
+			va("*pal%i-%i-%i-%i", pal[0], pal[1], pal[2], pal[3]), 
+			va("*pal%i-%i-%i-%i", pal[0], pal[1], pal[2], pal[3]), 
+			pal, 16, 16, IMGFLAG_CLAMPTOEDGE | IMGFLAG_MIPMAP );
+	}
+
 	if ( pic == NULL ) {
+		if(palette) {
+			return palette;
+		}
 		return NULL;
 	}
 
@@ -1062,6 +1150,7 @@ image_t	*R_FindImageFile( const char *name, imgFlags_t flags )
 	}
 
 	image = R_CreateImage( name, localName, pic, width, height, flags );
+	image->palette = palette;
 	ri.Free( pic );
 	return image;
 }
@@ -1469,6 +1558,7 @@ void R_InitImages( void ) {
 	for ( i = 0; i < 256; i++ )
 		s_gammatable_linear[i] = (unsigned char)i;
 
+	Com_Memset(paletteTable, 0, sizeof(paletteTable));
 	Com_Memset( hashTable, 0, sizeof( hashTable ) );
 
 	// build brightness translation tables

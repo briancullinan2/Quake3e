@@ -53,6 +53,10 @@ void GL_Bind( image_t *image ) {
 		texnum = image->texnum;
 	}
 
+	if(r_paletteMode->integer && image->palette) {
+		texnum = image->palette->texnum;
+	}
+
 	if ( r_nobind->integer && tr.dlightImage ) {		// performance evaluation option
 		texnum = tr.dlightImage->texnum;
 	}

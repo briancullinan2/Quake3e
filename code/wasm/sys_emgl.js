@@ -844,6 +844,13 @@ function loadImage(filename, pic, ext) {
     return -1
   }
 
+  // async with below
+  if (palette) {
+    HEAPU32[pic >> 2] = palette // TO BE COPIED OUT
+  } else {
+    HEAPU32[pic >> 2] = 1
+  }
+
   EMGL.previousName = filenameStr
   EMGL.previousImage = thisImage
   thisImage.addEventListener('load', ((thisImage) => (function () {
@@ -855,12 +862,6 @@ function loadImage(filename, pic, ext) {
     //}
     CL_R_FinishImage3(thisImage.address - 7 * 4, 0x1908 /* GL_RGBA */, 0)
   }))(thisImage), false)
-
-  if (palette) {
-    HEAPU32[pic >> 2] = palette // TO BE COPIED OUT
-  } else {
-    HEAPU32[pic >> 2] = 1
-  }
 
   if (HEAPU32[buf >> 2]) {
     FS_FreeFile(HEAPU32[buf >> 2])

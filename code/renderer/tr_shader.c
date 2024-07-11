@@ -21,6 +21,9 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 #include "tr_local.h"
 
+
+void R_AddPalette(const char *name, int a, int r, int g, int b);
+
 // tr_shader.c -- this file deals with the parsing and definition of shaders
 
 static char *s_shaderText;
@@ -1900,6 +1903,44 @@ static qboolean ParseShader( const char **text )
 			shader.noPicMip = 1;
 			continue;
 		}
+		// parse palette colors for filename
+    else if ( !Q_stricmp( token, "palette" ) ) {
+      char file[MAX_QPATH];
+      token = COM_ParseExt( text, qfalse );
+      memcpy(file, token, sizeof(file));
+      const char *colors = COM_ParseExt( text, qfalse );
+      char color[4];
+      int a = 0, r = 0, g = 0, b = 0;
+      int ci = 0;
+      int ri = 0;
+      int gi = 0;
+      int bi = 0;
+      for(int i = 0; i < 12; i++) {
+        if(colors[i] == ',') {
+          if(ri == 0) {
+            color[ci] = 0;
+            a = atoi(color);
+            ri = i + 1;
+          } else if(gi == 0) {
+            color[ci] = 0;
+            r = atoi(color);
+            gi = i + 1;
+          } else {
+            color[ci] = 0;
+            g = atoi(color);
+            bi = i + 1;
+            b = atoi(&colors[bi]);
+            break;
+          }
+          ci = 0;
+        } else if (colors[i] >= '0' && colors[i] <= '9') {
+          color[ci] = colors[i];
+          ci++;
+        }
+      }
+      R_AddPalette(file, a, r, g, b);
+			continue;
+		}
 		else if ( !Q_stricmp( token, "novlcollapse" ) /* && s_extendedShader */ )
 		{
 			shader.noVLcollapse = 1;
@@ -3690,6 +3731,15 @@ static void ScanAndLoadShaderFiles( void )
 
 		SkipBracedSection(&p, 0);
 	}
+
+
+  const char *shaderText = FindShaderInShaderText("palettes/default");
+	if ( !shaderText ) {
+    ri.Printf(PRINT_WARNING, "Error: parsing default palette\n");
+  } else {
+    ParseShader( &shaderText );
+  }
+	
 }
 
 
