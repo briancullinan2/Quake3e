@@ -1664,7 +1664,6 @@ NET_GetCvars
 */
 static qboolean NET_GetCvars( void ) {
 	int modified;
-  int port;
 
 #if defined (DEDICATED) || !defined (USE_IPV6)
 	// I want server owners to explicitly turn on ipv6 support.

@@ -1585,9 +1585,12 @@ static void clearCamera(idCameraDef *cam) {
 		Z_Free(cam->targetPositions);
 	cam->targetPositions = NULL;
 	cam->numTargetPositions = 0;
+	
 	if(cam->events)
 		Z_Free(cam->events);
+	cam->events = NULL;
 	cam->numEvents = 0;
+
 	if(cam->cameraPosition)
 		Z_Free(cam->cameraPosition);
 	cam->cameraPosition = NULL;
