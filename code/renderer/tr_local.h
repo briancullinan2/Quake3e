@@ -508,9 +508,9 @@ typedef struct image_s {
 
 	GLint		internalFormat;
 	int			TMU;				// only needed for voodoo2
+	int			lastTimeUsed;
 	struct image_s *palette;
-	struct image_s *greyscale;
-	struct image_s *edgy;
+	struct image_s *alternate;
 
 } image_t;
 
@@ -851,15 +851,7 @@ typedef struct {
 typedef struct {
 	char		name[MAX_QPATH];		// ie: maps/tim_dm2.bsp
 	char		baseName[MAX_QPATH];	// ie: tim_dm2
-#ifdef USE_AUTO_TERRAIN
-	char terrainMaster[MAX_QPATH];
-	char terrainIndex[MAX_QPATH];
-	byte *terrainImage;
-	int terrainLayers:3;
-	int terrainHeight;
-	int terrainWidth;
-	qboolean terrainFlip;
-#endif
+	struct terrain_s terrain;
 	int			dataSize;
 	vec3_t		bounds[2];
 
@@ -937,7 +929,7 @@ void		R_Modellist_f (void);
 //====================================================
 
 #define	MAX_DRAWIMAGES			4096
-#define	MAX_SKINS				1024
+#define	MAX_SKINS				4096
 
 
 #define	MAX_DRAWSURFS			0x20000
@@ -1107,6 +1099,7 @@ typedef struct {
 */
 typedef struct {
 	qboolean				registered;		// cleared at shutdown, set at beginRegistration
+	int							lastRegistrationTime;
 	qboolean				inited;			// cleared at shutdown, set at InitOpenGL
 
 	int						visCount;		// incremented every time a new vis cluster is entered
@@ -1329,6 +1322,7 @@ extern	cvar_t	*r_anaglyphMode;
 
 extern	cvar_t	*r_greyscale;
 extern	cvar_t	*r_edgy;
+extern	cvar_t	*r_invert;
 
 extern	cvar_t	*r_ignoreGLErrors;
 

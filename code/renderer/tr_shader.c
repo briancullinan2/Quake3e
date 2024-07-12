@@ -3818,6 +3818,7 @@ R_InitShaders
 ==================
 */
 void R_InitShaders( void ) {
+  tr.lastRegistrationTime = ri.Milliseconds();
 	ri.Printf( PRINT_ALL, "Initializing Shaders\n" );
 
 	Com_Memset(hashTable, 0, sizeof(hashTable));

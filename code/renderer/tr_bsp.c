@@ -381,7 +381,9 @@ static void R_LoadMergedLightmaps( const lump_t *l, byte *image )
 	//}
 }
 
-byte *R_GreyScale(byte *pic, int width, int height);
+
+byte *R_LoadAlternateImage( byte *pic, int width, int height );
+
 
 /*
 ===============
@@ -437,12 +439,15 @@ void R_LoadLightmaps( const lump_t *l ) {
 	tr.lightmaps = ri.Hunk_Alloc( tr.numLightmaps * sizeof(image_t *), h_low );
 	for ( i = 0 ; i < tr.numLightmaps ; i++ ) {
 		maxIntensity = R_ProcessLightmap( image, buf + i * LIGHTMAP_SIZE * LIGHTMAP_SIZE * 3, maxIntensity );
+		byte *altImage = R_LoadAlternateImage(image, LIGHTMAP_SIZE, LIGHTMAP_SIZE);
 		tr.lightmaps[i] = R_CreateImage( va( "*lightmap%d", i ), NULL, image, LIGHTMAP_SIZE, LIGHTMAP_SIZE,
 			lightmapFlags | IMGFLAG_CLAMPTOEDGE );
 
-
-		tr.lightmaps[i]->greyscale = R_CreateImage( va( "*lightmapgrey%d", i ), NULL, R_GreyScale(image, LIGHTMAP_SIZE, LIGHTMAP_SIZE), LIGHTMAP_SIZE, LIGHTMAP_SIZE,
-			lightmapFlags | IMGFLAG_CLAMPTOEDGE );
+		if(altImage && altImage != image) {
+			tr.lightmaps[i]->alternate = R_CreateImage( va( "*lightmapalt%d", i ), NULL, altImage, LIGHTMAP_SIZE, LIGHTMAP_SIZE,
+				lightmapFlags | IMGFLAG_CLAMPTOEDGE );
+			ri.Free(altImage);
+		}
 	}
 
 	//if ( r_lightmap->integer == 2 )	{
@@ -581,148 +586,6 @@ static void GenerateNormals( srfSurfaceFace_t *face )
 
 
 
-#ifdef USE_AUTO_TERRAIN
-
-
-
-
-/*
-   GetShaderIndexForPoint() - ydnar
-   for shader-indexed surfaces (terrain), find a matching index from the indexmap
- */
-
-byte GetShaderIndexForPoint( const vec3_t eMinmax[2], const vec3_t point, const float s, const float t ){
-	/* early out if no indexmap */
-if(!s_worldData.terrainImage) {
-	return 0;
-}
-
-	/* this code is really broken */
-#if 0
-	/* legacy precision fudges for terrain */
-	Vector3 mins, maxs;
-	for ( int i = 0; i < 3; i++ )
-	{
-		mins[ i ] = floor( eMinmax.mins[ i ] + 0.1 );
-		maxs[ i ] = floor( eMinmax.maxs[ i ] + 0.1 );
-	}
-	const Vector3 size = maxs - mins;
-
-	/* find st (fixme: support more than just z-axis projection) */
-	const float s = std::clamp( floor( point[ 0 ] + 0.1f - mins[ 0 ] ) / size[ 0 ], 0.0, 1.0 );
-	const float t = std::clamp( floor( maxs[ 1 ] - point[ 1 ] + 0.1f ) / size[ 1 ], 0.0, 1.0 );
-
-	/* make xy */
-	const int x = ( im->w - 1 ) * s;
-	const int y = ( im->h - 1 ) * t;
-#else
-	/* get size */
-	vec3_t size;
-	VectorSubtract(eMinmax[1], eMinmax[0], size);
-
-	/* calc st */
-	const float s2 = ( point[ 0 ] - eMinmax[0][ 0 ] ) / size[ 0 ];
-	const float t2 = ( eMinmax[1][ 1 ] - point[ 1 ] ) / size[ 1 ];
-
-	/* calc xy */
-	int x = s2 * s_worldData.terrainWidth;
-	if(x < 0)
-		x = 0;
-	if(x > s_worldData.terrainWidth - 1 )
-		x = s_worldData.terrainWidth - 1;
-
-
-	int y = t2 * s_worldData.terrainHeight;
-	if(y < 0)
-		y = 0;
-	if(y > s_worldData.terrainHeight - 1 )
-		y = s_worldData.terrainHeight - 1;
-#endif
-
-	/* return index */
-	//Com_Printf("found: %i\n", s_worldData.terrainImage[ y * s_worldData.terrainWidth * 4 + x * 4 ]);
-	if(s_worldData.terrainFlip) {
-		return s_worldData.terrainImage[ (s_worldData.terrainHeight - y) * s_worldData.terrainWidth * 4 + x * 4 ];
-	} else {
-		return s_worldData.terrainImage[ y * s_worldData.terrainWidth * 4 + x * 4 ];
-	}
-}
-
-/*
-   GetIndexedShader() - ydnar
-   for a given set of indexes and an indexmap, get a shader and set the vertex alpha in-place
-   this combines a couple different functions from terrain.c
- */
-
-shader_t *GetIndexedShader( const shader_t *parent, int numPoints, byte *shaderIndexes ){
-	/* early out if bad data */
-	if ( s_worldData.terrainImage == NULL || numPoints <= 0 || shaderIndexes == NULL ) {
-		return R_FindShader( "default", LIGHTMAP_NONE, qfalse );
-	}
-
-	/* determine min/max index */
-	byte minShaderIndex = 255;
-	byte maxShaderIndex = 0;
-	for ( int i = 0; i < numPoints; i++ )
-	{
-		minShaderIndex = MIN( minShaderIndex, shaderIndexes[ i ] );
-		maxShaderIndex = MAX( maxShaderIndex, shaderIndexes[ i ] );
-	}
-
-	/* set alpha inline */
-	for ( int i = 0; i < numPoints; i++ )
-	{
-		/* straight rip from terrain.c */
-		if ( shaderIndexes[ i ] < maxShaderIndex ) {
-			shaderIndexes[ i ] = 0;
-		}
-		else{
-			shaderIndexes[ i ] = 255;
-		}
-	}
-
-	/* get the shader */
-	shader_t *si = R_FindShader( ( minShaderIndex == maxShaderIndex )?
-	                            va( "textures/%s_%i", s_worldData.terrainMaster, maxShaderIndex ):
-	                            va( "textures/%s_%ito%i", s_worldData.terrainMaster, minShaderIndex, maxShaderIndex ), LIGHTMAP_NONE, qfalse );
-//Com_Printf("shader found: %s\n", si->name);
-	/* inherit a few things from parent shader */
-	/*if ( parent->globalTexture ) {
-		si->globalTexture = true;
-	}
-	if ( parent->forceMeta ) {
-		si->forceMeta = true;
-	}
-	if ( parent->nonplanar ) {
-		si->nonplanar = true;
-	}
-	if ( si->shadeAngleDegrees == 0.0 ) {
-		si->shadeAngleDegrees = parent->shadeAngleDegrees;
-	}
-	if ( parent->tcGen && !si->tcGen ) {
-		// set xy texture projection
-		si->tcGen = true;
-		si->vecs[ 0 ] = parent->vecs[ 0 ];
-		si->vecs[ 1 ] = parent->vecs[ 1 ];
-	}
-	if ( vector3_length( parent->lightmapAxis ) != 0.0f && vector3_length( si->lightmapAxis ) == 0.0f ) {
-		// set lightmap projection axis 
-		si->lightmapAxis = parent->lightmapAxis;
-	}
-	*/
-	//si->defaultShader = parent;
-	si->lightmapIndex = parent->lightmapIndex;
-	si->lightmapSearchIndex = parent->lightmapSearchIndex;
-	si->needsNormal = parent->needsNormal;
-	si->needsST2 = parent->needsST2;
-	si->normalOffset = parent->normalOffset;
-	/* return the shader */
-	return si;
-}
-
-#endif
-
-
 
 /*
 ===============
@@ -833,14 +696,14 @@ if(r_autoTerrain->integer) {
 
 		for ( i = 0; i < numPoints; i++ )
 		{
-			shaderIndexes[ i ] = GetShaderIndexForPoint( s_worldData.bounds, cv->points[i], cv->points[i][3], cv->points[i][4] );
+			shaderIndexes[ i ] = GetShaderIndexForPoint( &s_worldData.terrain, s_worldData.bounds, cv->points[i], cv->points[i][3], cv->points[i][4] );
 			offsets[ i ] = 0; // b->im->offsets[ shaderIndexes[ i ] ];
 			//%	Sys_Printf( "%f ", offsets[ i ] );
 		}
 
 		/* get matching shader and set alpha */
 		parent = surf->shader;
-		surf->shader = GetIndexedShader( parent, numPoints, shaderIndexes );
+		surf->shader = R_FindShader(GetIndexedShader( &s_worldData.terrain, numPoints, shaderIndexes ), LIGHTMAP_NONE, qfalse);
 		if(surf->shader->defaultShader) {
 			surf->shader = parent;
 		}
@@ -2366,17 +2229,17 @@ static void R_LoadEntities( const lump_t *l ) {
 if(r_autoTerrain->integer) {
 		s = "_shader";
 		if (!Q_strncmp(keyname, s, (int)strlen(s)) ) {
-			Q_strncpyz( w->terrainMaster, value, MAX_QPATH );
+			Q_strncpyz( w->terrain.terrainMaster, value, MAX_QPATH );
 			 
 		}
 		s = "_indexmap";
 		if (!Q_strncmp(keyname, s, (int)strlen(s)) ) {
-			Q_strncpyz( w->terrainIndex, value, MAX_QPATH );
+			Q_strncpyz( w->terrain.terrainIndex, value, MAX_QPATH );
 			 
 		}
 		s = "_layers";
 		if (!Q_strncmp(keyname, s, (int)strlen(s)) ) {
-			w->terrainLayers = atoi(value);
+			w->terrain.terrainLayers = atoi(value);
 		}
 }
 
@@ -2507,28 +2370,28 @@ if(r_autoTerrain->integer) {
 
 		// checkout shaders for terrain
 
-if(s_worldData.terrainIndex[0]) {
-		R_LoadImage(s_worldData.terrainIndex, &s_worldData.terrainImage, &s_worldData.terrainWidth, &s_worldData.terrainHeight);
+if(s_worldData.terrain.terrainIndex[0]) {
+		R_LoadImage(s_worldData.terrain.terrainIndex, &s_worldData.terrain.terrainImage, &s_worldData.terrain.terrainWidth, &s_worldData.terrain.terrainHeight);
 } 
-if(!s_worldData.terrainImage) {
-		R_LoadImage(va("maps/%s_alphamap.tga", s_worldData.baseName), &s_worldData.terrainImage, &s_worldData.terrainWidth, &s_worldData.terrainHeight);
+if(!s_worldData.terrain.terrainImage) {
+		R_LoadImage(va("maps/%s_alphamap.tga", s_worldData.baseName), &s_worldData.terrain.terrainImage, &s_worldData.terrain.terrainWidth, &s_worldData.terrain.terrainHeight);
 }
-if(!s_worldData.terrainImage) {
-		R_LoadImage(va("maps/%s_tracemap.tga", s_worldData.baseName), &s_worldData.terrainImage, &s_worldData.terrainWidth, &s_worldData.terrainHeight);
-	s_worldData.terrainFlip = qtrue;
+if(!s_worldData.terrain.terrainImage) {
+		R_LoadImage(va("maps/%s_tracemap.tga", s_worldData.baseName), &s_worldData.terrain.terrainImage, &s_worldData.terrain.terrainWidth, &s_worldData.terrain.terrainHeight);
+	s_worldData.terrain.terrainFlip = qtrue;
 }
 
-if(s_worldData.terrainImage) {
+if(s_worldData.terrain.terrainImage) {
 	// if we have an image but no layers default to 3 i guess
-	if(!s_worldData.terrainLayers) {
-		s_worldData.terrainLayers = 3;
+	if(!s_worldData.terrain.terrainLayers) {
+		s_worldData.terrain.terrainLayers = 3;
 	}
 
-	for ( i = 0; i < s_worldData.terrainHeight * s_worldData.terrainWidth * 4; i++ )
+	for ( i = 0; i < s_worldData.terrain.terrainHeight * s_worldData.terrain.terrainWidth * 4; i++ )
 	{
-		s_worldData.terrainImage[ i ] = ( ( s_worldData.terrainImage[ i ] & 0xFF ) * s_worldData.terrainLayers ) / 256;
-		if ( s_worldData.terrainImage[ i ] >= s_worldData.terrainLayers ) {
-			s_worldData.terrainImage[ i ] = s_worldData.terrainLayers - 1;
+		s_worldData.terrain.terrainImage[ i ] = ( ( s_worldData.terrain.terrainImage[ i ] & 0xFF ) * s_worldData.terrain.terrainLayers ) / 256;
+		if ( s_worldData.terrain.terrainImage[ i ] >= s_worldData.terrain.terrainLayers ) {
+			s_worldData.terrain.terrainImage[ i ] = s_worldData.terrain.terrainLayers - 1;
 		}
 	}
 	

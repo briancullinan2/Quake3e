@@ -58,6 +58,7 @@ cvar_t	*r_anaglyphMode;
 
 cvar_t	*r_greyscale;
 cvar_t	*r_edgy;
+cvar_t	*r_invert;
 
 static cvar_t *r_ignorehwgamma;
 
@@ -1670,6 +1671,9 @@ static void R_Register( void )
 	ri.Cvar_SetGroup( r_greyscale, CVG_RENDERER );
 
 	r_edgy = ri.Cvar_Get( "r_edgy", "0", CVAR_ARCHIVE_ND );
+	ri.Cvar_SetGroup( r_edgy, CVG_RENDERER );
+	r_invert = ri.Cvar_Get( "r_invert", "0", CVAR_ARCHIVE_ND );
+	ri.Cvar_SetGroup( r_invert, CVG_RENDERER );
 
 	//
 	// temporary variables that can change at any time
@@ -1725,7 +1729,7 @@ static void R_Register( void )
 	ri.Cvar_SetDescription( r_nobind, "Backend debugging tool: Disables texture binding." );
 	r_showtris = ri.Cvar_Get ("r_showtris", "0", CVAR_CHEAT);
 	ri.Cvar_SetDescription( r_showtris, "Debugging tool: Wireframe rendering of polygon triangles in the world." );
-	r_showverts = ri.Cvar_Get ("r_showverts", "0", CVAR_CHEAT);
+	r_showverts = ri.Cvar_Get ("r_showverts", "0", CVAR_ARCHIVE_ND);
 	ri.Cvar_SetDescription(r_showverts, "Debugging tool: Vertex rendering of polygon triangles in the world.");
 	
 	r_showsky = ri.Cvar_Get( "r_showsky", "0", 0 );

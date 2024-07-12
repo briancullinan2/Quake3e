@@ -378,8 +378,11 @@ static void DrawMultitextured( const shaderCommands_t *input, int stage ) {
 	qglDisable( GL_TEXTURE_2D );
 
 	GL_SelectTexture( 0 );
-	if(r_showverts->integer) {
-		DrawTris2( input, 25, 0, 0, 0, 255 );
+	if(r_showverts->integer == 2) {
+		DrawTris2( input, 25, 0, 255, 0, 255 );
+	}
+	else if(r_showverts->integer) {
+		DrawTris2( input, 35, 0, 0, 0, 255 );
 	}
 }
 
@@ -886,6 +889,13 @@ static void RB_IterateStagesGeneric( const shaderCommands_t *input )
 		if ( !pStage )
 			break;
 
+
+
+	if(input->shader && input->shader->lightmapIndex == LIGHTMAP_2D
+		&& pStage->bundle[0].image[0] && input->shader->surfaceFlags == 0) {
+		pStage->bundle[0].image[0]->palette = NULL;
+	}
+
 		//
 		// do multitexture
 		//
@@ -926,8 +936,13 @@ static void RB_IterateStagesGeneric( const shaderCommands_t *input )
 				GL_ProgramDisable();
 			}
 
-			if(r_showverts->integer) {
-				//DrawTris2( input, 10, 0, 0, 255, 255 );
+			if(r_showverts->integer && !(input->shader->surfaceFlags & SURF_SKY)
+				&& input->shader && input->shader->lightmapIndex != LIGHTMAP_2D) {
+				if(r_showverts->integer == 2) {
+					DrawTris2( input, 3, 0, 255, 0, 255 );
+				} else {
+					DrawTris2( input, 10, 0, 0, 255, 255 );
+				}
 			}
 		}
 

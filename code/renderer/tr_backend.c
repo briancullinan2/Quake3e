@@ -24,6 +24,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 backEndData_t	*backEndData;
 backEndState_t	backEnd;
 
+qboolean shouldUseAlternate = qfalse;
+
 const float *GL_Ortho( const float left, const float right, const float bottom, const float top, const float znear, const float zfar )
 {
 	static float m[ 16 ] = { 0 };
@@ -57,12 +59,8 @@ void GL_Bind( image_t *image ) {
 		texnum = image->palette->texnum;
 	}
 
-	if(image && r_greyscale->integer && image->greyscale) {
-		texnum = image->greyscale->texnum;
-	}
-
-	if(image && r_edgy->integer && image->edgy) {
-		texnum = image->edgy->texnum;
+	if(image && shouldUseAlternate && image->alternate) {
+		texnum = image->alternate->texnum;
 	}
 
 	if ( r_nobind->integer && tr.dlightImage ) {		// performance evaluation option

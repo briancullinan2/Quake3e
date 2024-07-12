@@ -37,19 +37,6 @@ GLint	gl_filter_max = GL_LINEAR;
 #define FILE_HASH_SIZE		1024
 static	image_t*		hashTable[FILE_HASH_SIZE];
 
-typedef struct palette_s {
-	char		*imgName;
-	struct palette_s *next;
-	int  a;
-	int  r;
-	int  g;
-	int  b;
-	struct image_s *image;
-} palette_t;
-
-
-static	palette_t*		paletteTable[FILE_HASH_SIZE];
-
 /*
 ================
 return a hash value for the filename
@@ -668,7 +655,6 @@ static void Upload32( byte *data, int x, int y, int width, int height, image_t *
 		height = scaled_height;
 	}
 
-
 	if ( image->flags & IMGFLAG_COLORSHIFT ) {
 		byte *p = data;
 		int i, n = width * height;
@@ -725,7 +711,6 @@ static void Upload32( byte *data, int x, int y, int width, int height, image_t *
 		}
 	}
 
-
 	if ( !(image->flags & IMGFLAG_NOLIGHTSCALE) )
 		R_LightScaleTexture( data, scaled_width, scaled_height, !mipmap );
 
@@ -774,6 +759,47 @@ void R_UploadSubImage( byte *data, int x, int y, int width, int height, image_t 
 
 
 /*
+======================
+S_FreeOldestSound
+======================
+*/
+image_t *R_FreeOldestImage( void ) {
+	int	i, oldest, used;
+	image_t	*image;
+
+	oldest = 0;
+	used = 0;
+
+	for ( i = 1 ; i < tr.numImages ; i++ ) {
+		image = tr.images[i];
+		if ( (!image->lastTimeUsed || !image->texnum || image->lastTimeUsed - oldest <= 0)
+			&& image->imgName[0] != '*'
+		 	&& image->lastTimeUsed < tr.lastRegistrationTime) {
+			used = i;
+			if(oldest < image->lastTimeUsed) {
+				oldest = image->lastTimeUsed;
+			}
+		}
+	}
+
+	if(!used && i == MAX_DRAWIMAGES) {
+		return NULL;
+	}
+
+	image = tr.images[used];
+	
+	ri.Printf(PRINT_DEVELOPER, "R_FreeOldestImage: freeing image %s\n", image->imgName);
+	
+	if(image->texnum)
+		qglDeleteTextures( 1, &image->texnum );
+	Com_Memset(image, 0, sizeof( image_t ));
+	
+	return image;
+}
+
+
+
+/*
 ================
 R_CreateImage
 
@@ -804,10 +830,14 @@ image_t *R_CreateImage( const char *name, const char *name2, byte *pic, int widt
 	}
 
 	if ( tr.numImages == MAX_DRAWIMAGES ) {
-		ri.Error( ERR_DROP, "R_CreateImage: MAX_DRAWIMAGES hit" );
+		image = R_FreeOldestImage();
+		if(!image) {
+			ri.Error( ERR_DROP, "R_CreateImage: MAX_DRAWIMAGES hit" );
+		}
 	}
 
 	image = ri.Hunk_Alloc( sizeof( *image ) + namelen + namelen2, h_low );
+	image->lastTimeUsed = tr.lastRegistrationTime;
 	image->imgName = (char *)( image + 1 );
 	strcpy( image->imgName, name );
 	if ( namelen2 ) {
@@ -1000,387 +1030,107 @@ const char *R_LoadImage( const char *name, byte **pic, int *width, int *height )
 	return localName;
 }
 
-void R_AddPalette(const char *name, int a, int r, int g, int b) {
-	int hash;
-	palette_t *palette;
-	char normalName[MAX_OSPATH];
-	const char *s;
-	if((s = Q_stristr(name, ".pk3dir/"))) {
-		name = s + 8;
+
+extern qboolean shouldUseAlternate;
+
+
+byte *R_LoadAlternateImage( byte *pic, int width, int height ) {
+	qboolean any = qfalse;
+	byte *workImage = pic;
+	byte *newWorkImage = pic;
+	if(r_greyscale->value > 0) {
+		any = qtrue;
+		newWorkImage = R_GreyScale(r_greyscale->value, workImage, width, height);
+		workImage = newWorkImage;
 	}
-	COM_StripExtension(name, normalName, MAX_OSPATH);
-	hash = generateHashValue(normalName);
-	//Com_Printf("palette: %s\n", name);
-	int namelen = strlen(normalName);
-	for (palette=paletteTable[hash]; palette; palette=palette->next) {
-		if ( !Q_stricmp( normalName, palette->imgName ) ) {
-			return; // found
+	if(r_invert->integer > 0) {
+		any = qtrue;
+		if(r_invert->integer == 1) {
+			newWorkImage = R_InvertColors(workImage, width, height);
+		} else if (r_invert->integer == 2) {
+			newWorkImage = R_InvertColors2(workImage, width, height);
+		} else if (r_invert->integer == 3) {
+			newWorkImage = R_InvertColors3(workImage, width, height);
+		} else {
+			newWorkImage = R_InvertColors4(workImage, width, height);
 		}
-	}
-
-	palette = ri.Hunk_Alloc( sizeof( *palette ) + namelen + 1, h_low );
-	palette->imgName = (char *)( palette + 1 );
-	strcpy( palette->imgName, normalName );
-	palette->a = a;
-	palette->r = r;
-	palette->g = g;
-	palette->b = b;
-	palette->next = paletteTable[hash];
-	paletteTable[hash] = palette;
-}
-
-
-Q_EXPORT byte *R_FindPalette(const char *name) {
-	palette_t *palette;
-	long	hash;
-	char normalName[MAX_OSPATH];
-	COM_StripExtension(name, normalName, MAX_OSPATH);
-	hash = generateHashValue(normalName);
-	for (palette=paletteTable[hash]; palette; palette=palette->next) {
-		if ( palette->imgName[0] && !Q_stricmp( normalName, palette->imgName ) ) {
-			//if(!palette->image) {
-				static byte	data[16][16][4];
-				for(int x = 0; x < 16; x++) {
-					for(int y = 0; y < 16; y++) {
-						//if(r_seeThroughWalls->integer) {
-						//	data[x][y][3] = palette->a * 0.5;
-						//} else {
-							data[x][y][3] = palette->a;
-						//}
-						data[x][y][2] = palette->b;
-						data[x][y][1] = palette->g;
-						data[x][y][0] = palette->r;
-					}
-				}
-				//palette->image = R_CreateImage2(
-				//	va("*pal%i-%i-%i-%i", palette->r, palette->g, palette->b, palette->a), 
-				//	(byte *)data, 16, 16, GL_RGBA8, IMGTYPE_COLORALPHA, 0, IMGFLAG_NONE, GL_RGBA8);
-				return &data[0][0][0];
-			//}
+		if(workImage != pic) {
+			ri.Free(workImage);
 		}
+		workImage = newWorkImage;
 	}
+	if(r_edgy->integer > 0) {
+		any = qtrue;
+		byte *rgb = R_RGBAtoR(workImage, width, height);
+		byte *edgy = ri.Malloc(width * height * 4);
+		canny_edge_detection((pixel_t *)rgb, width, height, (pixel_t *)edgy, 45, 55, 2.0f);
+		newWorkImage = R_RtoRGBA(edgy, pic, width, height);
+		ri.Free(edgy);
+		if(workImage != pic) {
+			ri.Free(workImage);
+		}
+		workImage = newWorkImage;
+	}
+	if(any && workImage) {
+		shouldUseAlternate = qtrue;
+		return workImage;
+	}
+	shouldUseAlternate = qfalse;
 	return NULL;
 }
 
-// because i'm going to need a drink after this one
-byte *R_RaddtoRGBA(byte *pic, byte *pic2, int width, int height) {
-	byte *grey = ri.Hunk_Alloc(width * height * 4, h_low);
 
-	byte *img, *scan, *alpha;
-	int i;
-	for ( i = 0, img = grey, scan = pic, alpha = pic2; i < width * height; i++, alpha += 4, img += 4, scan += 1 ) {
-		img[0] = alpha[0] + scan[0];
-		img[1] = alpha[1] + scan[1];
-		img[2] = alpha[2] + scan[2];
-		img[3] = alpha[3];
-		if(img[0] > 255) img[0] = 255;
-		if(img[1] > 255) img[1] = 255;
-		if(img[2] > 255) img[2] = 255;
-	}
+void R_UpdateAlternateImages( void ) {
 
-	return grey;
-}
-
-
-// because i'm going to need a drink after this one
-byte *R_RtoRGBA(byte *pic, byte *pic2, int width, int height) {
-	byte *grey = ri.Hunk_Alloc(width * height * 4, h_low);
-
-//if ( tr.mapLoading && r_mapGreyScale->value > 0 ) {
-	byte *img, *scan, *alpha;
-	int i;
-	for ( i = 0, img = grey, scan = pic, alpha = pic2; i < width * height; i++, alpha += 4, img += 4, scan += 1 ) {
-		img[0] = scan[0];
-		img[1] = scan[0];
-		img[2] = scan[0];
-		img[3] = alpha[3];
-	}
-//}
-	return grey;
-}
-
-
-byte *R_RGBAtoR(byte *pic, int width, int height) {
-	byte *grey = ri.Hunk_Alloc(width * height * 1, h_low);
-
-	byte *img, *scan;
-	int i;
-	for ( i = 0, img = grey, scan = pic; i < width * height; i++, img += 1, scan += 4 ) {
-		byte luma = LUMA( scan[0], scan[1], scan[2] );
-		img[0] = luma;
-		img[1] = luma;
-		img[2] = luma;
-	}
-
-	return grey;
-}
-
-byte *R_GreyScale(byte *pic, int width, int height) {
-	byte *grey = ri.Hunk_Alloc(width * height * 4, h_low);
-
-//if ( tr.mapLoading && r_mapGreyScale->value > 0 ) {
-	byte *img, *scan;
-	int i;
-	for ( i = 0, img = grey, scan = pic; i < width * height; i++, img += 4, scan += 4 ) {
-		if ( !r_greyscale->integer ) {
-			byte luma = LUMA( scan[0], scan[1], scan[2] );
-			img[0] = luma;
-			img[1] = luma;
-			img[2] = luma;
-			img[3] = scan[3];
-		} else {
-			float luma = LUMA( scan[0], scan[1], scan[2] );
-			img[0] = LERP( scan[0], luma, r_greyscale->value );
-			img[1] = LERP( scan[1], luma, r_greyscale->value );
-			img[2] = LERP( scan[2], luma, r_greyscale->value );
-			img[3] = scan[3];
+	// load or discard a new alternate image for every image
+	Com_Printf("Updating %i images, this may take a minute.\n", tr.numImages);
+  //tr.lastRegistrationTime = ri.Milliseconds();
+	for(int i = 0; i < tr.numImages; i++) {
+		image_t *image = tr.images[i];
+		if(image->imgName[0] == '*') {
+			continue;
+		}
+		if(Q_stristr(image->imgName, "-alternate")) {
+			qglDeleteTextures(1, &image->texnum);
+			image->texnum = 0;
+			image->lastTimeUsed = 0;
+			continue;
+		}
+		if(image->alternate) {
+			if(image->alternate->texnum) {
+				qglDeleteTextures(1, &image->alternate->texnum);
+				image->alternate->texnum = 0;
+			}
+			image->alternate = NULL;
 		}
 	}
-//}
-	return grey;
-}
 
-typedef struct {
-    uint8_t magic[2];
-} bmpfile_magic_t;
+	for(int i = 0; i < tr.numImages; i++) {
+		image_t *image = tr.images[i];
+		if(image->imgName[0] == '*') {
+			continue;
+		}
+		if(Q_stristr(image->imgName, "-alternate")) {
+			continue;
+		}
 
-typedef struct {
-    uint32_t filesz;
-    uint16_t creator1;
-    uint16_t creator2;
-    uint32_t bmp_offset;
-} bmpfile_header_t;
+		// so original images dont get freed, only alternates
+	  //image->lastTimeUsed = tr.lastRegistrationTime;
 
-typedef struct {
-    uint32_t header_sz;
-    int32_t  width;
-    int32_t  height;
-    uint16_t nplanes;
-    uint16_t bitspp;
-    uint32_t compress_type;
-    uint32_t bmp_bytesz;
-    int32_t  hres;
-    int32_t  vres;
-    uint32_t ncolors;
-    uint32_t nimpcolors;
-} bitmap_info_header_t;
+		byte	*pic;
+		int width, height;
+		const char *localName;
+		localName = R_LoadImage( image->imgName, &pic, &width, &height );
+		if(localName && pic) {
+			byte *altImage = R_LoadAlternateImage(pic, width, height);
+			if(altImage && altImage != pic) {
+				image->alternate = R_CreateImage( va("-alternate%s", image->imgName), va("-alternate%s", localName), altImage, width, height, image->flags);
+				ri.Free(altImage);
+			}
+			ri.Free(pic);
+		}
+	}
 
-typedef struct {
-    uint8_t r;
-    uint8_t g;
-    uint8_t b;
-    uint8_t nothing;
-} rgb_t;
-
-// Use short int instead `unsigned char' so that we can
-// store negative values.
-typedef short int pixel_t;
-
-#define MAX_BRIGHTNESS 255
-#define FLT_MAX 3.402823466e+38
-
-// if normalize is true, map pixels to range 0..MAX_BRIGHTNESS
-void convolution(const pixel_t *in, pixel_t *out, const float *kernel,
-                 const int nx, const int ny, const int kn,
-                 const qboolean normalize)
-{
-    assert(kn % 2 == 1);
-    assert(nx > kn && ny > kn);
-    const int khalf = kn / 2;
-    float min = FLT_MAX, max = -FLT_MAX;
-
-    if (normalize)
-        for (int m = khalf; m < nx - khalf; m++)
-            for (int n = khalf; n < ny - khalf; n++) {
-                float pixel = 0.0;
-                size_t c = 0;
-                for (int j = -khalf; j <= khalf; j++)
-                    for (int i = -khalf; i <= khalf; i++) {
-                        pixel += in[(n - j) * nx + m - i] * kernel[c];
-                        c++;
-                    }
-                if (pixel < min)
-                    min = pixel;
-                if (pixel > max)
-                    max = pixel;
-                }
-
-    for (int m = khalf; m < nx - khalf; m++)
-        for (int n = khalf; n < ny - khalf; n++) {
-            float pixel = 0.0;
-            size_t c = 0;
-            for (int j = -khalf; j <= khalf; j++)
-                for (int i = -khalf; i <= khalf; i++) {
-                    pixel += in[(n - j) * nx + m - i] * kernel[c];
-                    c++;
-                }
-
-            if (normalize)
-                pixel = MAX_BRIGHTNESS * (pixel - min) / (max - min);
-            out[n * nx + m] = (pixel_t)pixel;
-        }
-}
-
-/*
- * gaussianFilter:
- * http://www.songho.ca/dsp/cannyedge/cannyedge.html
- * determine size of kernel (odd #)
- * 0.0 <= sigma < 0.5 : 3
- * 0.5 <= sigma < 1.0 : 5
- * 1.0 <= sigma < 1.5 : 7
- * 1.5 <= sigma < 2.0 : 9
- * 2.0 <= sigma < 2.5 : 11
- * 2.5 <= sigma < 3.0 : 13 ...
- * kernelSize = 2 * int(2*sigma) + 3;
- */
-void gaussian_filter(const pixel_t *in, pixel_t *out,
-                     const int nx, const int ny, const float sigma)
-{
-    const int n = 2 * (int)(2 * sigma) + 3;
-    const float mean = (float)floor(n / 2.0);
-    float kernel[n * n]; // variable length array
-
-    //fprintf(stderr, "gaussian_filter: kernel size %d, sigma=%g\n",
-    //        n, sigma);
-    size_t c = 0;
-    for (int i = 0; i < n; i++)
-        for (int j = 0; j < n; j++) {
-            kernel[c] = exp(-0.5 * (pow((i - mean) / sigma, 2.0) +
-                                    pow((j - mean) / sigma, 2.0)))
-                        / (2 * M_PI * sigma * sigma);
-            c++;
-        }
-
-    convolution(in, out, kernel, nx, ny, n, qtrue);
-}
-
-/*
- * Links:
- * http://en.wikipedia.org/wiki/Canny_edge_detector
- * http://www.tomgibara.com/computer-vision/CannyEdgeDetector.java
- * http://fourier.eng.hmc.edu/e161/lectures/canny/node1.html
- * http://www.songho.ca/dsp/cannyedge/cannyedge.html
- *
- * Note: T1 and T2 are lower and upper thresholds.
- */
-pixel_t *canny_edge_detection(const pixel_t *in,
-															const int nx,
-															const int ny,
-                              pixel_t *out,
-                              const int tmin, const int tmax,
-                              const float sigma)
-{
-
-    pixel_t *G = calloc(nx * ny * sizeof(pixel_t), 1);
-    pixel_t *after_Gx = calloc(nx * ny * sizeof(pixel_t), 1);
-    pixel_t *after_Gy = calloc(nx * ny * sizeof(pixel_t), 1);
-    pixel_t *nms = calloc(nx * ny * sizeof(pixel_t), 1);
-    //pixel_t *out = malloc(bmp_ih->bmp_bytesz * sizeof(pixel_t));
-
-    if (G == NULL || after_Gx == NULL || after_Gy == NULL ||
-        nms == NULL || out == NULL) {
-        fprintf(stderr, "canny_edge_detection:"
-                " Failed memory allocation(s).\n");
-        exit(1);
-    }
-
-    gaussian_filter(in, out, nx, ny, sigma);
-
-    const float Gx[] = {-1, 0, 1,
-                        -2, 0, 2,
-                        -1, 0, 1};
-
-    convolution(out, after_Gx, Gx, nx, ny, 3, qfalse);
-
-    const float Gy[] = { 1, 2, 1,
-                         0, 0, 0,
-                        -1,-2,-1};
-
-    convolution(out, after_Gy, Gy, nx, ny, 3, qfalse);
-
-    for (int i = 1; i < nx - 1; i++)
-        for (int j = 1; j < ny - 1; j++) {
-            const int c = i + nx * j;
-            // G[c] = abs(after_Gx[c]) + abs(after_Gy[c]);
-            G[c] = (pixel_t)hypot(after_Gx[c], after_Gy[c]);
-        }
-
-    // Non-maximum suppression, straightforward implementation.
-    for (int i = 1; i < nx - 1; i++)
-        for (int j = 1; j < ny - 1; j++) {
-            const int c = i + nx * j;
-            const int nn = c - nx;
-            const int ss = c + nx;
-            const int ww = c + 1;
-            const int ee = c - 1;
-            const int nw = nn + 1;
-            const int ne = nn - 1;
-            const int sw = ss + 1;
-            const int se = ss - 1;
-
-            const float dir = (float)(fmod(atan2(after_Gy[c],
-                                                 after_Gx[c]) + M_PI,
-                                           M_PI) / M_PI) * 8;
-
-            if (((dir <= 1 || dir > 7) && G[c] > G[ee] &&
-                 G[c] > G[ww]) || // 0 deg
-                ((dir > 1 && dir <= 3) && G[c] > G[nw] &&
-                 G[c] > G[se]) || // 45 deg
-                ((dir > 3 && dir <= 5) && G[c] > G[nn] &&
-                 G[c] > G[ss]) || // 90 deg
-                ((dir > 5 && dir <= 7) && G[c] > G[ne] &&
-                 G[c] > G[sw]))   // 135 deg
-                nms[c] = G[c];
-            else
-                nms[c] = 0;
-        }
-
-    // Reuse array
-    // used as a stack. nx*ny/2 elements should be enough.
-    int *edges = (int*) after_Gy;
-    memset(out, 0, sizeof(pixel_t) * nx * ny);
-    memset(edges, 0, sizeof(pixel_t) * nx * ny);
-
-    // Tracing edges with hysteresis . Non-recursive implementation.
-    size_t c = 1;
-    for (int j = 1; j < ny - 1; j++)
-        for (int i = 1; i < nx - 1; i++) {
-            if (nms[c] >= tmax && out[c] == 0) { // trace edges
-                out[c] = MAX_BRIGHTNESS;
-                int nedges = 1;
-                edges[0] = c;
-
-                do {
-                    nedges--;
-                    const int t = edges[nedges];
-
-                    int nbs[8]; // neighbours
-                    nbs[0] = t - nx;     // nn
-                    nbs[1] = t + nx;     // ss
-                    nbs[2] = t + 1;      // ww
-                    nbs[3] = t - 1;      // ee
-                    nbs[4] = nbs[0] + 1; // nw
-                    nbs[5] = nbs[0] - 1; // ne
-                    nbs[6] = nbs[1] + 1; // sw
-                    nbs[7] = nbs[1] - 1; // se
-
-                    for (int k = 0; k < 8; k++)
-                        if (nms[nbs[k]] >= tmin && out[nbs[k]] == 0) {
-                            out[nbs[k]] = MAX_BRIGHTNESS;
-                            edges[nedges] = nbs[k];
-                            nedges++;
-                        }
-                } while (nedges > 0);
-            }
-            c++;
-        }
-
-    free(after_Gx);
-    free(after_Gy);
-    free(G);
-    free(nms);
-
-    return out;
 }
 
 
@@ -1441,7 +1191,6 @@ image_t	*R_FindImageFile( const char *name, imgFlags_t flags )
 	//
 	// load the pic from disk
 	//
-	localName = R_LoadImage( name, &pic, &width, &height );
 	byte* pal = R_FindPalette(name);
 	image_t *palette = NULL;
 	if(pal) {
@@ -1450,25 +1199,27 @@ image_t	*R_FindImageFile( const char *name, imgFlags_t flags )
 			va("*pal%i-%i-%i-%i", pal[0], pal[1], pal[2], pal[3]), 
 			pal, 16, 16, IMGFLAG_CLAMPTOEDGE | IMGFLAG_MIPMAP );
 	}
+	if(Q_stristr(name, "*pal")) {
+		return palette;
+	}
 
+	localName = R_LoadImage( name, &pic, &width, &height );
 	if ( pic == NULL ) {
-		if(palette) {
+		if(palette) { // because we know it's supposed to be there it's listed in a file
 			return palette;
 		}
 		return NULL;
 	}
 
-	byte *grey = R_GreyScale(pic, width, height);
-	byte *rgb = R_RGBAtoR(pic, width, height);
-	byte *edgy = ri.Hunk_Alloc(width * height * 4, h_low);
-	canny_edge_detection((pixel_t *)rgb, width, height, (pixel_t *)edgy, 45, 55, 2.0f);
-	byte *rgba = R_RtoRGBA(edgy, pic, width, height);
 	//byte *rgbaaa = R_RaddtoRGBA(edgy, pic, width, height);
-
+	// before createimage changes things, make copies
+	byte *altImage = R_LoadAlternateImage(pic, width, height);
 	image = R_CreateImage( name, localName, pic, width, height, flags );
 	image->palette = palette;
-	image->greyscale = R_CreateImage( va("%s_grey", name), va("%s_grey", localName), grey, width, height, flags );
-	image->edgy = R_CreateImage( va("%s_edgy", name), va("%s_edgy", localName), rgba, width, height, flags );
+	if(altImage && altImage != pic) {
+		image->alternate = R_CreateImage( va("-alternate%s", name), va("-alternate%s", localName), altImage, width, height, flags );
+		ri.Free(altImage);
+	}
 
 	ri.Free( pic );
 	return image;
@@ -1864,6 +1615,9 @@ void R_SetColorMappings( void ) {
 }
 
 
+void R_ClearPalettes( void );
+
+
 /*
 ===============
 R_InitImages
@@ -1877,8 +1631,9 @@ void R_InitImages( void ) {
 	for ( i = 0; i < 256; i++ )
 		s_gammatable_linear[i] = (unsigned char)i;
 
-	Com_Memset(paletteTable, 0, sizeof(paletteTable));
 	Com_Memset( hashTable, 0, sizeof( hashTable ) );
+	
+	R_ClearPalettes();
 
 	// build brightness translation tables
 	R_SetColorMappings();
