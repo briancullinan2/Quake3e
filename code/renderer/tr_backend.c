@@ -53,8 +53,16 @@ void GL_Bind( image_t *image ) {
 		texnum = image->texnum;
 	}
 
-	if(r_paletteMode->integer && image->palette) {
+	if(image && r_paletteMode->integer && image->palette) {
 		texnum = image->palette->texnum;
+	}
+
+	if(image && r_greyscale->integer && image->greyscale) {
+		texnum = image->greyscale->texnum;
+	}
+
+	if(image && r_edgy->integer && image->edgy) {
+		texnum = image->edgy->texnum;
 	}
 
 	if ( r_nobind->integer && tr.dlightImage ) {		// performance evaluation option

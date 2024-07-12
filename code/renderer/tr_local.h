@@ -509,6 +509,8 @@ typedef struct image_s {
 	GLint		internalFormat;
 	int			TMU;				// only needed for voodoo2
 	struct image_s *palette;
+	struct image_s *greyscale;
+	struct image_s *edgy;
 
 } image_t;
 
@@ -934,7 +936,7 @@ void		R_Modellist_f (void);
 
 //====================================================
 
-#define	MAX_DRAWIMAGES			2048
+#define	MAX_DRAWIMAGES			4096
 #define	MAX_SKINS				1024
 
 
@@ -1305,6 +1307,7 @@ extern	cvar_t	*r_lightmap;					// render lightmaps only
 extern	cvar_t	*r_vertexLight;					// vertex lighting mode for better performance
 
 extern	cvar_t	*r_showtris;					// enables wireframe rendering of the world
+extern	cvar_t	*r_showverts;
 extern	cvar_t	*r_showsky;						// forces sky in front of all surfaces
 extern	cvar_t	*r_shownormals;					// draws wireframe normals
 extern	cvar_t	*r_clear;						// force screen clear every frame
@@ -1325,6 +1328,7 @@ extern	cvar_t	*r_skipBackEnd;
 extern	cvar_t	*r_anaglyphMode;
 
 extern	cvar_t	*r_greyscale;
+extern	cvar_t	*r_edgy;
 
 extern	cvar_t	*r_ignoreGLErrors;
 

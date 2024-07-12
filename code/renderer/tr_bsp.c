@@ -381,13 +381,14 @@ static void R_LoadMergedLightmaps( const lump_t *l, byte *image )
 	//}
 }
 
+byte *R_GreyScale(byte *pic, int width, int height);
 
 /*
 ===============
 R_LoadLightmaps
 ===============
 */
-static void R_LoadLightmaps( const lump_t *l ) {
+void R_LoadLightmaps( const lump_t *l ) {
 	const byte	*buf;
 	byte		image[LIGHTMAP_LEN*LIGHTMAP_LEN*4];
 	int			i, numLightmaps;
@@ -437,6 +438,10 @@ static void R_LoadLightmaps( const lump_t *l ) {
 	for ( i = 0 ; i < tr.numLightmaps ; i++ ) {
 		maxIntensity = R_ProcessLightmap( image, buf + i * LIGHTMAP_SIZE * LIGHTMAP_SIZE * 3, maxIntensity );
 		tr.lightmaps[i] = R_CreateImage( va( "*lightmap%d", i ), NULL, image, LIGHTMAP_SIZE, LIGHTMAP_SIZE,
+			lightmapFlags | IMGFLAG_CLAMPTOEDGE );
+
+
+		tr.lightmaps[i]->greyscale = R_CreateImage( va( "*lightmapgrey%d", i ), NULL, R_GreyScale(image, LIGHTMAP_SIZE, LIGHTMAP_SIZE), LIGHTMAP_SIZE, LIGHTMAP_SIZE,
 			lightmapFlags | IMGFLAG_CLAMPTOEDGE );
 	}
 

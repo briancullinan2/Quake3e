@@ -96,6 +96,59 @@ void R_BindAnimatedImage( const textureBundle_t *bundle ) {
 	GL_Bind( bundle->image[ index ] );
 }
 
+/*
+================
+DrawTris
+
+Draws triangle outlines for debugging
+================
+*/
+static void DrawTris2( const shaderCommands_t *input, int thickness, float r, float g, float b, float a ) {
+
+	if ( r_showtris->integer == 1 && backEnd.drawConsole )
+		return;
+
+	if ( tess.numIndexes == 0 )
+		return;
+
+	GL_ProgramDisable();
+
+#ifdef USE_PMLIGHT
+	tess.dlightUpdateParams = qtrue;
+#endif
+
+	GL_ClientState( 0, CLS_NONE );
+	qglDisable( GL_TEXTURE_2D );
+
+#ifdef USE_PMLIGHT
+	if ( tess.dlightPass )
+		qglColor4f( 1.0f, 0.33f, 0.2f, 1.0f );
+	else
+#endif
+	qglColor4f( r, g, b, a );
+
+	GL_State( GLS_POLYMODE_LINE /*| GLS_DEPTHMASK_TRUE*/ );
+	//qglDepthRange( 0, 0 );
+
+	qglLineWidth(thickness); 
+
+	qglVertexPointer( thickness, GL_FLOAT, sizeof( input->xyz[0] ), input->xyz );
+
+	if ( qglLockArraysEXT ) {
+		qglLockArraysEXT( 0, input->numVertexes );
+	}
+
+	R_DrawElements( input->numIndexes, input->indexes );
+
+	if ( qglUnlockArraysEXT ) {
+		qglUnlockArraysEXT();
+	}
+
+	qglEnable( GL_TEXTURE_2D );
+
+	qglDepthRange( 0, 1 );
+}
+
 
 /*
 ================
@@ -130,6 +183,8 @@ static void DrawTris( const shaderCommands_t *input ) {
 
 	GL_State( GLS_POLYMODE_LINE | GLS_DEPTHMASK_TRUE );
 	qglDepthRange( 0, 0 );
+
+	qglLineWidth(3); 
 
 	qglVertexPointer( 3, GL_FLOAT, sizeof( input->xyz[0] ), input->xyz );
 
@@ -323,6 +378,9 @@ static void DrawMultitextured( const shaderCommands_t *input, int stage ) {
 	qglDisable( GL_TEXTURE_2D );
 
 	GL_SelectTexture( 0 );
+	if(r_showverts->integer) {
+		DrawTris2( input, 25, 0, 0, 0, 255 );
+	}
 }
 
 
@@ -866,6 +924,10 @@ static void RB_IterateStagesGeneric( const shaderCommands_t *input )
 				GL_ProgramEnable();
 				R_DrawElements( input->numIndexes, input->indexes );
 				GL_ProgramDisable();
+			}
+
+			if(r_showverts->integer) {
+				//DrawTris2( input, 10, 0, 0, 255, 255 );
 			}
 		}
 
