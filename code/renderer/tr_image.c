@@ -1034,13 +1034,14 @@ const char *R_LoadImage( const char *name, byte **pic, int *width, int *height )
 extern qboolean shouldUseAlternate;
 
 
-byte *R_LoadAlternateImage_real( byte *pic, int width, int height, float greyscale, int invert, int edgy, int rainbow ) {
+byte *R_LoadAlternateImage_real( byte *pic, int width, int height, float greyscale, int invert, int edgy, int rainbow, 
+	float hueShift, float satShift, float lumShift ) {
 	qboolean any = qfalse;
 	byte *workImage = pic;
 	byte *newWorkImage = pic;
 	if(greyscale > 0.0f) {
 		any = qtrue;
-		newWorkImage = R_GreyScale(r_greyscale->value, workImage, width, height);
+		newWorkImage = R_GreyScale(greyscale, workImage, width, height);
 		workImage = newWorkImage;
 	}
 	if(invert) {
@@ -1083,6 +1084,31 @@ byte *R_LoadAlternateImage_real( byte *pic, int width, int height, float greysca
 		}
 		workImage = newWorkImage;
 	}
+	if(hueShift != 0.0f) {
+		any = qtrue;
+		newWorkImage = R_HueShift(hueShift, workImage, width, height);
+		if(workImage != pic) {
+			ri.Free(workImage);
+		}
+		workImage = newWorkImage;
+	}
+	if(satShift != 0.0f) {
+		any = qtrue;
+		newWorkImage = R_SatShift(satShift, workImage, width, height);
+		if(workImage != pic) {
+			ri.Free(workImage);
+		}
+		workImage = newWorkImage;
+	}
+	if(lumShift != 0.0f) {
+		any = qtrue;
+		newWorkImage = R_LumShift(lumShift, workImage, width, height);
+		if(workImage != pic) {
+			ri.Free(workImage);
+		}
+		workImage = newWorkImage;
+	}
+
 	if(any && workImage) {
 		return workImage;
 	}
@@ -1090,7 +1116,7 @@ byte *R_LoadAlternateImage_real( byte *pic, int width, int height, float greysca
 }
 
 byte *R_LoadAlternateImage( byte *pic, int width, int height ) {
-	byte *workImage = R_LoadAlternateImage_real(pic, width, height, r_greyscale->value, r_invert->integer, r_edgy->integer, r_rainbow->integer);
+	byte *workImage = R_LoadAlternateImage_real(pic, width, height, r_greyscale->value, r_invert->integer, r_edgy->integer, r_rainbow->integer, 0.0f, 0.0f, 0.0f);
 	if(workImage) {
 		shouldUseAlternate = qtrue;
 		return workImage;
@@ -1101,6 +1127,10 @@ byte *R_LoadAlternateImage( byte *pic, int width, int height ) {
 
 
 byte *R_LoadAlternateImageVariables( byte *pic, int width, int height, const char *variables) {
+	const char *start;
+	float hueShift = 0.0f;
+	float satShift = 0.0f;
+	float lumShift = 0.0f;
 	float greyscale = 0.0f;
 	int invert = 0;
 	int edgy = 0;
@@ -1108,7 +1138,26 @@ byte *R_LoadAlternateImageVariables( byte *pic, int width, int height, const cha
 	if(Q_stristr(variables, "%rainbow")) {
 		rainbow = 1;
 	}
-	return R_LoadAlternateImage_real(pic, width, height, greyscale, invert, edgy, rainbow);
+	if((start = Q_stristr(variables, "%hue"))) {
+		hueShift = atof((char[]){start[4], start[5], start[6], start[7]});
+	}
+	if((start = Q_stristr(variables, "%sat"))) {
+		satShift = atof((char[]){start[4], start[5], start[6], start[7]});
+	}
+	if((start = Q_stristr(variables, "%lum"))) {
+		lumShift = atof((char[]){start[4], start[5], start[6], start[7]});
+	}
+	if(Q_stristr(variables, "%invert")) {
+		invert = 1;
+		if(Q_stristr(variables, "%invert4")) {
+			invert = 4;
+		} else if(Q_stristr(variables, "%invert3")) {
+			invert = 3;
+		} else if(Q_stristr(variables, "%invert2")) {
+			invert = 2;
+		}
+	}
+	return R_LoadAlternateImage_real(pic, width, height, greyscale, invert, edgy, rainbow, hueShift, satShift, lumShift);
 }
 
 

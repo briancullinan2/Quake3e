@@ -473,6 +473,61 @@ byte *R_Rainbow2(byte *pic, int width, int height) {
 	return grey;
 }
 
+byte *R_LumShift(float lumShift, byte *pic, int width, int height) {
+	byte *grey = ri.Malloc(width * height * 4);
+
+	byte *img, *scan;
+	int i;
+	for ( i = 0, img = grey, scan = pic; i < width * height; i++, img += 4, scan += 4 ) {
+		HSL hsl = rgb2hsl(scan[0], scan[1], scan[2]);
+		hsl.l += lumShift;
+		RGB rgb = hsl2rgb(hsl.h, hsl.s, hsl.l);
+		img[0] = rgb.r;
+		img[1] = rgb.g;
+		img[2] = rgb.b;
+		img[3] = scan[3];
+	}
+
+	return grey;
+}
+
+byte *R_SatShift(float satShift, byte *pic, int width, int height) {
+	byte *grey = ri.Malloc(width * height * 4);
+
+	byte *img, *scan;
+	int i;
+	for ( i = 0, img = grey, scan = pic; i < width * height; i++, img += 4, scan += 4 ) {
+		HSL hsl = rgb2hsl(scan[0], scan[1], scan[2]);
+		hsl.s += satShift;
+		RGB rgb = hsl2rgb(hsl.h, hsl.s, hsl.l);
+		img[0] = rgb.r;
+		img[1] = rgb.g;
+		img[2] = rgb.b;
+		img[3] = scan[3];
+	}
+
+	return grey;
+}
+
+byte *R_HueShift(float hueShift, byte *pic, int width, int height) {
+	byte *grey = ri.Malloc(width * height * 4);
+
+	byte *img, *scan;
+	int i;
+	for ( i = 0, img = grey, scan = pic; i < width * height; i++, img += 4, scan += 4 ) {
+		HSL hsl = rgb2hsl(scan[0], scan[1], scan[2]);
+		hsl.h += hueShift;
+		//hsl.l = 1.0f - hsl.l;
+		RGB rgb = hsl2rgb(hsl.h, hsl.s, hsl.l);
+		img[0] = rgb.r;
+		img[1] = rgb.g;
+		img[2] = rgb.b;
+		img[3] = scan[3];
+	}
+
+	return grey;
+}
+
 byte *R_Rainbow(byte *pic, int width, int height) {
 	byte *grey = ri.Malloc(width * height * 4);
 
