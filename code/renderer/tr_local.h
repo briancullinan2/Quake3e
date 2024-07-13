@@ -1323,6 +1323,8 @@ extern	cvar_t	*r_anaglyphMode;
 extern	cvar_t	*r_greyscale;
 extern	cvar_t	*r_edgy;
 extern	cvar_t	*r_invert;
+extern	cvar_t	*r_rainbow;
+
 
 extern	cvar_t	*r_ignoreGLErrors;
 

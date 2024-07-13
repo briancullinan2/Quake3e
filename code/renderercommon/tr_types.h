@@ -267,6 +267,8 @@ Q_EXPORT byte *R_FindPalette(const char *name);
 byte *R_RaddtoRGBA(byte *pic, byte *pic2, int width, int height);
 byte *R_RtoRGBA(byte *pic, byte *pic2, int width, int height);
 byte *R_RGBAtoR(byte *pic, int width, int height);
+byte *R_Rainbow2(byte *pic, int width, int height);
+byte *R_Rainbow(byte *pic, int width, int height);
 
 
 typedef struct rgb {

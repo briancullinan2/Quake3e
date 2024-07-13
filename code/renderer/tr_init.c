@@ -59,6 +59,7 @@ cvar_t	*r_anaglyphMode;
 cvar_t	*r_greyscale;
 cvar_t	*r_edgy;
 cvar_t	*r_invert;
+cvar_t	*r_rainbow;
 
 static cvar_t *r_ignorehwgamma;
 
@@ -1674,6 +1675,8 @@ static void R_Register( void )
 	ri.Cvar_SetGroup( r_edgy, CVG_RENDERER );
 	r_invert = ri.Cvar_Get( "r_invert", "0", CVAR_ARCHIVE_ND );
 	ri.Cvar_SetGroup( r_invert, CVG_RENDERER );
+	r_rainbow = ri.Cvar_Get( "r_rainbow", "0", CVAR_ARCHIVE_ND );
+	ri.Cvar_SetGroup( r_rainbow, CVG_RENDERER );
 
 	//
 	// temporary variables that can change at any time
