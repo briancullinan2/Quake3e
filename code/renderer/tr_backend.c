@@ -24,6 +24,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 backEndData_t	*backEndData;
 backEndState_t	backEnd;
 
+qboolean shouldUseAlternate = qfalse;
+
 const float *GL_Ortho( const float left, const float right, const float bottom, const float top, const float znear, const float zfar )
 {
 	static float m[ 16 ] = { 0 };
@@ -51,6 +53,14 @@ void GL_Bind( image_t *image ) {
 		texnum = tr.defaultImage->texnum;
 	} else {
 		texnum = image->texnum;
+	}
+
+	if(image && r_paletteMode->integer && image->palette) {
+		texnum = image->palette->texnum;
+	}
+
+	if(image && shouldUseAlternate && image->alternate) {
+		texnum = image->alternate->texnum;
 	}
 
 	if ( r_nobind->integer && tr.dlightImage ) {		// performance evaluation option
@@ -647,7 +657,8 @@ static void RB_RenderDrawSurfList( drawSurf_t *drawSurfs, int numDrawSurfs ) {
 					R_TransformDlights( backEnd.refdef.num_dlights, backEnd.refdef.dlights, &backEnd.or );
 				}
 #endif // USE_LEGACY_DLIGHTS
-				if ( backEnd.currentEntity->e.renderfx & RF_DEPTHHACK ) {
+				if ( (backEnd.currentEntity->e.renderfx & RF_DEPTHHACK)
+					|| (backEnd.currentEntity->e.renderfx & RF_DEPTHEXTRAHACKY) ) {
 					// hack the depth range to prevent view model from poking into walls
 					depthRange = qtrue;
 
@@ -704,8 +715,15 @@ static void RB_RenderDrawSurfList( drawSurf_t *drawSurfs, int numDrawSurfs ) {
 						}
 					}
 
+if((backEnd.currentEntity->e.renderfx & RF_DEPTHEXTRAHACKY)) {
 					if(!oldDepthRange)
 						qglDepthRange (0, 0.3);
+
+} else {
+					if(!oldDepthRange)
+						qglDepthRange (0.0f, 0.3f);
+
+}
 				}
 				else
 				{

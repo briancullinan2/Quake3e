@@ -9,7 +9,7 @@ function getQueryCommands() {
 		'quake3e_web',
 		'+set', 'fs_basepath', '/base',
 		'+set', 'fs_homepath', '/home',
-//		'+set', 'sv_pure', '0', // require for now, TODO: server side zips
+		'+set', 'sv_pure', '0', // require for now, TODO: server side zips
 		'+set', 'r_mode', '-2',
 		'+set', 'net_socksServer', window.location.hostname || '',
 		'+set', 'net_socksPort', window.location.port 
@@ -218,23 +218,24 @@ function Sys_Return() {
 	if(returnUrl) {
 		window.location = returnUrl
 	}
+	// brian cullinan added this feature for Tig
 	// client mode
-	let reconnect = addressToString(Cvar_VariableString(stringToAddress('cl_reconnectArgs')))
-	if(reconnect) {
-		window.location = '/games/' + reconnect
-	}
+	//let reconnect = addressToString(Cvar_VariableString(stringToAddress('cl_reconnectArgs')))
+	//if(reconnect) {
+	//	window.location = '/games/' + reconnect
+	//}
 	// single player mode
-	let mapname = addressToString(Cvar_VariableString(stringToAddress('mapname')))
-	if(mapname && mapname != 'nomap') {
-		window.location = '/maps/' + mapname
-	}
+	//let mapname = addressToString(Cvar_VariableString(stringToAddress('mapname')))
+	//if(mapname && mapname != 'nomap') {
+	//	window.location = '/maps/' + mapname
+	//}
 }
 
 
 
 function Sys_Exit(code) {
 	SYS.exited = true
-	GLimp_Shutdown()
+	GLimp_Shutdown(true)
 	NET_Shutdown()
 	if(SYS.frameInterval) {
 		clearInterval(SYS.frameInterval)
@@ -242,6 +243,9 @@ function Sys_Exit(code) {
 	}
 	if(code == 0) {
 		Sys_Return()
+	}
+	if(	GL.canvas ) {
+		GL.canvas.remove()
 	}
 }
 

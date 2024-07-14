@@ -23,6 +23,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "client.h"
 //#include "../qcommon/q_shared.h"
 #include <setjmp.h>
+#ifndef __WASM__
 
 /*
  * Include file for users of JPEG library.
@@ -523,3 +524,4 @@ void CL_SaveJPG( const char *filename, int quality, int image_width, int image_h
 
 	Hunk_FreeTempMemory(out);
 }
+#endif

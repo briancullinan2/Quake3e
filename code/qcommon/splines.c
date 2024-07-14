@@ -590,7 +590,7 @@ static void getActiveSegmentInfo(int segment, vec3_t origin, vec3_t direction, f
 */
 
 
-static idInterpolatedPosition *initInterpolatedPosition(vec3_t start, vec3_t end, long time) {
+static idInterpolatedPosition *initInterpolatedPosition(const vec3_t start, const vec3_t end, long time) {
 	idInterpolatedPosition *result = Z_Malloc(sizeof(idInterpolatedPosition));
 	result->pos.time = time;
 	result->pos.type = CP_INTERPOLATED;
@@ -1585,9 +1585,12 @@ static void clearCamera(idCameraDef *cam) {
 		Z_Free(cam->targetPositions);
 	cam->targetPositions = NULL;
 	cam->numTargetPositions = 0;
+	
 	if(cam->events)
 		Z_Free(cam->events);
+	cam->events = NULL;
 	cam->numEvents = 0;
+
 	if(cam->cameraPosition)
 		Z_Free(cam->cameraPosition);
 	cam->cameraPosition = NULL;

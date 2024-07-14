@@ -448,6 +448,11 @@ static void S_SpatializeOrigin( const vec3_t origin, int master_vol, int *left_v
 	vec3_t	source_vec;
 	vec3_t	vec;
 
+#ifdef __WASM__
+	// TODO: change speaker position in web audio
+	return;
+#endif
+
 	const float dist_mult = SOUND_ATTENUATE;
 	
 	// calculate stereo separation and distance attenuation

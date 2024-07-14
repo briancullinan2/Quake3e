@@ -1464,6 +1464,7 @@ static const byte	mipBlendColors[16][4] = {
 	{0,0,255,128},
 };
 
+
 static void RawImage_SwizzleRA( byte *data, int width, int height )
 {
 	int i;
@@ -1954,18 +1955,20 @@ static GLenum PixelDataFormatFromInternalFormat(GLenum internalFormat)
 	}
 }
 
-static void RawImage_UploadTexture(GLuint texture, byte *data, int x, int y, int width, int height, GLenum target, GLenum picFormat, int numMips, GLenum internalFormat, imgType_t type, imgFlags_t flags, qboolean subtexture )
+static void RawImage_UploadTexture(GLuint texture, byte *data, int x, int y, int width, int height, GLenum target, GLenum picFormat, GLenum dataFormat, GLenum dataType, int numMips, GLenum internalFormat, imgType_t type, imgFlags_t flags, qboolean subtexture )
 {
-	GLenum dataFormat, dataType;
 	qboolean rgtc = internalFormat == GL_COMPRESSED_RG_RGTC2;
 	qboolean rgba8 = picFormat == GL_RGBA8 || picFormat == GL_SRGB8_ALPHA8_EXT;
 	qboolean rgba = rgba8 || picFormat == GL_RGBA16;
 	qboolean mipmap = !!(flags & IMGFLAG_MIPMAP);
 	int size, miplevel;
 	qboolean lastMip = qfalse;
+	byte *formatBuffer = NULL;
 
-	dataFormat = PixelDataFormatFromInternalFormat(internalFormat);
-	dataType = picFormat == GL_RGBA16 ? GL_UNSIGNED_SHORT : GL_UNSIGNED_BYTE;
+	if (qglesMajorVersion && rgba8 && (dataFormat != GL_RGBA || dataType != GL_UNSIGNED_BYTE))
+	{
+		formatBuffer = ri.Hunk_AllocateTempMemory(4 * width * height);
+	}
 
 	miplevel = 0;
 	do
@@ -1984,6 +1987,11 @@ static void RawImage_UploadTexture(GLuint texture, byte *data, int x, int y, int
 
 			if (rgba8 && rgtc)
 				RawImage_UploadToRgtc2Texture(texture, miplevel, x, y, width, height, data);
+			else if (formatBuffer)
+			{
+				R_ConvertTextureFormat(data, width, height, dataFormat, dataType, formatBuffer);
+				qglTextureSubImage2DEXT(texture, target, miplevel, x, y, width, height, dataFormat, dataType, formatBuffer);
+			}
 			else
 				qglTextureSubImage2DEXT(texture, target, miplevel, x, y, width, height, dataFormat, dataType, data);
 		}
@@ -2017,6 +2025,9 @@ static void RawImage_UploadTexture(GLuint texture, byte *data, int x, int y, int
 		}
 	}
 	while (!lastMip);
+
+	if (formatBuffer != NULL)
+		ri.Hunk_FreeTempMemory(formatBuffer);
 }
 
 
@@ -2026,7 +2037,7 @@ Upload32
 
 ===============
 */
-static void Upload32(byte *data, int x, int y, int width, int height, GLenum picFormat, int numMips, image_t *image, qboolean scaled)
+static void Upload32(byte *data, int x, int y, int width, int height, GLenum picFormat, GLenum dataFormat, GLenum dataType, int numMips, image_t *image, qboolean scaled)
 {
 	int			i, c;
 	byte		*scan;
@@ -2081,7 +2092,7 @@ static void Upload32(byte *data, int x, int y, int width, int height, GLenum pic
 		for (i = 0; i < 6; i++)
 		{
 			int w2 = width, h2 = height;
-			RawImage_UploadTexture(image->texnum, data, x, y, width, height, GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, picFormat, numMips, internalFormat, type, flags, qfalse);
+			RawImage_UploadTexture(image->texnum, data, x, y, width, height, GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, picFormat, dataFormat, dataType, numMips, internalFormat, type, flags, qfalse);
 			for (c = numMips; c; c--)
 			{
 				data += CalculateMipSize(w2, h2, picFormat);
@@ -2092,7 +2103,7 @@ static void Upload32(byte *data, int x, int y, int width, int height, GLenum pic
 	}
 	else
 	{
-		RawImage_UploadTexture(image->texnum, data, x, y, width, height, GL_TEXTURE_2D, picFormat, numMips, internalFormat, type, flags, qfalse);
+		RawImage_UploadTexture(image->texnum, data, x, y, width, height, GL_TEXTURE_2D, picFormat, dataFormat, dataType, numMips, internalFormat, type, flags, qfalse);
 	}
 
 	GL_CheckErrors();
@@ -2118,7 +2129,7 @@ static image_t *R_CreateImage2( const char *name, byte *pic, int width, int heig
 	qboolean    picmip = !!(flags & IMGFLAG_PICMIP);
 	qboolean    lastMip;
 	GLenum textureTarget = cubemap ? GL_TEXTURE_CUBE_MAP : GL_TEXTURE_2D;
-	GLenum dataFormat;
+	GLenum dataFormat, dataType;
 	size_t		namelen;
 
 	namelen = strlen( name );
@@ -2152,6 +2163,57 @@ static image_t *R_CreateImage2( const char *name, byte *pic, int width, int heig
 
 	if (!internalFormat)
 		internalFormat = RawImage_GetFormat(pic, width * height, picFormat, isLightmap, image->type, image->flags);
+
+	dataFormat = PixelDataFormatFromInternalFormat(internalFormat);
+	dataType = picFormat == GL_RGBA16 ? GL_UNSIGNED_SHORT : GL_UNSIGNED_BYTE;
+
+	// Convert image data format for OpenGL ES, data is converted for each mip level
+	if (qglesMajorVersion)
+	{
+		switch (internalFormat)
+		{
+			case GL_LUMINANCE:
+			case GL_LUMINANCE8:
+				internalFormat = GL_LUMINANCE;
+				dataFormat = GL_LUMINANCE;
+				dataType = GL_UNSIGNED_BYTE;
+				break;
+			case GL_LUMINANCE_ALPHA:
+			case GL_LUMINANCE8_ALPHA8:
+				internalFormat = GL_LUMINANCE_ALPHA;
+				dataFormat = GL_LUMINANCE_ALPHA;
+				dataType = GL_UNSIGNED_BYTE;
+				break;
+			case GL_RGB:
+#ifndef __WASM__
+			case GL_RGB8:
+#endif
+				internalFormat = GL_RGB;
+				dataFormat = GL_RGB;
+				dataType = GL_UNSIGNED_BYTE;
+				break;
+			case GL_RGB5:
+				internalFormat = GL_RGB;
+				dataFormat = GL_RGB;
+				dataType = GL_UNSIGNED_SHORT_5_6_5;
+				break;
+			case GL_RGBA:
+#ifndef __WASM__
+			case GL_RGBA8:
+#endif
+				internalFormat = GL_RGBA;
+				dataFormat = GL_RGBA;
+				dataType = GL_UNSIGNED_BYTE;
+				break;
+			case GL_RGBA4:
+				internalFormat = GL_RGBA;
+				dataFormat = GL_RGBA;
+				dataType = GL_UNSIGNED_SHORT_4_4_4_4;
+				break;
+			default:
+				ri.Error( ERR_DROP, "Missing OpenGL ES support for image '%s' with internal format 0x%X\n", name, internalFormat );
+		}
+	}
 
 	image->internalFormat = internalFormat;
 
@@ -2204,7 +2266,7 @@ static image_t *R_CreateImage2( const char *name, byte *pic, int width, int heig
 
 	// Upload data.
 	if (pic)
-		Upload32(pic, 0, 0, width, height, picFormat, numMips, image, scaled);
+		Upload32(pic, 0, 0, width, height, picFormat, dataFormat, dataType, numMips, image, scaled);
 
 	if (resampledBuffer != NULL)
 		ri.Hunk_FreeTempMemory(resampledBuffer);
@@ -2381,7 +2443,7 @@ static image_t *R_CreateImage3( const char *name, byte *pic, GLenum picFormat, i
 }
 
 
-Q_EXPORT void R_FinishImage3( image_t *image, GLenum picFormat, int numMips ) {
+void R_FinishImage3( image_t *image, GLenum picFormat, int numMips ) {
 	int      glWrapClampMode, mipWidth, mipHeight, miplevel;
 	qboolean mipmap = !!(image->flags & IMGFLAG_MIPMAP);
 	qboolean lastMip = qfalse;
@@ -2475,7 +2537,13 @@ image_t *R_CreateImage(const char *name, byte *pic, int width, int height, imgTy
 
 void R_UpdateSubImage( image_t *image, byte *pic, int x, int y, int width, int height, GLenum picFormat )
 {
-	Upload32(pic, x, y, width, height, picFormat, 0, image, qfalse);
+	GLenum dataFormat, dataType;
+
+	// TODO: This is fine for lightmaps but (unused) general RGBA images need to store dataFormat / dataType in image_t for OpenGL ES?
+	dataFormat = PixelDataFormatFromInternalFormat(image->internalFormat);
+	dataType = picFormat == GL_RGBA16 ? GL_UNSIGNED_SHORT : GL_UNSIGNED_BYTE;
+
+	Upload32(pic, x, y, width, height, picFormat, dataFormat, dataType, 0, image, qfalse);
 }
 
 //===================================================================
@@ -2499,12 +2567,11 @@ void R_LoadPNG_Remote( const char *name, byte **pic, int *width, int *height );
 static const imageExtToLoaderMap_t imageLoaders[ ] =
 {
 	{ "tga",  R_LoadTGA },
-#ifndef __WASM__
+#ifndef __WASM__ // because it has these longjmps for error handling I would have to rewrite
 	{ "png",  R_LoadPNG },
-#endif
 	{ "jpg",  R_LoadJPG },
 	{ "jpeg", R_LoadJPG },
-//#endif
+#endif
 	{ "pcx",  R_LoadPCX },
 	{ "bmp",  R_LoadBMP }
 #ifdef __WASM__

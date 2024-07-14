@@ -508,6 +508,9 @@ typedef struct image_s {
 
 	GLint		internalFormat;
 	int			TMU;				// only needed for voodoo2
+	int			lastTimeUsed;
+	struct image_s *palette;
+	struct image_s *alternate;
 
 } image_t;
 
@@ -848,15 +851,7 @@ typedef struct {
 typedef struct {
 	char		name[MAX_QPATH];		// ie: maps/tim_dm2.bsp
 	char		baseName[MAX_QPATH];	// ie: tim_dm2
-#ifdef USE_AUTO_TERRAIN
-	char terrainMaster[MAX_QPATH];
-	char terrainIndex[MAX_QPATH];
-	byte *terrainImage;
-	int terrainLayers:3;
-	int terrainHeight;
-	int terrainWidth;
-	qboolean terrainFlip;
-#endif
+	struct terrain_s terrain;
 	int			dataSize;
 	vec3_t		bounds[2];
 
@@ -933,8 +928,8 @@ void		R_Modellist_f (void);
 
 //====================================================
 
-#define	MAX_DRAWIMAGES			2048
-#define	MAX_SKINS				1024
+#define	MAX_DRAWIMAGES			4096
+#define	MAX_SKINS				4096
 
 
 #define	MAX_DRAWSURFS			0x20000
@@ -1104,6 +1099,7 @@ typedef struct {
 */
 typedef struct {
 	qboolean				registered;		// cleared at shutdown, set at beginRegistration
+	int							lastRegistrationTime;
 	qboolean				inited;			// cleared at shutdown, set at InitOpenGL
 
 	int						visCount;		// incremented every time a new vis cluster is entered
@@ -1304,6 +1300,7 @@ extern	cvar_t	*r_lightmap;					// render lightmaps only
 extern	cvar_t	*r_vertexLight;					// vertex lighting mode for better performance
 
 extern	cvar_t	*r_showtris;					// enables wireframe rendering of the world
+extern	cvar_t	*r_showverts;
 extern	cvar_t	*r_showsky;						// forces sky in front of all surfaces
 extern	cvar_t	*r_shownormals;					// draws wireframe normals
 extern	cvar_t	*r_clear;						// force screen clear every frame
@@ -1324,6 +1321,10 @@ extern	cvar_t	*r_skipBackEnd;
 extern	cvar_t	*r_anaglyphMode;
 
 extern	cvar_t	*r_greyscale;
+extern	cvar_t	*r_edgy;
+extern	cvar_t	*r_invert;
+extern	cvar_t	*r_rainbow;
+
 
 extern	cvar_t	*r_ignoreGLErrors;
 
@@ -1341,6 +1342,10 @@ extern	cvar_t	*r_debugSort;
 extern	cvar_t	*r_printShaders;
 
 extern cvar_t	*r_marksOnTriangleMeshes;
+
+
+extern  cvar_t  *r_paletteMode;
+
 
 #ifdef USE_AUTO_TERRAIN
 extern cvar_t	*r_autoTerrain;

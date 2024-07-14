@@ -57,6 +57,9 @@ cvar_t	*r_skipBackEnd;
 cvar_t	*r_anaglyphMode;
 
 cvar_t	*r_greyscale;
+cvar_t	*r_edgy;
+cvar_t	*r_invert;
+cvar_t	*r_rainbow;
 
 static cvar_t *r_ignorehwgamma;
 
@@ -144,6 +147,7 @@ cvar_t	*r_colorMipLevels;
 cvar_t	*r_picmip;
 cvar_t	*r_nomip;
 cvar_t	*r_showtris;
+cvar_t	*r_showverts;
 cvar_t	*r_showsky;
 cvar_t	*r_shownormals;
 cvar_t	*r_finish;
@@ -188,6 +192,9 @@ static cvar_t	*r_maxpolybuffers;
 int		max_polys;
 int		max_polyverts;
 int		max_polybuffers;
+
+
+cvar_t  *r_paletteMode;
 
 
 #ifdef USE_AUTO_TERRAIN
@@ -1519,7 +1526,7 @@ static void R_Register( void )
 	r_texturebits = ri.Cvar_Get( "r_texturebits", "0", CVAR_ARCHIVE_ND | CVAR_LATCH );
 	ri.Cvar_SetDescription( r_texturebits, "Number of texture bits per texture." );
 
-	r_mergeLightmaps = ri.Cvar_Get( "r_mergeLightmaps", "1", CVAR_ARCHIVE_ND | CVAR_LATCH );
+	r_mergeLightmaps = ri.Cvar_Get( "r_mergeLightmaps", "0", CVAR_ARCHIVE_ND | CVAR_LATCH );
 	ri.Cvar_SetDescription( r_mergeLightmaps, "Merge built-in small lightmaps into bigger lightmaps (atlases)." );
 
 #ifdef USE_VBO
@@ -1530,6 +1537,7 @@ static void R_Register( void )
 	r_mapGreyScale = ri.Cvar_Get( "r_mapGreyScale", "0", CVAR_ARCHIVE_ND | CVAR_LATCH );
 	ri.Cvar_CheckRange( r_mapGreyScale, "-1", "1", CV_FLOAT );
 	ri.Cvar_SetDescription(r_mapGreyScale, "Desaturate world map textures only, works independently from \\r_greyscale, negative values only desaturate lightmaps.");
+  r_paletteMode = ri.Cvar_Get("r_paletteMode", "0", CVAR_ARCHIVE);
 
 	r_subdivisions = ri.Cvar_Get( "r_subdivisions", "4", CVAR_ARCHIVE_ND | CVAR_LATCH );
 	ri.Cvar_SetDescription(r_subdivisions, "Distance to subdivide bezier curved surfaces. Higher values mean less subdivision and less geometric complexity.");
@@ -1663,6 +1671,13 @@ static void R_Register( void )
 	ri.Cvar_SetDescription( r_greyscale, "Desaturate rendered frame, requires \\r_fbo 1." );
 	ri.Cvar_SetGroup( r_greyscale, CVG_RENDERER );
 
+	r_edgy = ri.Cvar_Get( "r_edgy", "0", CVAR_ARCHIVE_ND );
+	ri.Cvar_SetGroup( r_edgy, CVG_RENDERER );
+	r_invert = ri.Cvar_Get( "r_invert", "0", CVAR_ARCHIVE_ND );
+	ri.Cvar_SetGroup( r_invert, CVG_RENDERER );
+	r_rainbow = ri.Cvar_Get( "r_rainbow", "0", CVAR_ARCHIVE_ND );
+	ri.Cvar_SetGroup( r_rainbow, CVG_RENDERER );
+
 	//
 	// temporary variables that can change at any time
 	//
@@ -1717,6 +1732,9 @@ static void R_Register( void )
 	ri.Cvar_SetDescription( r_nobind, "Backend debugging tool: Disables texture binding." );
 	r_showtris = ri.Cvar_Get ("r_showtris", "0", CVAR_CHEAT);
 	ri.Cvar_SetDescription( r_showtris, "Debugging tool: Wireframe rendering of polygon triangles in the world." );
+	r_showverts = ri.Cvar_Get ("r_showverts", "0", CVAR_ARCHIVE_ND);
+	ri.Cvar_SetDescription(r_showverts, "Debugging tool: Vertex rendering of polygon triangles in the world.");
+	
 	r_showsky = ri.Cvar_Get( "r_showsky", "0", 0 );
 	ri.Cvar_SetDescription( r_showsky, "Forces sky in front of all surfaces." );
 	r_shownormals = ri.Cvar_Get ("r_shownormals", "0", CVAR_CHEAT);

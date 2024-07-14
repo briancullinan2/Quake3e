@@ -74,16 +74,6 @@ typedef struct image_s {
 	GLuint paletteImage;
 } image_t;
 
-typedef struct palette_s {
-	char		*imgName;
-	struct palette_s *next;
-	int  a;
-	int  r;
-	int  g;
-	int  b;
-	struct image_s *image;
-} palette_t;
-
 // any change in the LIGHTMAP_* defines here MUST be reflected in
 // R_FindShader() in tr_bsp.c
 #define LIGHTMAP_2D         -4	// shader is for 2D rendering

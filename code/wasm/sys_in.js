@@ -38,6 +38,34 @@ function GLimp_StartDriverAndSetMode(mode, modeFS, fullscreen, fallback) {
   return 0 // no error
 }
 
+function CopyBiases() {
+	GL.screenXBias = 0.0;
+	GL.screenYBias = 0.0;
+
+	if ( GL.canvas.clientWidth * 480 > GL.canvas.clientHeight * 640 ) {
+		// wide screen, scale by height
+		GL.screenXScale = GL.screenYScale = GL.canvas.clientHeight * (1.0/480.0);
+		GL.screenXBias = 0.5 * ( GL.canvas.clientWidth - ( GL.canvas.clientHeight * (640.0/480.0) ) );
+	}
+	else {
+		// no wide screen, scale by width
+		GL.screenXScale = GL.screenYScale = GL.canvas.clientWidth * (1.0/640.0);
+		GL.screenYBias = 0.5 * ( GL.canvas.clientHeight - ( GL.canvas.clientWidth * (480.0/640.0) ) );
+	}
+
+	GL.screenXmin = 0.0 - (GL.screenXBias / GL.screenXScale);
+	GL.screenXmax = 640.0 + (GL.screenXBias / GL.screenXScale);
+
+	GL.screenYmin = 0.0 - (GL.screenYBias / GL.screenYScale);
+	GL.screenYmax = 480.0 + (GL.screenYBias / GL.screenYScale);
+
+	GL.cursorScaleR = 1.0 / GL.screenXScale;
+	if ( GL.cursorScaleR < 0.5 ) {
+		GL.cursorScaleR = 0.5;
+	}
+}
+
+
 function updateVideoCmd() {
   GL.canvas.setAttribute('width', GL.canvas.clientWidth)
   GL.canvas.setAttribute('height', GL.canvas.clientHeight)
@@ -54,6 +82,9 @@ function updateVideoCmd() {
   HEAP32[(INPUT.aspect >> 2) + 6]++;
   HEAP32[cvar_modifiedFlags >> 2] |= 0x40000000 // CVAR_MODIFIED
   */
+ 	
+  CopyBiases();
+
   WindowResize(GL.canvas.width, GL.canvas.height)
 }
 
@@ -115,6 +146,7 @@ function InputPushFocusEvent(evt) {
     //HEAP32[gw_active >> 2] = true;
     HEAP32[gw_minimized >> 2] = false;
   }
+  CopyBiases();
 }
 
 
@@ -366,19 +398,18 @@ function InputPushMouseEvent(evt) {
     return
   }
 
-  if (!(Key_GetCatcher() & KEYCATCH_CONSOLE)
-    || HEAPU32[first_click >> 2]) {
+  if (Key_GetCatcher() === 0 && HEAPU32[(INPUT.in_joystick>>2) + 8]) {
+    return
+  }
+
+
+  if (!(Key_GetCatcher() & KEYCATCH_CONSOLE) || HEAPU32[first_click >> 2]) {
     if (evt.type == 'mousemove') {
       if (Key_GetCatcher() === 0) {
         Sys_QueEvent(Sys_Milliseconds(), SE_MOUSE,
           getMovementX(evt), getMovementY(evt), 0, null);
       } else {
-        Sys_QueEvent(Sys_Milliseconds(), SE_MOUSE_ABS,
-        //(evt.clientX + 20) * 640/480, 
-        //(evt.clientY + 20) * GL.canvas.clientWidth / GL.canvas.clientHeight * 640/480,
-        (evt.clientX * 2 + 20) * 480/640, 
-        (evt.clientY * 2 + 20) * 480/640,
-         0, null);
+        Sys_QueEvent(Sys_Milliseconds(), SE_MOUSE_ABS, evt.clientX, evt.clientY, 0, null)
       }
     } else {
       INPUT.editorActive = false
@@ -411,9 +442,7 @@ function InputPushMouseEvent(evt) {
   }
 
   // TODO: fix this maybe?
-  //if(!mouseActive || in_joystick->integer) {
-  //  return;
-  //}
+
   // Basically, whenever the requestPointerLock() is finally triggered when cgame starts,
   //   the unfocusedFPS is cancelled and changed to real FPS, 200+!
   if (down && document.pointerLockElement != GL.canvas) {
@@ -422,7 +451,6 @@ function InputPushMouseEvent(evt) {
     createTemporaryText()
     TEMPORARY_TEXT.focus()
     GL.canvas.requestPointerLock()
-    InitNippleJoysticks()
     document.body.classList.add('captured')
     document.body.classList.remove('released')
 
@@ -455,6 +483,7 @@ function Sys_ConsoleInput() {
 }
 
 
+const CVAR_ROM = 0x0040
 const CVAR_ARCHIVE = 0x0001
 const CVAR_NODEFAULT = 0x4000
 const CVAR_LATCH = 0x0020
@@ -465,6 +494,8 @@ const CV_INTEGER = 2
 function IN_Init() {
 
   console.log('\n------- Input Initialization -------\n')
+
+  CopyBiases()
 
   INPUT.aspect = Cvar_Get(stringToAddress('r_customAspect'), stringToAddress(''), 0);
   INPUT.fpsUnfocused = Cvar_Get(stringToAddress('com_maxfpsUnfocused'), stringToAddress('60'), 0);
@@ -522,7 +553,7 @@ function IN_Init() {
 
   document.addEventListener('pointerlockchange', InputPushFocusEvent, false)
 
-  //InitNippleJoysticks()
+  InitNippleJoysticks()
   /*
   let nipple handle touch events
   GL.canvas.addEventListener('touchstart', InputPushTouchEvent, false)
@@ -551,22 +582,22 @@ function InputPushTouchEvent(id, evt, data) {
   INPUT.cancelBackspace = false
   if (id == 1) {
     if (data.vector && data.vector.y > .4) {
-      InputPushKeyEvent({ type: 'keydown', repeat: true, keyCode: 87 })
+      InputPushKeyEvent({ type: 'keydown', repeat: false, keyCode: 87 })
     } else {
       InputPushKeyEvent({ type: 'keyup', keyCode: 87 })
     }
     if (data.vector && data.vector.y < -.4) {
-      InputPushKeyEvent({ type: 'keydown', repeat: true, keyCode: 83 })
+      InputPushKeyEvent({ type: 'keydown', repeat: false, keyCode: 83 })
     } else {
       InputPushKeyEvent({ type: 'keyup', keyCode: 83 })
     }
     if (data.vector && data.vector.x < -.4) {
-      InputPushKeyEvent({ type: 'keydown', repeat: true, keyCode: 65 })
+      InputPushKeyEvent({ type: 'keydown', repeat: false, keyCode: 65 })
     } else {
       InputPushKeyEvent({ type: 'keyup', keyCode: 65 })
     }
     if (data.vector && data.vector.x > .4) {
-      InputPushKeyEvent({ type: 'keydown', repeat: true, keyCode: 68 })
+      InputPushKeyEvent({ type: 'keydown', repeat: false, keyCode: 68 })
     } else {
       InputPushKeyEvent({ type: 'keyup', keyCode: 68 })
     }
@@ -574,22 +605,22 @@ function InputPushTouchEvent(id, evt, data) {
 
   if (id == 2) {
     if (data.vector && data.vector.y > .4) {
-      InputPushKeyEvent({ type: 'keydown', repeat: true, keyCode: 40 })
+      InputPushKeyEvent({ type: 'keydown', repeat: false, keyCode: 32 }) // 40
     } else {
-      InputPushKeyEvent({ type: 'keyup', keyCode: 40 })
+      InputPushKeyEvent({ type: 'keyup', keyCode: 32 })
     }
     if (data.vector && data.vector.y < -.4) {
-      InputPushKeyEvent({ type: 'keydown', repeat: true, keyCode: 38 })
+      InputPushKeyEvent({ type: 'keydown', repeat: false, keyCode: 67 }) // 38
     } else {
-      InputPushKeyEvent({ type: 'keyup', keyCode: 38 })
+      InputPushKeyEvent({ type: 'keyup', keyCode: 67 })
     }
     if (data.vector && data.vector.x < -.4) {
-      InputPushKeyEvent({ type: 'keydown', repeat: true, keyCode: 37 })
+      InputPushKeyEvent({ type: 'keydown', repeat: false, keyCode: 37 })
     } else {
       InputPushKeyEvent({ type: 'keyup', keyCode: 37 })
     }
     if (data.vector && data.vector.x > .4) {
-      InputPushKeyEvent({ type: 'keydown', repeat: true, keyCode: 39 })
+      InputPushKeyEvent({ type: 'keydown', repeat: false, keyCode: 39 })
     } else {
       InputPushKeyEvent({ type: 'keyup', keyCode: 39 })
     }
@@ -606,12 +637,16 @@ function InputPushTouchEvent(id, evt, data) {
     if ((Key_GetCatcher() & KEYCATCH_UI) && id == 3) {
       Sys_QueEvent(Sys_Milliseconds(), SE_MOUSE_ABS, x, y, 0, null);
     }
-    Sys_QueEvent(Sys_Milliseconds(), SE_FINGER_DOWN, INPUT.keystrings['MOUSE1'], id, 0, null);
+    if(Key_GetCatcher() !== 0) {
+      Sys_QueEvent(Sys_Milliseconds(), SE_FINGER_DOWN, INPUT.keystrings['MOUSE1'], id, 0, null);
+    }
   }
 
   if (evt.type == 'end') {
     //Sys_QueEvent( in_eventTime+1, SE_KEY, K_MOUSE1, qfalse, 0, null );
-    Sys_QueEvent(Sys_Milliseconds(), SE_FINGER_UP, INPUT.keystrings['MOUSE1'], id, 0, null);
+    if(Key_GetCatcher() !== 0) {
+      Sys_QueEvent(Sys_Milliseconds(), SE_FINGER_UP, INPUT.keystrings['MOUSE1'], id, 0, null);
+    }
     INPUT.touchhats[id][0] = 0;
     INPUT.touchhats[id][1] = 0;
   }
@@ -661,7 +696,33 @@ function InitNippleJoysticks() {
   if (navigator && navigator.userAgent && navigator.userAgent.match(/mobile/i)) {
     joy = true
   }
-  Cvar_Get(stringToAddress('in_joystick'), stringToAddress(joy ? '1' : '0'), CVAR_ARCHIVE)
+  Cvar_Get(stringToAddress('in_mobile'), stringToAddress(joy ? '1' : '0'), CVAR_ROM)
+  INPUT.in_joystick = Cvar_Get(stringToAddress('in_joystick'), stringToAddress(joy ? '1' : '0'), CVAR_ARCHIVE)
+
+  let originalKeybindings = `
+bind w "+forward"
+bind a "+moveleft"
+bind s "+back"
+bind d "+moveright"
+bind c "+movedown"
+bind SPACE "+moveup"
+bind UPARROW "+forward"
+bind DOWNARROW "+back"
+bind LEFTARROW "+left"
+bind RIGHTARROW "+right"
+`
+  let keybindings = `
+bind w "+forward"
+bind a "+moveleft"
+bind s "+back"
+bind d "+moveright"
+bind c "+movedown"
+bind SPACE "+moveup"
+bind UPARROW "+forward"
+bind DOWNARROW "+back"
+bind LEFTARROW "+left"
+bind RIGHTARROW "+right"
+`
 
   if (!Cvar_VariableIntegerValue(stringToAddress('in_joystick'))) {
     return
@@ -684,6 +745,7 @@ function InitNippleJoysticks() {
     size: 100,
     catchDistance: 50,
     maxNumberOfNipples: 1,
+    dynamicPage: false,
     position: { bottom: '50px', left: '50px' },
   })
   INPUT.joysticks[1] = nipplejs.create({
@@ -693,6 +755,7 @@ function InitNippleJoysticks() {
     size: 100,
     catchDistance: 50,
     maxNumberOfNipples: 1,
+    dynamicPage: false,
     position: { bottom: '50px', right: '50px' },
   })
   INPUT.joysticks[2] = nipplejs.create({
@@ -702,6 +765,7 @@ function InitNippleJoysticks() {
     mode: 'dynamic',
     size: 2,
     catchDistance: 2,
+    dynamicPage: false,
     maxNumberOfNipples: 1,
   })
   INPUT.joysticks[0].on('start end move', InputPushTouchEvent.bind(INPUT.joysticks[0], 1))
@@ -734,11 +798,11 @@ function SDL_ShowCursor() {
     document.webkitExitPointerLock()
   else if (document.mozExitPointerLock)
     document.mozExitPointerLock()
-  if(INPUT.joysticks.length) {
-    INPUT.joysticks[0].destroy()
-    INPUT.joysticks[1].destroy()
-    INPUT.joysticks[2].destroy()
-  }
+  //if(INPUT.joysticks.length) {
+  //  INPUT.joysticks[0].destroy()
+  //  INPUT.joysticks[1].destroy()
+  //  INPUT.joysticks[2].destroy()
+  //}
 }
 
 function GLimp_Shutdown(destroy) {

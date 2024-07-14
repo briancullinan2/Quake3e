@@ -1545,7 +1545,7 @@ void R_Init( void ) {
 		ri.Printf (PRINT_ALL, "glGetError() = 0x%x\n", err);
 
 	// print info
-	GfxInfo_f();
+	//GfxInfo_f();
 	ri.Printf( PRINT_ALL, "----- finished R_Init -----\n" );
 }
 
@@ -1619,6 +1619,12 @@ static void RE_EndRegistration( void ) {
 	}
 }
 
+#ifdef __WASM__
+void R_FinishImage3( image_t *, GLenum picFormat, int numMips );
+void RE_FinishImage3(void *img, int picFormat, int numMips) {
+	R_FinishImage3((image_t *)img, picFormat, numMips);
+}
+#endif
 
 /*
 @@@@@@@@@@@@@@@@@@@@@
@@ -1695,6 +1701,7 @@ refexport_t *GetRefAPI ( int apiVersion, refimport_t *rimp ) {
 
 #ifdef __WASM__
 	re.InitShaders = R_InitShaders;
+	re.FinishImage3 = RE_FinishImage3;
 #endif
 
 	return &re;

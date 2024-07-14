@@ -844,6 +844,13 @@ function loadImage(filename, pic, ext) {
     return -1
   }
 
+  // async with below
+  if (palette) {
+    HEAPU32[pic >> 2] = palette // TO BE COPIED OUT
+  } else {
+    HEAPU32[pic >> 2] = 1
+  }
+
   EMGL.previousName = filenameStr
   EMGL.previousImage = thisImage
   thisImage.addEventListener('load', ((thisImage) => (function () {
@@ -853,14 +860,8 @@ function loadImage(filename, pic, ext) {
     //  HEAP32[(thisImage.address - 4 * 4) >> 2] = 512
     //  HEAP32[(thisImage.address - 3 * 4) >> 2] = 512
     //}
-    R_FinishImage3(thisImage.address - 7 * 4, 0x1908 /* GL_RGBA */, 0)
+    CL_R_FinishImage3(thisImage.address - 7 * 4, 0x1908 /* GL_RGBA */, 0)
   }))(thisImage), false)
-
-  if (palette) {
-    HEAPU32[pic >> 2] = palette // TO BE COPIED OUT
-  } else {
-    HEAPU32[pic >> 2] = 1
-  }
 
   if (HEAPU32[buf >> 2]) {
     FS_FreeFile(HEAPU32[buf >> 2])
@@ -920,7 +921,7 @@ function loadImage(filename, pic, ext) {
         glGenTextures(1, thisImage.address);
         HEAP32[(thisImage.address - 4 * 4) >> 2] = replaceImage.width
         HEAP32[(thisImage.address - 3 * 4) >> 2] = replaceImage.height
-        R_FinishImage3(thisImage.address - 7 * 4, 0x1908 /* GL_RGBA */, 0)
+        CL_R_FinishImage3(thisImage.address - 7 * 4, 0x1908 /* GL_RGBA */, 0)
         HEAP32[(thisImage.address + 8 * 4) >> 2] = 0 // remove palette
         //R_ReplaceShaders(thisImage.address - 7 * 4)
       }, false)

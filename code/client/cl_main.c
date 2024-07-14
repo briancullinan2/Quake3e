@@ -1800,20 +1800,6 @@ static void CL_ResetPureClientAtServer( void ) {
 }
 
 
-#ifdef __WASM__
-/*
-=================
-CL_Vid_Restart_Fast
-*/
-extern void GL_GetDrawableSize( int *w, int *h );
-
-static void CL_Vid_Restart_Fast() {
-	glconfig_t *glConfig = re.GetConfig();
-	GL_GetDrawableSize( &glConfig->vidWidth, &glConfig->vidHeight );
-	cls.glconfig = *glConfig;
-}
-#endif
-
 /*
 =================
 CL_Vid_Restart
@@ -1825,16 +1811,6 @@ doesn't know what graphics to reload
 =================
 */
 static void CL_Vid_Restart( refShutdownCode_t shutdownCode ) {
-
-/*
-#ifdef __WASM__
-  char *arg = Cmd_Argv(1);
-  if (!strcmp(arg, "fast")) {
-    CL_Vid_Restart_Fast();
-    return;
-  }
-#endif
-*/
 
 	// Settings may have changed so stop recording now
 	if ( CL_VideoRecording() )
@@ -2090,25 +2066,12 @@ static void CL_DownloadsComplete( void ) {
 	// this will also (re)load the UI
 	// if this is a local client then only the client part of the hunk
 	// will be cleared, note that this is done after the hunk mark has been set
-	//if ( !com_sv_running->integer )
-#ifndef __WASM__
 	CL_FlushMemory();
-#else
-extern	qboolean	first_click;
-
-	re.InitShaders();
-	if(!first_click) {
-		S_Shutdown();
-		cls.soundStarted = qtrue;
-		S_Init();
-		cls.soundRegistered = qtrue;
-		S_BeginRegistration();
-	}
-#endif
 
 
 	// initialize the CGame
 	cls.cgameStarted = qtrue;
+
 	CL_InitCGame();
 
 	if ( clc.demofile == FS_INVALID_HANDLE ) {
@@ -3386,6 +3349,10 @@ void CL_StartHunkUsers( void ) {
 		CL_InitRenderer();
 	}
 
+#ifdef __WASM__
+extern	qboolean	first_click;
+	if(first_click)
+#endif
 	if ( !cls.soundStarted ) {
 		cls.soundStarted = qtrue;
 		S_Init();
@@ -3467,6 +3434,16 @@ static void CL_SetScaling( float factor, int captureWidth, int captureHeight ) {
 	cls.captureWidth = captureWidth;
 	cls.captureHeight = captureHeight;
 }
+
+#ifdef __WASM__
+
+void CL_R_FinishImage3( void *img, int picFormat, int numMips ) {
+	if(re.FinishImage3) {
+		re.FinishImage3(img, picFormat, numMips);
+	}
+}
+
+#endif
 
 
 /*
@@ -3570,9 +3547,11 @@ static void CL_InitRef( void ) {
 	rimp.CIN_RunCinematic = CIN_RunCinematic;
 
 	rimp.CL_WriteAVIVideoFrame = CL_WriteAVIVideoFrame;
+#ifndef __WASM__
 	rimp.CL_SaveJPGToBuffer = CL_SaveJPGToBuffer;
 	rimp.CL_SaveJPG = CL_SaveJPG;
 	rimp.CL_LoadJPG = CL_LoadJPG;
+#endif
 
 	rimp.CL_IsMinimized = CL_IsMininized;
 	rimp.CL_SetScaling = CL_SetScaling;

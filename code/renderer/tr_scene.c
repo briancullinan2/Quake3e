@@ -279,6 +279,14 @@ static void RE_AddDynamicLightToScene( const vec3_t org, float intensity, float 
 	}
 #endif
 
+	if ( r_greyscale->value )
+	{
+		float luminance = LUMA( r, g, b );
+		r = luminance;
+		g = luminance;
+		b = luminance;
+	}
+
 	if ( r_dlightSaturation->value != 1.0 )
 	{
 		float luminance = LUMA( r, g, b );

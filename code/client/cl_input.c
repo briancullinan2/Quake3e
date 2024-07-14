@@ -375,13 +375,9 @@ void CL_MouseEvent( int dx, int dy /*, int time*/, qboolean absolute ) {
 			VM_Call( cgvm, 2, CG_MOUSE_EVENT, -10000, -10000 );
 		}
 		if ( Key_GetCatcher() & KEYCATCH_UI ) {
-			VM_Call( uivm, 2, UI_MOUSE_EVENT, 
-			(int)(dx / cl_sensitivity->value * 3), 
-			(int)(dy / cl_sensitivity->value * 3) );
+			VM_Call( uivm, 2, UI_MOUSE_EVENT, dx, dy, qtrue );
 		} else if ( Key_GetCatcher() & KEYCATCH_CGAME ) {
-			VM_Call( cgvm, 2, CG_MOUSE_EVENT, 
-			(int)(dx / cl_sensitivity->value * 3), 
-			(int)(dy / cl_sensitivity->value * 3) );
+			VM_Call( cgvm, 2, CG_MOUSE_EVENT, dx, dy, qtrue );
 		}
 		return;
 	}

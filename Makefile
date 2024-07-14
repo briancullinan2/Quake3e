@@ -67,7 +67,7 @@ RENDERER_DEFAULT=opengl2
 WASM=1
 CROSS_COMPILING=1
 BUILD_SERVER=0
-USE_SYSTEM_JPEG=0
+USE_SYSTEM_JPEG=1
 USE_IPV6=0
 USE_SDL=0
 USE_CURL=0
@@ -435,6 +435,7 @@ SHLIBLDFLAGS = -Wl,--no-entry $(LDFLAGS) \
 
 #  -fno-builtin -nostdlib 
 # -shared not supported
+#  -Wl,--export=CL_Try_LoadJPG,--export=CL_Fail_LoadJPG \
 
 CLIENT_LDFLAGS  = $(LDFLAGS) code/wasm/stack_ops.S \
 	-Wl,--export=sprintf       -Wl,--export=malloc  \
@@ -443,12 +444,11 @@ CLIENT_LDFLAGS  = $(LDFLAGS) code/wasm/stack_ops.S \
 	-Wl,--export=errno,--export=R_FindPalette \
   -Wl,--export=Key_ClearStates,--export=Key_GetCatcher \
   -Wl,--export=Key_SetCatcher,--export=CL_PacketEvent \
-  -Wl,--export=CL_Try_LoadJPG,--export=CL_Fail_LoadJPG \
   -Wl,--export=s_soundStarted,--export=s_soundMuted,--export=s_knownSfx \
   -Wl,--export=stackRestore,--export=stackSave,--export=stackAlloc \
   -Wl,--export=dma,--export=S_SoundInfo,--export=Cbuf_ExecuteText \
   -Wl,--export=Cbuf_AddText,--export=gw_minimized \
-  -Wl,--export=gw_active,--export=Z_Free \
+  -Wl,--export=gw_active,--export=Z_Free,--export=CL_R_FinishImage3 \
   -Wl,--export=CL_NextDownload,--export=com_fullyInitialized \
   -Wl,--export=Z_Malloc,--export=Sys_QueEvent,--export=MSG_Init \
   -Wl,--export=Com_RunAndTimeServerPacket,--export=Com_Frame \
@@ -911,6 +911,7 @@ Q3REND1OBJ = \
   $(B)/rend1/tr_image_bmp.o \
   $(B)/rend1/tr_image_tga.o \
   $(B)/rend1/tr_image_pcx.o \
+  $(B)/rend1/tr_manipulation.o \
   $(B)/rend1/tr_init.o \
   $(B)/rend1/tr_light.o \
   $(B)/rend1/tr_main.o \
@@ -956,6 +957,7 @@ Q3REND2OBJ = \
   $(B)/rend2/tr_image_png.o \
   $(B)/rend2/tr_image_tga.o \
   $(B)/rend2/tr_image_dds.o \
+  $(B)/rend2/tr_manipulation.o \
   $(B)/rend2/tr_init.o \
   $(B)/rend2/tr_light.o \
   $(B)/rend2/tr_main.o \
@@ -1025,6 +1027,7 @@ Q3RENDVOBJ = \
   $(B)/rendv/tr_image_bmp.o \
   $(B)/rendv/tr_image_tga.o \
   $(B)/rendv/tr_image_pcx.o \
+  $(B)/rendv/tr_manipulation.o \
   $(B)/rendv/tr_init.o \
   $(B)/rendv/tr_light.o \
   $(B)/rendv/tr_main.o \

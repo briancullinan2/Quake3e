@@ -266,9 +266,17 @@ static void RE_AddDynamicLightToScene( const vec3_t org, float intensity, float 
 	dl = &backEndData->dlights[r_numdlights++];
 	VectorCopy (org, dl->origin);
 	dl->radius = intensity;
-	dl->color[0] = r;
-	dl->color[1] = g;
-	dl->color[2] = b;
+	if(r_greyscale->integer) {
+		byte luma = LUMA(r, g, b);
+		float average = (r + g + b) / 3;
+		r = luma;
+		g = luma;
+		b = luma;
+	} else {
+		dl->color[0] = r;
+		dl->color[1] = g;
+		dl->color[2] = b;
+	}
 	dl->additive = additive;
 }
 
