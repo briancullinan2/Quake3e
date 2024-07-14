@@ -2978,9 +2978,9 @@ int Com_EventLoop( void ) {
       CL_DropFile(ev.evPtr, ev.evPtrLength);
       break;
 */
-#endif
 
 #endif // !DEDICATED
+
 		case SE_CONSOLE:
 			Cbuf_AddText( (char *)ev.evPtr );
 			Cbuf_AddText( "\n" );
