@@ -32,6 +32,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define	RF_THIRD_PERSON		0x0002		// don't draw through eyes, only mirrors (player bodies, chat sprites)
 #define	RF_FIRST_PERSON		0x0004		// only draw through eyes (view weapon, damage blood blob)
 #define	RF_DEPTHHACK		0x0008		// for view weapon Z crunching
+#define RF_STENCIL      0x0010
+#define RF_DEPTHEXTRAHACKY 0x0020
 
 #define RF_CROSSHAIR		0x0010		// This item is a cross hair and will draw over everything similar to
 										// DEPTHHACK in stereo rendering mode, with the difference that the

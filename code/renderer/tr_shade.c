@@ -103,7 +103,7 @@ DrawTris
 Draws triangle outlines for debugging
 ================
 */
-static void DrawTris2( const shaderCommands_t *input, int thickness, float r, float g, float b, float a ) {
+static void DrawTris2( const shaderCommands_t *input, qboolean depthHack, int thickness, float r, float g, float b, float a ) {
 
 	if ( r_showtris->integer == 1 && backEnd.drawConsole )
 		return;
@@ -127,8 +127,12 @@ static void DrawTris2( const shaderCommands_t *input, int thickness, float r, fl
 #endif
 	qglColor4f( r, g, b, a );
 
-	GL_State( GLS_POLYMODE_LINE /*| GLS_DEPTHMASK_TRUE*/ );
-	//qglDepthRange( 0, 0 );
+	if(depthHack) {
+		GL_State( GLS_POLYMODE_LINE | GLS_DEPTHMASK_TRUE );
+		qglDepthRange( 0, 0 );
+	} else {
+		GL_State( GLS_POLYMODE_LINE /*| GLS_DEPTHMASK_TRUE*/ );
+	}
 
 	qglLineWidth(thickness); 
 
@@ -379,10 +383,10 @@ static void DrawMultitextured( const shaderCommands_t *input, int stage ) {
 
 	GL_SelectTexture( 0 );
 	if(r_showverts->integer == 2) {
-		DrawTris2( input, 25, 0, 255, 0, 255 );
+		DrawTris2( input, qtrue, 25, 0, 255, 0, 255 );
 	}
 	else if(r_showverts->integer) {
-		DrawTris2( input, 35, 0, 0, 0, 255 );
+		DrawTris2( input, qtrue, 35, 0, 0, 0, 255 );
 	}
 }
 
@@ -939,9 +943,9 @@ static void RB_IterateStagesGeneric( const shaderCommands_t *input )
 			if(r_showverts->integer && !(input->shader->surfaceFlags & SURF_SKY)
 				&& input->shader && input->shader->lightmapIndex != LIGHTMAP_2D) {
 				if(r_showverts->integer == 2) {
-					DrawTris2( input, 3, 0, 255, 0, 255 );
+					DrawTris2( input, qtrue, 3, 0, 255, 0, 255 );
 				} else {
-					DrawTris2( input, 10, 0, 0, 255, 255 );
+					DrawTris2( input, qtrue, 10, 0, 0, 255, 255 );
 				}
 			}
 		}
@@ -1159,7 +1163,7 @@ void RB_EndSurface( void ) {
 #else
 	{
 #endif
-		if ( r_showtris->integer ) {
+		if ( r_showtris->integer || backEnd.currentEntity->e.renderfx & RF_STENCIL ) {
 			DrawTris( input );
 		}
 		if ( r_shownormals->integer ) {

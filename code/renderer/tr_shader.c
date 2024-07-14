@@ -2538,7 +2538,7 @@ static shader_t *GeneratePermanentShader( void ) {
 	int			size, hash;
 
 	if ( tr.numShaders >= MAX_SHADERS ) {
-		ri.Printf( PRINT_WARNING, "WARNING: GeneratePermanentShader - MAX_SHADERS hit\n");
+		ri.Printf( PRINT_WARNING, "WARNING: GeneratePermanentShader - MAX_SHADERS hit %s\n", shader.name);
 		return tr.defaultShader;
 	}
 
@@ -3201,7 +3201,11 @@ shader_t *R_FindShader( const char *name, int lightmapIndex, qboolean mipRawImag
 	COM_StripVariables(name, strippedName2, MAX_QPATH);
 	COM_StripExtension(strippedName2, strippedName, sizeof(strippedName));
 
-	hash = generateHashValue(strippedName, FILE_HASH_SIZE);
+	if(variables[0] != '\0') {
+		hash = generateHashValue(name, FILE_HASH_SIZE);
+	} else {
+		hash = generateHashValue(strippedName, FILE_HASH_SIZE);
+	}
 
 	//
 	// see if the shader is already loaded
@@ -3211,15 +3215,20 @@ shader_t *R_FindShader( const char *name, int lightmapIndex, qboolean mipRawImag
 		// then a default shader is created with lightmapIndex == LIGHTMAP_NONE, so we
 		// have to check all default shaders otherwise for every call to R_FindShader
 		// with that same strippedName a new default shader is created.
-		if ( (sh->lightmapSearchIndex == lightmapIndex || sh->defaultShader) &&	!Q_stricmp(sh->name, strippedName) 
-			&& (variables[0] == '\0' || !Q_stricmp(sh->name, va("%s%s", strippedName, variables)) )
+		if ( (sh->lightmapSearchIndex == lightmapIndex || sh->defaultShader) &&	
+			((variables[0] == '\0' && !Q_stricmp(sh->name, strippedName)) || !Q_stricmp(sh->name, name))
+			//&& (variables[0] == '\0' || !Q_stricmp(sh->name, name) )
 		) {
 			// match found
 			return sh;
 		}
 	}
 
-	InitShader( va("%s%s", strippedName, variables), lightmapIndex );
+	if(variables[0] != '\0') {
+		InitShader( name, lightmapIndex );
+	} else {
+		InitShader( strippedName, lightmapIndex );
+	}
 
 	// FIXME: set these "need" values appropriately
 	//shader.needsNormal = qtrue;

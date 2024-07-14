@@ -657,7 +657,8 @@ static void RB_RenderDrawSurfList( drawSurf_t *drawSurfs, int numDrawSurfs ) {
 					R_TransformDlights( backEnd.refdef.num_dlights, backEnd.refdef.dlights, &backEnd.or );
 				}
 #endif // USE_LEGACY_DLIGHTS
-				if ( backEnd.currentEntity->e.renderfx & RF_DEPTHHACK ) {
+				if ( (backEnd.currentEntity->e.renderfx & RF_DEPTHHACK)
+					|| (backEnd.currentEntity->e.renderfx & RF_DEPTHEXTRAHACKY) ) {
 					// hack the depth range to prevent view model from poking into walls
 					depthRange = qtrue;
 
@@ -714,8 +715,15 @@ static void RB_RenderDrawSurfList( drawSurf_t *drawSurfs, int numDrawSurfs ) {
 						}
 					}
 
+if((backEnd.currentEntity->e.renderfx & RF_DEPTHEXTRAHACKY)) {
 					if(!oldDepthRange)
 						qglDepthRange (0, 0.3);
+
+} else {
+					if(!oldDepthRange)
+						qglDepthRange (0.0f, 0.3f);
+
+}
 				}
 				else
 				{
