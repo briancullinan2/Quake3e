@@ -166,6 +166,7 @@ async function initEngine(program) {
 async function initBrowser() {
 	const viewport = document.getElementById('viewport-frame')
 	GL.canvas = document.getElementsByTagName('canvas')[0]
+	GL.canvas2D = document.getElementsByTagName('canvas')[1]
 	const ENGINE = initEnvironment({
 		SYS: SYS,
 		GL: GL,

@@ -856,11 +856,24 @@ function loadImage(filename, pic, ext) {
   thisImage.addEventListener('load', ((thisImage) => (function () {
     HEAP32[(thisImage.address - 4 * 4) >> 2] = thisImage.width
     HEAP32[(thisImage.address - 3 * 4) >> 2] = thisImage.height
-    //if(!HEAPU32[buf >> 2]) {
-    //  HEAP32[(thisImage.address - 4 * 4) >> 2] = 512
-    //  HEAP32[(thisImage.address - 3 * 4) >> 2] = 512
-    //}
-    CL_R_FinishImage3(thisImage.address - 7 * 4, 0x1908 /* GL_RGBA */, 0)
+
+    let location = null
+    if(!thisImage.name.startsWith('*pal')) {
+      GL.canvas2D.width = thisImage.width
+      GL.canvas2D.height = thisImage.height
+      GL.context2D.drawImage(thisImage, 0, 0)
+      const rgba = GL.context2D.getImageData( 
+        0, 0, thisImage.width, thisImage.height 
+      ).data;
+      location = Z_Malloc(rgba.length)
+      HEAPU8.set(rgba, location)
+    }
+    
+    CL_R_FinishImage3(thisImage.address - 7 * 4, location, 0x1908 /* GL_RGBA */, 0)
+
+    if(location) {
+      Z_Free(location)
+    }
   }))(thisImage), false)
 
   if (HEAPU32[buf >> 2]) {
@@ -914,16 +927,30 @@ function loadImage(filename, pic, ext) {
             Array.from(new Uint8Array(responseData)))
       // same thing as above but synchronously after the images loads async
       replaceImage.addEventListener('load', function () {
+        GL.canvas2D.width = replaceImage.width
+        GL.canvas2D.height = replaceImage.height
+        GL.context2D.drawImage(replaceImage, 0, 0)
+        const rgba = GL.context2D.getImageData( 
+          0, 0, replaceImage.width, replaceImage.height 
+        ).data;
+        let location = Z_Malloc(rgba.length)
+        HEAPU8.set(rgba, location)
+
+
         // TODO: not working, need to try remapShader
         // CODE REVIEW: replace texnum?
         EMGL.previousName = filenameStr
         EMGL.previousImage = replaceImage
+
+        // TODO: R_LoadAlternateImageVariables manipulations
+
         glGenTextures(1, thisImage.address);
         HEAP32[(thisImage.address - 4 * 4) >> 2] = replaceImage.width
         HEAP32[(thisImage.address - 3 * 4) >> 2] = replaceImage.height
-        CL_R_FinishImage3(thisImage.address - 7 * 4, 0x1908 /* GL_RGBA */, 0)
+        CL_R_FinishImage3(thisImage.address - 7 * 4, location, 0x1908 /* GL_RGBA */, 0)
         HEAP32[(thisImage.address + 8 * 4) >> 2] = 0 // remove palette
-        //R_ReplaceShaders(thisImage.address - 7 * 4)
+
+        Z_Free(location)
       }, false)
     })())
     return true

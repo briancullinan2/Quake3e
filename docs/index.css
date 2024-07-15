@@ -10,6 +10,12 @@ html, body {
   font: 12px/normal 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', 'source-code-pro', monospace
 }
 
+#scratch {
+  opacity: 0;
+  z-index: -1;
+  position: absolute;
+}
+
 body > img {
   opacity: .01;
 }

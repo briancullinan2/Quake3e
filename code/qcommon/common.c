@@ -1606,7 +1606,7 @@ void *stackSave( void );
 void *stackAlloc(int);
 void S_SoundInfo( void );
 void CL_NextDownload( void );
-void CL_R_FinishImage3( void *img, int picFormat, int numMips );
+void CL_R_FinishImage3( void *img, byte *pic, int picFormat, int numMips );
 
 Q_EXPORT intptr_t sprintfLocation = (intptr_t)sprintf;
 Q_EXPORT intptr_t mallocLocation = (intptr_t)malloc;

@@ -2360,7 +2360,7 @@ static image_t *R_CreateImage2( const char *name, byte *pic, int width, int heig
 #ifdef __WASM__
 
 
-void R_FinishImage3( image_t *, GLenum picFormat, int numMips );
+void R_FinishImage3( image_t *, byte *pic, GLenum picFormat, int numMips );
 /*
 ================
 R_CreateImage2
@@ -2409,7 +2409,7 @@ static image_t *R_CreateImage3( const char *name, byte *pic, GLenum picFormat, i
 	image->internalFormat = PixelDataFormatFromInternalFormat(internalFormat);
 
 	if(image->width > 1 && image->height > 1) {
-		R_FinishImage3( image, picFormat, 0 );
+		R_FinishImage3( image, pic, picFormat, 0 );
 	}
 	// TODO: move to loadImage in sys_emgl.js
 	//else {
@@ -2424,13 +2424,26 @@ static image_t *R_CreateImage3( const char *name, byte *pic, GLenum picFormat, i
 	return image;
 }
 
+byte *R_LoadAlternateImage( byte *pic, int width, int height );
 
-void R_FinishImage3( image_t *image, GLenum picFormat, int numMips ) {
+void R_FinishImage3( image_t *image, byte *pic, GLenum picFormat, int numMips ) {
 	int      glWrapClampMode, mipWidth, mipHeight, miplevel;
 	qboolean mipmap = !!(image->flags & IMGFLAG_MIPMAP);
 	qboolean lastMip = qfalse;
 	qboolean cubemap = qfalse;
 	GLenum   textureTarget = cubemap ? GL_TEXTURE_CUBE_MAP : GL_TEXTURE_2D;
+
+	if(pic) {
+
+		// TODO: R_LoadAlternateImageVariables
+		
+		byte *altImage = R_LoadAlternateImage(pic, image->width, image->height);
+		if(altImage && altImage != pic) {
+			image->alternate = R_CreateImage( va("-alternate%s", image->imgName), altImage, image->width, image->height, image->type, image->flags, 0 );
+			ri.Free(altImage);
+		}
+
+	}
 
 	image->uploadWidth = image->width;
 	image->uploadHeight = image->height;
@@ -3106,8 +3119,6 @@ image_t	*R_FindImageFile( const char *name, imgType_t type, imgFlags_t flags )
 				YCoCgAtoRGBA(pic, pic, width, height);
 			}
 #endif
-			byte *altImage = R_LoadAlternateImage(pic, width, height);
-
 			R_CreateImage( normalName, normalPic, normalWidth, normalHeight, IMGTYPE_NORMAL, normalFlags, 0 );
 			ri.Free( normalPic );	
 		}
@@ -3127,18 +3138,7 @@ image_t	*R_FindImageFile( const char *name, imgType_t type, imgFlags_t flags )
 			flags &= ~IMGFLAG_MIPMAP;
 	}
 
-	// do this in a separate step in case the game loads with r_invert and the mod loads an inverted model, it's back to normal, funnier
-	if(variables[0] != '\0') {
-		byte *variableImage = R_LoadAlternateImageVariables(pic, width, height, variables);
-		if(variableImage && variableImage != pic) {
-			ri.Free(pic);
-			pic = variableImage;
-		}
-	}
 
-
-	// before createimage changes things, make copies
-	byte *altImage = R_LoadAlternateImage(pic, width, height);
 
 #ifdef __WASM__
 	// skip this entirely and upload directly to openGL then
@@ -3151,6 +3151,18 @@ image_t	*R_FindImageFile( const char *name, imgType_t type, imgFlags_t flags )
 		return image;
 	}
 #endif
+
+	// do this in a separate step in case the game loads with r_invert and the mod loads an inverted model, it's back to normal, funnier
+	if(variables[0] != '\0') {
+		byte *variableImage = R_LoadAlternateImageVariables(pic, width, height, variables);
+		if(variableImage && variableImage != pic) {
+			ri.Free(pic);
+			pic = variableImage;
+		}
+	}
+
+	// before createimage changes things, make copies
+	byte *altImage = R_LoadAlternateImage(pic, width, height);
 	image = R_CreateImage2( ( char * ) name, pic, width, height, picFormat, picNumMips, type, flags, 0 );
 	image->palette = palette;
 	if(altImage && altImage != pic) {
