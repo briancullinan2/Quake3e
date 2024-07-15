@@ -80,7 +80,7 @@
     <ClCompile Include="..\..\renderer2\tr_light.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\renderer2\tr_manipulation.c">
+    <ClCompile Include="..\..\renderercommon\tr_manipulation.c">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\..\renderer2\tr_main.c">

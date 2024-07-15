@@ -1027,7 +1027,6 @@ Q3RENDVOBJ = \
   $(B)/rendv/tr_image_bmp.o \
   $(B)/rendv/tr_image_tga.o \
   $(B)/rendv/tr_image_pcx.o \
-  $(B)/rendv/tr_manipulation.o \
   $(B)/rendv/tr_init.o \
   $(B)/rendv/tr_light.o \
   $(B)/rendv/tr_main.o \
