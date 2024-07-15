@@ -28,6 +28,33 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 static qboolean R_LoadMD3(model_t *mod, int lod, void *buffer, int bufferSize, const char *modName);
 static qboolean R_LoadMDR(model_t *mod, void *buffer, int filesize, const char *name );
 
+qboolean makeSkin = qfalse;
+skin_t		*skin;
+skinSurface_t parseSurfaces[MAX_SKIN_SURFACES];
+
+void ClearSurfaces( void ) {
+	//memset(skin, 0, sizeof(skin_t));
+	memset(parseSurfaces, 0, sizeof(skinSurface_t));
+}
+
+void R_AddSkinSurface(char *name, shader_t *shader) {
+	static	skinSurface_t* surface;
+	int i;
+	//char normalName[MAX_OSPATH];
+	//COM_StripExtension(name, normalName, MAX_OSPATH);
+	for (i = 0, surface=&parseSurfaces[0]; i < skin->numSurfaces; i++, surface++) {
+		if ( !Q_stricmp( name, surface->name ) ) {
+			return; // found
+		}
+	}
+
+	surface = &parseSurfaces[skin->numSurfaces++];
+	Q_strncpyz( surface->name, name, sizeof( surface->name ) );
+	surface->shader = shader;
+}
+
+
+
 /*
 ====================
 R_RegisterMD3
@@ -259,6 +286,7 @@ qhandle_t RE_RegisterModel( const char *name ) {
 	char		localName[ MAX_QPATH ];
 	const char	*ext;
 	char		altName[ MAX_QPATH ];
+	char		strippedName[ MAX_QPATH ];
 
 	if ( !name || !name[0] ) {
 		ri.Printf( PRINT_ALL, "RE_RegisterModel: NULL name\n" );
@@ -305,6 +333,23 @@ qhandle_t RE_RegisterModel( const char *name ) {
 	Q_strncpyz( localName, name, sizeof( localName ) );
 
 	ext = COM_GetExtension( localName );
+	// check if the model is going to need a default skin
+	COM_StripExtension( name, strippedName, MAX_QPATH );
+	int len = ri.FS_ReadFile( va("%s.skin", strippedName), NULL );
+	if(len < 1) {
+		len = ri.FS_ReadFile( va("%s_default.skin", strippedName), NULL );
+	}
+	if(len > 0 || tr.numSkins == MAX_SKINS) {
+		makeSkin = qfalse;
+	} else {
+		makeSkin = qtrue;
+		skin = ri.Hunk_Alloc( sizeof( skin_t ), h_low );
+		Q_strncpyz( skin->name, va("%s.skin", strippedName), sizeof( skin->name ) );
+		tr.skins[tr.numSkins++] = skin;
+		ClearSurfaces();
+	}
+
+
 
 	if( *ext )
 	{
@@ -541,6 +586,7 @@ static qboolean R_LoadMD3(model_t * mod, int lod, void *buffer, int bufferSize, 
 			{
 				*shaderIndex = sh->index;
 			}
+			R_AddSkinSurface(surf->name, sh);
 		}
 
 		// swap all the triangles
@@ -816,6 +862,10 @@ static qboolean R_LoadMD3(model_t * mod, int lod, void *buffer, int bufferSize, 
 			ri.Free(data);
 		}
 	}
+	
+	skin->surfaces = ri.Hunk_Alloc( skin->numSurfaces * sizeof( skinSurface_t ), h_low );
+	memcpy( skin->surfaces, parseSurfaces, skin->numSurfaces * sizeof( skinSurface_t ) );
+
 
 	return qtrue;
 }

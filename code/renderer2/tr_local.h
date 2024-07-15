@@ -1164,6 +1164,11 @@ typedef struct {
 	char		name[MAX_QPATH];		// ie: maps/tim_dm2.bsp
 	char		baseName[MAX_QPATH];	// ie: tim_dm2
 
+#ifdef USE_AUTO_TERRAIN
+	struct terrain_s terrain;
+	vec3_t		bounds[2];
+#endif
+
 	int			dataSize;
 
 	int			numShaders;
@@ -1319,8 +1324,8 @@ void		R_Modellist_f (void);
 
 //====================================================
 
-#define	MAX_DRAWIMAGES			2048
-#define	MAX_SKINS				1024
+#define	MAX_DRAWIMAGES			4096
+#define	MAX_SKINS				4096
 
 
 #define	MAX_DRAWSURFS			0x10000
@@ -1844,6 +1849,17 @@ extern	cvar_t	*r_debugSort;
 extern	cvar_t	*r_printShaders;
 
 extern  cvar_t	*r_marksOnTriangleMeshes;
+
+extern  cvar_t  *r_paletteMode;
+extern	cvar_t	*r_showverts;
+extern	cvar_t	*r_edgy;
+extern	cvar_t	*r_invert;
+extern	cvar_t	*r_rainbow;
+
+
+#ifdef USE_AUTO_TERRAIN
+extern cvar_t	*r_autoTerrain;
+#endif
 
 //====================================================================
 

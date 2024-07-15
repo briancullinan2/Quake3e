@@ -21,6 +21,10 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 #include "tr_local.h"
 
+void R_AddPalette(const char *name, int a, int r, int g, int b);
+static char	variables[ MAX_QPATH ] = {'\0'};
+#define R_FindImageFile(x, y, z) R_FindImageFile( variables[0] == '\0' ? x : va("%s%s", x, variables), y, z )
+
 // tr_shader.c -- this file deals with the parsing and definition of shaders
 
 static char *s_shaderText;
@@ -1743,7 +1747,11 @@ static const infoParm_t infoParms[] = {
 	{"pointlight",	0,	SURF_POINTLIGHT, 0 },	// sample lighting at vertexes
 	{"nolightmap",	0,	SURF_NOLIGHTMAP,0 },	// don't generate a lightmap
 	{"nodlight",	0,	SURF_NODLIGHT, 0 },		// don't ever add dynamic lights
-	{"dust",		0,	SURF_DUST, 0}			// leave a dust trail when walking on this surface
+	{"dust",		0,	SURF_DUST, 0},			// leave a dust trail when walking on this surface
+#ifdef USE_AUTO_TERRAIN
+	{"terrain",		0,	SURF_TERRAIN, 0},			// leave a dust trail when walking on this surface
+#endif
+	{NULL}
 };
 
 
@@ -2280,9 +2288,6 @@ static qboolean ParseShader( const char **text )
 
 			continue;
 		}
-
-#ifdef __WASM__
-
 		// parse palette colors for filename
     else if ( !Q_stricmp( token, "palette" ) ) {
       char file[MAX_OSPATH];
@@ -2291,17 +2296,13 @@ static qboolean ParseShader( const char **text )
       memcpy(file, token, sizeof(file));
       memcpy(colors, COM_ParseExt( text, qfalse ), sizeof(colors));
       int a = 0, r = 0, g = 0, b = 0;
-      int ci = 0;
-      int ri2 = 0;
-      int gi = 0;
-      int bi = 0;
       for(int i = 0; i < 16; i++) {
 				if (colors[i] >= '0' && colors[i] <= '9') {
 				} else {
 					colors[i] = ' ';
 				}
 			}
-			char *color = COM_ParseExt( text, qfalse );
+			const char *color = COM_ParseExt( text, qfalse );
 			for(int i = 0; i < 4; i++) {
 				if(color[0]) {
 					if(i == 0) {
@@ -2321,8 +2322,6 @@ static qboolean ParseShader( const char **text )
       R_AddPalette(file, a, r, g, b);
 			continue;
 		}
-#endif
-
     else if ( !Q_stricmp( token, "novlcollapse" ) )
 		{
 			// new in quakelive
@@ -3625,6 +3624,7 @@ shader_t *R_FindShaderByName( const char *name ) {
 	return tr.defaultShader;
 }
 
+void COM_StripVariables( const char *in, char *out, int destsize );
 
 /*
 ===============
@@ -3655,6 +3655,7 @@ most world construction surfaces.
 ===============
 */
 shader_t *R_FindShader( const char *name, int lightmapIndex, qboolean mipRawImage ) {
+	char		strippedName2[MAX_QPATH];
 	char		strippedName[MAX_QPATH];
 	unsigned long hash;
 	const char	*shaderText;
@@ -3675,9 +3676,20 @@ shader_t *R_FindShader( const char *name, int lightmapIndex, qboolean mipRawImag
 		lightmapIndex = LIGHTMAP_BY_VERTEX;
 	}
 
-	COM_StripExtension(name, strippedName, sizeof(strippedName));
+	const char *varStart = strchr(name, '%');
+	if (varStart) {
+		Q_strncpyz(variables, varStart, MAX_QPATH);
+	} else {
+		variables[0] = '\0';
+	}
+	COM_StripVariables(name, strippedName2, MAX_QPATH);
+	COM_StripExtension(strippedName2, strippedName, sizeof(strippedName));
 
-	hash = generateHashValue(strippedName, FILE_HASH_SIZE);
+	if(variables[0] != '\0') {
+		hash = generateHashValue(name, FILE_HASH_SIZE);
+	} else {
+		hash = generateHashValue(strippedName, FILE_HASH_SIZE);
+	}
 
 	//
 	// see if the shader is already loaded
@@ -3687,13 +3699,20 @@ shader_t *R_FindShader( const char *name, int lightmapIndex, qboolean mipRawImag
 		// then a default shader is created with lightmapIndex == LIGHTMAP_NONE, so we
 		// have to check all default shaders otherwise for every call to R_FindShader
 		// with that same strippedName a new default shader is created.
-		if ( (sh->lightmapSearchIndex == lightmapIndex || sh->defaultShader) &&	!Q_stricmp(sh->name, strippedName)) {
+		if ( (sh->lightmapSearchIndex == lightmapIndex || sh->defaultShader) &&	
+			((variables[0] == '\0' && !Q_stricmp(sh->name, strippedName)) || !Q_stricmp(sh->name, name))
+			//&& (variables[0] == '\0' || !Q_stricmp(sh->name, name)
+		) {
 			// match found
 			return sh;
 		}
 	}
 
-	InitShader( strippedName, lightmapIndex );
+	if(variables[0] != '\0') {
+		InitShader( name, lightmapIndex );
+	} else {
+		InitShader( strippedName, lightmapIndex );
+	}
   shader.lastTimeUsed = tr.lastRegistrationTime;
 
 	//
@@ -4288,7 +4307,7 @@ static void ScanAndLoadShaderFiles( void )
 		hash = generateHashValue(token, MAX_SHADERTEXT_HASH);
 		shaderTextHashTable[hash][--shaderTextHashTableSizes[hash]] = (char*)oldp;
 
-#ifdef __WASM__
+#if 0 //def __WASM__
 		//Com_Printf("shaders: %s\n", token);
 		if(Q_stristr(token, "palettes/"))
 		{
@@ -4300,6 +4319,13 @@ static void ScanAndLoadShaderFiles( void )
 
 		SkipBracedSection(&p, 0);
 	}
+
+	const char *shaderText = FindShaderInShaderText("palettes/default");
+	if ( !shaderText ) {
+    ri.Printf(PRINT_WARNING, "Error: parsing default palette\n");
+  } else {
+    ParseShader( &shaderText );
+  }
 }
 
 

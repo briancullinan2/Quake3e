@@ -27,6 +27,9 @@ backEndData_t	*backEndData;
 backEndState_t	backEnd;
 
 
+qboolean shouldUseAlternate = qfalse;
+
+
 static float	s_flipMatrix[16] = {
 	// convert from our coordinate system (looking down X)
 	// to OpenGL's coordinate system (looking down -Z)
@@ -56,13 +59,22 @@ void GL_BindToTMU( image_t *image, int tmu )
 		// this is because if a texture on the web does not load, it will make
 		//   the entire rendering slow as it tries to fill every pixel with a
 		//   null image.
-		if(image->paletteImage) {
-			texture = image->paletteImage;
-		} else
-		if(!texture || image->width <= 1 || image->height <= 1) {
-			texture = tr.defaultImage->texnum;
-		}
+		//if(image->paletteImage) {
+		//	texture = image->paletteImage;
+		//} else
+		//if(!texture || image->width <= 1 || image->height <= 1) {
+		//	texture = tr.defaultImage->texnum;
+		//}
 #endif
+		if(image && (r_paletteMode->integer || !image->texnum) && image->palette) {
+			texture = image->palette->texnum;
+		}
+
+		if(image && shouldUseAlternate && image->alternate) {
+			texture = image->alternate->texnum;
+		}
+
+
 	}
 	else
 	{

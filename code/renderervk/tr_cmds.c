@@ -358,6 +358,8 @@ void RE_BeginFrame( stereoFrame_t stereoFrame ) {
 	tr.refdef.stereoFrame = stereoFrame;
 }
 
+void R_UpdateAlternateImages( void );
+
 
 /*
 =============
@@ -400,6 +402,13 @@ void RE_EndFrame( int *frontEndMsec, int *backEndMsec ) {
 
 	// recompile GPU shaders if needed
 	if ( ri.Cvar_CheckGroup( CVG_RENDERER ) ) {
+
+
+		if(tr.world) {
+			R_UpdateAlternateImages();
+		}
+
+
 
 		// texturemode stuff
 		if ( r_textureMode->modified ) {

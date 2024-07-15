@@ -268,7 +268,6 @@ static void RE_AddDynamicLightToScene( const vec3_t org, float intensity, float 
 	dl->radius = intensity;
 	if(r_greyscale->integer) {
 		byte luma = LUMA(r, g, b);
-		float average = (r + g + b) / 3;
 		r = luma;
 		g = luma;
 		b = luma;

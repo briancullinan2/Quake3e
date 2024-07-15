@@ -1653,7 +1653,7 @@ void RB_EndSurface( void ) {
 	//
 	// draw debugging stuff
 	//
-	if ( r_showtris->integer ) {
+	if ( r_showtris->integer || backEnd.currentEntity->e.renderfx & RF_STENCIL ) {
 		DrawTris (input);
 	}
 	if ( r_shownormals->integer ) {

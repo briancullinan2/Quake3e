@@ -70,8 +70,9 @@ typedef struct image_s {
 
 	imgType_t	type;
 	imgFlags_t	flags;
-	int palette;
-	GLuint paletteImage;
+	int			lastTimeUsed;
+	struct image_s *palette;
+	struct image_s *alternate;
 } image_t;
 
 // any change in the LIGHTMAP_* defines here MUST be reflected in

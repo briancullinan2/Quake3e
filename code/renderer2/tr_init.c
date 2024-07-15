@@ -215,8 +215,14 @@ int		max_polys;
 int		max_polyverts;
 int		max_polybuffers;
 
-#ifdef __WASM__
 cvar_t  *r_paletteMode;
+cvar_t	*r_edgy;
+cvar_t	*r_invert;
+cvar_t	*r_rainbow;
+cvar_t	*r_showverts;
+
+#ifdef USE_AUTO_TERRAIN
+cvar_t	*r_autoTerrain;
 #endif
 
 // for modular renderer
@@ -1159,9 +1165,10 @@ static void R_Register( void )
 	ri.Cvar_SetDescription( r_vertexLight, "Set to 1 to use vertex light instead of lightmaps, collapse all multi-stage shaders into single-stage ones, might cause rendering artifacts." );
 	r_subdivisions = ri.Cvar_Get ("r_subdivisions", "4", CVAR_ARCHIVE | CVAR_LATCH);
 	ri.Cvar_SetDescription(r_subdivisions, "Distance to subdivide bezier curved surfaces. Higher values mean less subdivision and less geometric complexity.");
-	r_greyscale = ri.Cvar_Get("r_greyscale", "0", CVAR_ARCHIVE | CVAR_LATCH);
+	r_greyscale = ri.Cvar_Get("r_greyscale", "0", CVAR_ARCHIVE);
 	ri.Cvar_CheckRange( r_greyscale, "0", "1", CV_FLOAT );
 	ri.Cvar_SetDescription( r_greyscale, "Desaturates rendered frame." );
+	ri.Cvar_SetGroup( r_greyscale, CVG_RENDERER );
 
 	r_externalGLSL = ri.Cvar_Get( "r_externalGLSL", "0", CVAR_LATCH );
 
@@ -1397,6 +1404,24 @@ static void R_Register( void )
 	r_maxpolyverts = ri.Cvar_Get( "r_maxpolyverts", va("%d", MAX_POLYVERTS), 0);
 	ri.Cvar_SetDescription( r_maxpolyverts, "Maximum number of polygon vertices to draw in a scene." );
 	r_maxpolybuffers = ri.Cvar_Get( "r_maxpolybuffers", va("%i", MAX_POLYBUFFERS), CVAR_LATCH);
+
+  r_paletteMode = ri.Cvar_Get("r_paletteMode", "0", CVAR_ARCHIVE);
+
+	r_edgy = ri.Cvar_Get( "r_edgy", "0", CVAR_ARCHIVE_ND );
+	ri.Cvar_SetGroup( r_edgy, CVG_RENDERER );
+	r_invert = ri.Cvar_Get( "r_invert", "0", CVAR_ARCHIVE_ND );
+	ri.Cvar_SetGroup( r_invert, CVG_RENDERER );
+	r_rainbow = ri.Cvar_Get( "r_rainbow", "0", CVAR_ARCHIVE_ND );
+	ri.Cvar_SetGroup( r_rainbow, CVG_RENDERER );
+
+	r_showverts = ri.Cvar_Get ("r_showverts", "0", CVAR_ARCHIVE_ND);
+	ri.Cvar_SetDescription(r_showverts, "Debugging tool: Vertex rendering of polygon triangles in the world.");
+
+#ifdef USE_AUTO_TERRAIN
+	r_autoTerrain = ri.Cvar_Get( "r_autoTerrain", "90", CVAR_ARCHIVE_ND );
+	ri.Cvar_SetDescription( r_autoTerrain, "Allow mappers to request the renderer automatically re-apply alpha maps (aka the old way) to world geometry as it loads. For example, chaning seasons during gameplay." );
+#endif
+
 
 	// make sure all the commands added here are also
 	// removed in R_Shutdown

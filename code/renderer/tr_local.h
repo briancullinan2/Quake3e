@@ -851,9 +851,11 @@ typedef struct {
 typedef struct {
 	char		name[MAX_QPATH];		// ie: maps/tim_dm2.bsp
 	char		baseName[MAX_QPATH];	// ie: tim_dm2
+#ifdef USE_AUTO_TERRAIN
 	struct terrain_s terrain;
-	int			dataSize;
 	vec3_t		bounds[2];
+#endif
+	int			dataSize;
 
 	int			numShaders;
 	dshader_t	*shaders;
