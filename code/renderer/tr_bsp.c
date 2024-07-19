@@ -851,7 +851,7 @@ static void ParseTriSurf( const dsurface_t *ds, const drawVert_t *verts, msurfac
 	verts += LittleLong( ds->firstVert );
 	for ( i = 0 ; i < numVerts ; i++ ) {
 		for ( j = 0 ; j < 3 ; j++ ) {
-			tri->verts[i].xyz[j] = LittleFloat( verts[i].xyz[j] );
+			tri->verts[i].xyz[j] = LittleFloat( verts[i].xyz[j] ) * r_scale->value;
 			tri->verts[i].normal[j] = LittleFloat( verts[i].normal[j] );
 		}
 		AddPointToBounds( tri->verts[i].xyz, tri->bounds[0], tri->bounds[1] );
