@@ -509,7 +509,6 @@ char cl_title[ MAX_CVAR_VALUE_STRING ] = CLIENT_WINDOW_TITLE;
 #ifdef USE_SDL
 #ifndef __WASM__
 #ifndef DEDICATED
-//#ifdef __WASM__
 extern cvar_t *r_headless;
 #endif
 #endif

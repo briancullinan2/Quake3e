@@ -606,7 +606,8 @@ static qboolean R_LoadMD3( model_t *mod, int lod, void *buffer, int fileSize, co
 				shader->shaderIndex = 0;
 			} else {
 				shader->shaderIndex = sh->index;
-				R_AddSkinSurface(surf->name, sh);
+				if(makeSkin)
+					R_AddSkinSurface(surf->name, sh);
 			}
 		}
 
@@ -640,9 +641,10 @@ static qboolean R_LoadMD3( model_t *mod, int lod, void *buffer, int fileSize, co
 		surf = (md3Surface_t *)( (byte *)surf + surf->ofsEnd );
 	}
 
-	skin->surfaces = ri.Hunk_Alloc( skin->numSurfaces * sizeof( skinSurface_t ), h_low );
-	memcpy( skin->surfaces, parseSurfaces, skin->numSurfaces * sizeof( skinSurface_t ) );
-
+	if(makeSkin) {
+		skin->surfaces = ri.Hunk_Alloc( skin->numSurfaces * sizeof( skinSurface_t ), h_low );
+		memcpy( skin->surfaces, parseSurfaces, skin->numSurfaces * sizeof( skinSurface_t ) );
+	}
 
 	return qtrue;
 }
@@ -1197,7 +1199,8 @@ void R_ModelBounds( qhandle_t handle, vec3_t mins, vec3_t maxs ) {
 
 	model = R_GetModelByHandle( handle );
 
-	if(handle == 0) {
+	// brian cullinan - this hack for atmospheric effects in cgame/bg_tracemap
+	if(handle == 0 && tr.world) {
 		VectorCopy( tr.world->bmodels[0].bounds[0], mins );
 		VectorCopy( tr.world->bmodels[0].bounds[1], maxs );
 		return;
