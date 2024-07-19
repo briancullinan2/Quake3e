@@ -36,6 +36,8 @@ void RE_LoadWorldMap( const char *name );
 static	world_t		s_worldData;
 static	byte		*fileBase;
 
+cvar_t  *r_scale;
+
 static int	c_gridVerts;
 
 //===============================================================================
@@ -639,7 +641,7 @@ static void ParseFace( const dsurface_t *ds, const drawVert_t *verts, msurface_t
 	verts += LittleLong( ds->firstVert );
 	for ( i = 0 ; i < numPoints ; i++ ) {
 		for ( j = 0 ; j < 3 ; j++ ) {
-			cv->points[i][j] = LittleFloat( verts[i].xyz[j] );
+			cv->points[i][j] = LittleFloat( verts[i].xyz[j] ) * r_scale->value;
 		}
 		AddPointToBounds( cv->points[i], cv->bounds[0], cv->bounds[1] );
 		for ( j = 0 ; j < 2 ; j++ ) {
@@ -681,7 +683,7 @@ static void ParseFace( const dsurface_t *ds, const drawVert_t *verts, msurface_t
 	}
 #endif
 
-	cv->plane.dist = DotProduct( cv->points[0], cv->plane.normal );
+	cv->plane.dist = DotProduct( cv->points[0], cv->plane.normal ); // * r_scale->value;
 	SetPlaneSignbits( &cv->plane );
 	cv->plane.type = PlaneTypeForNormal( cv->plane.normal );
 
@@ -770,7 +772,7 @@ static void ParseMesh( const dsurface_t *ds, const drawVert_t *verts, msurface_t
 	numPoints = width * height;
 	for ( i = 0 ; i < numPoints ; i++ ) {
 		for ( j = 0 ; j < 3 ; j++ ) {
-			points[i].xyz[j] = LittleFloat( verts[i].xyz[j] );
+			points[i].xyz[j] = LittleFloat( verts[i].xyz[j] ) * r_scale->value;
 			points[i].normal[j] = LittleFloat( verts[i].normal[j] );
 		}
 		for ( j = 0 ; j < 2 ; j++ ) {
@@ -1751,8 +1753,8 @@ static void R_LoadSubmodels( const lump_t *l ) {
 		Com_sprintf( model->name, sizeof( model->name ), "*%d", i );
 
 		for (j=0 ; j<3 ; j++) {
-			out->bounds[0][j] = LittleFloat (in->mins[j]);
-			out->bounds[1][j] = LittleFloat (in->maxs[j]);
+			out->bounds[0][j] = LittleFloat (in->mins[j]) * r_scale->value;
+			out->bounds[1][j] = LittleFloat (in->maxs[j]) * r_scale->value;
 		}
 
 		out->firstSurface = s_worldData.surfaces + LittleLong( in->firstSurface );
@@ -1810,8 +1812,8 @@ static void R_LoadNodesAndLeafs( const lump_t *nodeLump, const lump_t *leafLump 
 	{
 		for (j=0 ; j<3 ; j++)
 		{
-			out->mins[j] = LittleLong (in->mins[j]);
-			out->maxs[j] = LittleLong (in->maxs[j]);
+			out->mins[j] = LittleLong (in->mins[j]) * r_scale->value;
+			out->maxs[j] = LittleLong (in->maxs[j]) * r_scale->value;
 		}
 	
 		p = LittleLong(in->planeNum);
@@ -1835,8 +1837,8 @@ static void R_LoadNodesAndLeafs( const lump_t *nodeLump, const lump_t *leafLump 
 	{
 		for (j=0 ; j<3 ; j++)
 		{
-			out->mins[j] = LittleLong (inLeaf->mins[j]);
-			out->maxs[j] = LittleLong (inLeaf->maxs[j]);
+			out->mins[j] = LittleLong (inLeaf->mins[j]) * r_scale->value;
+			out->maxs[j] = LittleLong (inLeaf->maxs[j]) * r_scale->value;
 		}
 
 		out->cluster = LittleLong(inLeaf->cluster);
@@ -1964,7 +1966,7 @@ static	void R_LoadPlanes( const lump_t *l ) {
 			}
 		}
 
-		out->dist = LittleFloat (in->dist);
+		out->dist = LittleFloat (in->dist) * r_scale->value;
 		out->type = PlaneTypeForNormal( out->normal );
 		out->signbits = bits;
 	}
@@ -2096,7 +2098,7 @@ static void R_LoadFogs( const lump_t *l, const lump_t *brushesLump, const lump_t
 				out->hasSurface = qtrue;
 				planeNum = LittleLong( sides[ sideOffset ].planeNum );
 				VectorSubtract( vec3_origin, s_worldData.planes[ planeNum ].normal, out->surface );
-				out->surface[3] = -s_worldData.planes[ planeNum ].dist;
+				out->surface[3] = -s_worldData.planes[ planeNum ].dist * r_scale->value;
 			}
 		}
 
@@ -2302,6 +2304,8 @@ void RE_LoadWorldMap( const char *name ) {
 	if ( tr.worldMapLoaded ) {
 		ri.Error( ERR_DROP, "ERROR: attempted to redundantly load world map" );
 	}
+
+	r_scale = ri.Cvar_Get("cm_scale", "1.0", 0);
 
 	// set default sun direction to be used if it isn't
 	// overridden by a shader

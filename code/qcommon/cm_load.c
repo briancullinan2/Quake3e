@@ -66,6 +66,8 @@ cvar_t    *cm_saveEnts;
 cvar_t    *cm_entityString;
 #endif
 
+cvar_t    *cm_scale;
+
 static cmodel_t box_model;
 static cplane_t *box_planes;
 static cbrush_t *box_brush;
@@ -146,8 +148,8 @@ static void CMod_LoadSubmodels( const lump_t *l ) {
 
 		for (j=0 ; j<3 ; j++)
 		{	// spread the mins / maxs by a pixel
-			out->mins[j] = LittleFloat (in->mins[j]) - 1;
-			out->maxs[j] = LittleFloat (in->maxs[j]) + 1;
+			out->mins[j] = LittleFloat (in->mins[j]) - 1 * cm_scale->value;
+			out->maxs[j] = LittleFloat (in->maxs[j]) + 1 * cm_scale->value;
 		}
 
 		if ( i == 0 ) {
@@ -345,7 +347,7 @@ static void CMod_LoadPlanes( const lump_t *l )
 				bits |= 1<<j;
 		}
 
-		out->dist = LittleFloat( in->dist );
+		out->dist = LittleFloat( in->dist ) * cm_scale->value;
 		out->type = PlaneTypeForNormal( out->normal );
 		out->signbits = bits;
 	}
@@ -597,9 +599,9 @@ static void CMod_LoadPatches( const lump_t *surfs, const lump_t *verts ) {
 
 		dv_p = dv + LittleLong( in->firstVert );
 		for ( j = 0 ; j < c ; j++, dv_p++ ) {
-			points[j][0] = LittleFloat( dv_p->xyz[0] );
-			points[j][1] = LittleFloat( dv_p->xyz[1] );
-			points[j][2] = LittleFloat( dv_p->xyz[2] );
+			points[j][0] = LittleFloat( dv_p->xyz[0] ) * cm_scale->value;
+			points[j][1] = LittleFloat( dv_p->xyz[1] ) * cm_scale->value;
+			points[j][2] = LittleFloat( dv_p->xyz[2] ) * cm_scale->value;
 		}
 
 		shaderNum = LittleLong( in->shaderNum );
@@ -668,6 +670,8 @@ void CM_LoadMap( const char *name, qboolean clientload, int *checksum ) {
 	cm_entityString = Cvar_Get ("cm_entityString", "", CVAR_TEMP);
 	Cmd_AddCommand("saveents", CM_SaveEntities);
 #endif
+
+	cm_scale = Cvar_Get ("cm_scale", "1.0", CVAR_TEMP);
 
 	Com_DPrintf( "%s( '%s', %i )\n", __func__, name, clientload );
 
