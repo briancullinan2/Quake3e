@@ -708,7 +708,8 @@ void gaussian_filter(const pixel_t *in, pixel_t *out,
 {
     const int n = 2 * (int)(2 * sigma) + 3;
     const float mean = (float)floor(n / 2.0);
-    float kernel[n * n]; // variable length array
+    float (*kernel); // variable length array
+		kernel = ri.Malloc(n * n * sizeof(float));
 
     //fprintf(stderr, "gaussian_filter: kernel size %d, sigma=%g\n",
     //        n, sigma);
@@ -722,6 +723,7 @@ void gaussian_filter(const pixel_t *in, pixel_t *out,
         }
 
     convolution(in, out, kernel, nx, ny, n, qtrue);
+		ri.Free(kernel);
 }
 
 /*
