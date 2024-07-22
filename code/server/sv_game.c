@@ -120,6 +120,7 @@ static void SV_SetBrushModel( sharedEntity_t *ent, const char *name ) {
 
 	if ( !name ) {
 		Com_Error( ERR_DROP, "SV_SetBrushModel: NULL" );
+		return;
 	}
 
 	if ( name[0] != '*' ) {

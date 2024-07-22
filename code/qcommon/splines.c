@@ -39,7 +39,8 @@ typedef enum {
 } eventType;
 
 typedef enum {
-	CP_FIXED = 0x00,
+	CP_NONE = 0x00,
+	CP_FIXED,
 	CP_INTERPOLATED,
 	CP_SPLINE,
 	POSITION_COUNT
@@ -86,6 +87,7 @@ typedef struct {
 typedef struct {
 	idCameraPosition base;
 	vec3_t			     pos;
+//	vec3_t           angle;
 } idFixedPosition;
 
 typedef struct {
@@ -117,6 +119,8 @@ typedef struct {
 	qboolean triggered;
 } idCameraEvent;
 
+#define MAX_CAMERA_POSITIONS 1024
+
 typedef struct {
 	char name[MAX_QPATH];
 	int currentCameraPosition;
@@ -124,7 +128,7 @@ typedef struct {
 	qboolean cameraRunning;
 	idCameraPosition *cameraPosition;
 	int numCameraPositions;
-	idCameraPosition *targetPositions;
+	idCameraPosition *targetPositions[MAX_CAMERA_POSITIONS];
 	int numTargetPositions;
 	idCameraEvent *events;
 	int numEvents;
@@ -139,7 +143,6 @@ typedef struct {
 } idCameraDef;
 
 #define MAX_CAMERA_EVENTS 1024
-#define MAX_CAMERA_POSITIONS 1024
 #define MAX_CONTROL_POINTS 1024
 #define MAX_CAMERAS 8
 idCameraDef  splineList;
@@ -614,6 +617,7 @@ static idSplineList *initSplineList(const char *p) {
 static idSplinePosition *initSplinePosition(long time) {
 	idSplinePosition *result = Z_Malloc(sizeof(idSplinePosition));
 	result->target = initSplineList("");
+	result->pos.type = CP_SPLINE;
 	result->pos.time = time;
 	result->pos.numVelocities = 0;
 	result->pos.velocities = Z_Malloc(sizeof(idVelocity) * MAX_CAMERA_EVENTS);
@@ -650,7 +654,7 @@ static void addTarget(const char *name, positionType type, idCameraDef *cam) {
 		} else {
 			strcpy(pos->name, "position");
 		}
-		cam->targetPositions[cam->numTargetPositions] = *pos;
+		cam->targetPositions[cam->numTargetPositions] = pos;
 		cam->numTargetPositions++;
 		cam->activeTarget = cam->numTargetPositions-1;
 		if (cam->activeTarget == 0) {
@@ -667,14 +671,14 @@ static void addTarget(const char *name, positionType type, idCameraDef *cam) {
 static idCameraPosition *getActiveTarget(idCameraDef *cam) {
 	if (cam->numTargetPositions == 0) {
 		addTarget(NULL, CP_FIXED, cam);
-		return &cam->targetPositions[0];
+		return cam->targetPositions[0];
 	}
-	return &cam->targetPositions[cam->activeTarget];
+	return cam->targetPositions[cam->activeTarget];
 }
 
 static void setActiveTargetByName(const char *name, idCameraDef *cam) {
 	for (int i = 0; i < cam->numTargetPositions; i++) {
-		if (Q_stricmp(name, cam->targetPositions[i].name) == 0) {
+		if (Q_stricmp(name, cam->targetPositions[i]->name) == 0) {
 			assert(i >= 0 && i < cam->numTargetPositions);
 			cam->activeTarget = i;
 			return;
@@ -698,6 +702,22 @@ static const vec3_t *getPosition(long t, idCameraPosition *pos) {
 	}
 	return result;
 }
+
+/*
+static const vec3_t *getAngles(long t, idCameraPosition *pos) {
+	const vec3_t *result = NULL;
+	if(pos->type == CP_FIXED) {
+		result = &((idFixedPosition *)(pos))->angle;
+	} else if (pos->type == CP_INTERPOLATED) {
+		//result = getInterpolatedAngles(t, (idInterpolatedPosition *)pos);
+	} else if (pos->type == CP_SPLINE) {
+		//result = getSplineAngles(t, ((idSplinePosition *)pos)->target);
+	} else {
+		Com_Error(ERR_DROP, "Unknown camera position\n");
+	}
+	return result;
+}
+*/
 
 static float getFOV(long t, idCameraFOV *fov) {
 	if (fov->time) {
@@ -781,9 +801,14 @@ static qboolean getCameraInfo_real(long time, vec3_t origin, vec3_t direction, f
 		VectorCopy(*getPosition(time, getActiveTarget(cam)), temp);
 	}
 
+//Com_Printf("damnit: %i %f %f %f\n", getActiveTarget(cam)->type, temp[0], temp[1], temp[2]);
+
 	VectorSubtract(temp, origin, temp);
 	VectorNormalize(temp);
 	VectorCopy(temp, direction);
+	//direction[0] = 0;
+	//direction[1] = 0;
+	//direction[2] = 0;
 
 	return qtrue;
 }
@@ -935,8 +960,8 @@ static void startCamera_real(long t, idCameraDef *cam) {
 	cam->cameraPosition->time = t;
 	startPosition(t, cam->cameraPosition);
 	cam->fov.startTime = t;
-	//for (int i = 0; i < targetPositions.Num(); i++) {
-	//	targetPositions[i]->
+	//for (int i = 0; i < cam->numTargetPositions; i++) {
+	//	cam->targetPositions[i]->
 	//}
 	cam->startTime = t;
 	cam->cameraRunning = qtrue;
@@ -970,36 +995,42 @@ static void parseCamera(const char *(*text), idCameraDef *cam ) {
 		if (Q_stricmp(token, "camera_fixed") == 0) {
 			cam->cameraPosition = Z_Malloc(sizeof(idFixedPosition));
 			parseFixed(text, (idFixedPosition *)cam->cameraPosition);
+			((idFixedPosition *)cam->cameraPosition)->base.type = CP_FIXED;
 		}
 
 		if (Q_stricmp(token, "camera_interpolated") == 0) {
 			cam->cameraPosition = (idCameraPosition *)initInterpolatedPosition(vec3_origin, vec3_origin, 0);
 			parseInterpolated(text, (idInterpolatedPosition *)cam->cameraPosition);
+			((idInterpolatedPosition *)cam->cameraPosition)->pos.type = CP_INTERPOLATED;
 		}
 
 		if (Q_stricmp(token, "camera_spline") == 0) {
 			cam->cameraPosition = (idCameraPosition *)initSplinePosition(0);
 			parseSpline(text, (idSplinePosition *)cam->cameraPosition);
+			((idSplinePosition *)cam->cameraPosition)->pos.type = CP_SPLINE;
 		}
 
 		if (Q_stricmp(token, "target_fixed") == 0) {
 			idFixedPosition *pos = Z_Malloc(sizeof(idFixedPosition));
+			pos->base.type = CP_FIXED;
 			parseFixed(text, pos);
-			cam->targetPositions[cam->numTargetPositions] = *(idCameraPosition *)pos;
+			cam->targetPositions[cam->numTargetPositions] = (idCameraPosition *)pos;
 			cam->numTargetPositions++;
 		}
 
 		if (Q_stricmp(token, "target_interpolated") == 0) {
 			idInterpolatedPosition *pos = initInterpolatedPosition(vec3_origin, vec3_origin, 0);
+			pos->pos.type = CP_INTERPOLATED;
 			parseInterpolated(text, pos);
-			cam->targetPositions[cam->numTargetPositions] = *(idCameraPosition *)pos;
+			cam->targetPositions[cam->numTargetPositions] = (idCameraPosition *)pos;
 			cam->numTargetPositions++;
 		}
 
 		if (Q_stricmp(token, "target_spline") == 0) {
 			idSplinePosition *pos = initSplinePosition(0);
+			pos->pos.type = CP_SPLINE;
 			parseSpline(text, pos);
-			cam->targetPositions[cam->numTargetPositions] = *(idCameraPosition *)pos;
+			cam->targetPositions[cam->numTargetPositions] = (idCameraPosition *)pos;
 			cam->numTargetPositions++;
 		}
 
@@ -1031,7 +1062,7 @@ static qboolean loadCamera_real(const char *filename, idCameraDef *cam) {
 	}
 
 	clearCamera(cam);
-	cam->targetPositions = Z_Malloc(sizeof(idCameraPosition) * MAX_CAMERA_POSITIONS);
+	//cam->targetPositions = Z_Malloc(sizeof(idCameraPosition) * MAX_CAMERA_POSITIONS);
 	cam->events = Z_Malloc(sizeof(idCameraEvent) * MAX_CAMERA_EVENTS);
 	COM_BeginParseSession( filename );
 	buf_p = buf;
@@ -1581,9 +1612,14 @@ static void clearCamera(idCameraDef *cam) {
 	strcpy(cam->name, "camera01");
 	cam->fov.fov = 90;
 
-	if(cam->targetPositions)
-		Z_Free(cam->targetPositions);
-	cam->targetPositions = NULL;
+	//if(cam->targetPositions)
+	//	Z_Free(cam->targetPositions);
+	for(int i = 0; i < MAX_CAMERA_POSITIONS; i++) {
+		if(cam->targetPositions[i]) {
+			Z_Free(cam->targetPositions[i]);
+			cam->targetPositions[i] = NULL;
+		}
+	}
 	cam->numTargetPositions = 0;
 	
 	if(cam->events)

@@ -28,6 +28,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 static qboolean R_LoadMD3(model_t *mod, int lod, void *buffer, int fileSize, const char *name );
 static qboolean R_LoadMDR(model_t *mod, void *buffer, int filesize, const char *name );
 
+qboolean R_LoadOBJ( model_t *mod, void *buffer, int filesize, const char *mod_name );
+
 qboolean makeSkin = qfalse;
 skin_t		*skin;
 skinSurface_t parseSurfaces[MAX_SKIN_SURFACES];
@@ -220,6 +222,42 @@ static qhandle_t R_RegisterIQM(const char *name, model_t *mod)
 }
 
 
+
+/*
+====================
+R_RegisterOBJ
+====================
+*/
+static qhandle_t R_RegisterOBJ(const char *name, model_t *mod)
+{
+	union {
+		unsigned *u;
+		void *v;
+	} buf;
+	qboolean loaded = qfalse;
+	int filesize;
+
+	filesize = ri.FS_ReadFile(name, (void **) &buf.v);
+	if(!buf.u)
+	{
+		mod->type = MOD_BAD;
+		return 0;
+	}
+	
+	loaded = R_LoadOBJ(mod, buf.u, filesize, name);
+
+	ri.FS_FreeFile (buf.v);
+	
+	if ( !loaded )
+	{
+		ri.Printf( PRINT_WARNING, "%s: couldn't load %s\n", __func__, name );
+		mod->type = MOD_BAD;
+		return 0;
+	}
+	
+	return mod->index;
+}
+
 typedef struct
 {
 	const char *ext;
@@ -232,7 +270,8 @@ static modelExtToLoaderMap_t modelLoaders[ ] =
 {
 	{ "iqm", R_RegisterIQM },
 	{ "mdr", R_RegisterMDR },
-	{ "md3", R_RegisterMD3 }
+	{ "md3", R_RegisterMD3 },
+	{ "obj", R_RegisterOBJ }
 };
 
 static int numModelLoaders = ARRAY_LEN(modelLoaders);
@@ -1243,6 +1282,13 @@ void R_ModelBounds( qhandle_t handle, vec3_t mins, vec3_t maxs ) {
 			VectorCopy(iqmData->bounds + 3, maxs);
 			return;
 		}
+	} else if(model->type == MOD_OBJ) {
+		objHeader_t *objData;
+
+		objData = model->modelData;
+
+		VectorCopy(objData->mins, mins);
+		VectorCopy(objData->maxs, maxs);
 	}
 
 	VectorClear( mins );

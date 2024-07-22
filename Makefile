@@ -919,6 +919,7 @@ Q3REND1OBJ = \
   $(B)/rend1/tr_mesh.o \
   $(B)/rend1/tr_model.o \
   $(B)/rend1/tr_model_iqm.o \
+  $(B)/rend1/tr_model_obj.o \
   $(B)/rend1/tr_noise.o \
   $(B)/rend1/tr_scene.o \
   $(B)/rend1/tr_shade.o \

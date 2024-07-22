@@ -611,6 +611,7 @@ typedef enum {
 	SF_FLARE,
 	SF_ENTITY,				// beams, rails, lightning, etc that can be determined by entity
 	SF_POLYBUFFER,
+	SF_OBJ,
 
 	SF_NUM_SURFACE_TYPES,
 	SF_MAX = 0x7fffffff			// ensures that sizeof( surfaceType_t ) == sizeof( int )
@@ -794,6 +795,78 @@ typedef struct srfIQModel_s {
 
 extern	void (*rb_surfaceTable[SF_NUM_SURFACE_TYPES])(void *);
 
+
+
+/*
+==============================================================================
+
+OBJ MESH
+
+==============================================================================
+*/
+
+
+
+
+
+typedef uint32_t triangle_t[3];
+
+typedef struct 
+{
+	uint32_t position;
+	uint16_t indices[3];
+
+	vec_t *point;
+	vec_t *texcoords;
+	vec_t *normal;
+	vec3_t tangent;
+	vec3_t bitangent;
+} objVertex_t;
+
+
+typedef struct objGroup_s
+{
+	surfaceType_t		surfaceType:SF_OBJ;		// any of surface*_t
+
+  char name[MAX_QPATH];
+  int firstVertex;
+	int firstTri;
+	objVertex_t *verts;
+  triangle_t *tris;
+  int numVertices;
+	int numIndexes;
+  char material[MAX_QPATH];
+  skinSurface_t *skin;
+} objGroup_t;
+
+typedef struct
+{
+  skin_t *materials;
+
+  int num_verts;
+  int num_tris;
+  int num_texcoords;
+  int num_points;
+  int num_groups;
+  int num_normals;
+
+  vec3_t mins;
+  vec3_t maxs;
+
+  objVertex_t *verts;
+  objGroup_t *groups;
+  vec3_t *points;
+  vec3_t *normals;
+  vec2_t *texcoords;
+  triangle_t *tris;
+
+} objHeader_t;
+
+
+
+
+
+
 /*
 ==============================================================================
 
@@ -902,7 +975,8 @@ typedef enum {
 	MOD_BRUSH,
 	MOD_MESH,
 	MOD_MDR,
-	MOD_IQM
+	MOD_IQM,
+	MOD_OBJ,
 } modtype_t;
 
 typedef struct model_s {

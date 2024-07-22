@@ -1747,6 +1747,9 @@ static void R_SortDrawSurfs( drawSurf_t *drawSurfs, int numDrawSurfs ) {
 }
 
 
+void R_AddOBJSurfaces( trRefEntity_t *ent );
+
+
 /*
 =============
 R_AddEntitySurfaces
@@ -1818,6 +1821,9 @@ static void R_AddEntitySurfaces( void ) {
 					break;
 				case MOD_BRUSH:
 					R_AddBrushModelSurfaces( ent );
+					break;
+				case MOD_OBJ:
+					R_AddOBJSurfaces( ent );
 					break;
 				case MOD_BAD:		// null model axis
 					if ( (ent->e.renderfx & RF_THIRD_PERSON) && (tr.viewParms.portalView == PV_NONE) ) {

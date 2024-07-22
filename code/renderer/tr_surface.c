@@ -1386,7 +1386,9 @@ static void RB_SurfaceFlare( srfFlare_t *surf ) {
 
 static void RB_SurfaceSkip( void *surf ) {
 }
+static void RB_OBJSurface(objGroup_t *surface) {
 
+}
 
 void (*rb_surfaceTable[SF_NUM_SURFACE_TYPES])( void *) = {
 	(void(*)(void*))RB_SurfaceBad,			// SF_BAD, 
@@ -1400,5 +1402,6 @@ void (*rb_surfaceTable[SF_NUM_SURFACE_TYPES])( void *) = {
 	(void(*)(void*))RB_IQMSurfaceAnim,		// SF_IQM,
 	(void(*)(void*))RB_SurfaceFlare,		// SF_FLARE,
 	(void(*)(void*))RB_SurfaceEntity,		// SF_ENTITY
-	(void(*)(void*))RB_SurfacePolyBuffer			// SF_POLYBUFFER,
+	(void(*)(void*))RB_SurfacePolyBuffer,			// SF_POLYBUFFER,
+	(void(*)(void*))RB_OBJSurface, // SF_OBJ
 };
