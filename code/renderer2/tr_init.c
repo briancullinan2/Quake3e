@@ -219,6 +219,7 @@ cvar_t  *r_paletteMode;
 cvar_t	*r_edgy;
 cvar_t	*r_invert;
 cvar_t	*r_rainbow;
+cvar_t	*r_berserk;
 cvar_t	*r_showverts;
 
 #ifdef USE_AUTO_TERRAIN
@@ -1413,6 +1414,8 @@ static void R_Register( void )
 	ri.Cvar_SetGroup( r_invert, CVG_RENDERER );
 	r_rainbow = ri.Cvar_Get( "r_rainbow", "0", CVAR_ARCHIVE_ND );
 	ri.Cvar_SetGroup( r_rainbow, CVG_RENDERER );
+	r_berserk = ri.Cvar_Get( "r_berserk", "0", CVAR_ARCHIVE_ND );
+	ri.Cvar_SetGroup( r_berserk, CVG_RENDERER );
 
 	r_showverts = ri.Cvar_Get ("r_showverts", "0", CVAR_ARCHIVE_ND);
 	ri.Cvar_SetDescription(r_showverts, "Debugging tool: Vertex rendering of polygon triangles in the world.");

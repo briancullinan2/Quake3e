@@ -620,6 +620,23 @@ byte *R_InvertColors(byte *pic, int width, int height) {
 	return grey;
 }
 
+byte *R_Berserk(byte *pic, int width, int height) {
+	byte *grey = ri.Malloc(width * height * 4);
+
+//if ( tr.mapLoading && r_mapGreyScale->value > 0 ) {
+	byte *img, *scan;
+	int i;
+	for ( i = 0, img = grey, scan = pic; i < width * height; i++, img += 4, scan += 4 ) {
+		float luma = LUMA( scan[0], scan[1], scan[2] );
+		img[0] = LERP( scan[0], luma, 1.0f );
+		img[1] = LERP( scan[1], luma, 1.0f ) * 0.1f;
+		img[2] = LERP( scan[2], luma, 1.0f ) * 0.1f;
+		img[3] = scan[3];
+	}
+//}
+	return grey;
+}
+
 byte *R_GreyScale(float greyscale, byte *pic, int width, int height) {
 	byte *grey = ri.Malloc(width * height * 4);
 

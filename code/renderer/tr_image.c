@@ -1035,7 +1035,7 @@ extern qboolean shouldUseAlternate;
 
 
 byte *R_LoadAlternateImage_real( byte *pic, int width, int height, float greyscale, int invert, int edgy, int rainbow, 
-	float hueShift, float satShift, float lumShift ) {
+	int berserk, float hueShift, float satShift, float lumShift ) {
 	qboolean any = qfalse;
 	byte *workImage = pic;
 	byte *newWorkImage = pic;
@@ -1084,6 +1084,14 @@ byte *R_LoadAlternateImage_real( byte *pic, int width, int height, float greysca
 		}
 		workImage = newWorkImage;
 	}
+	if(berserk > 0) {
+		any = qtrue;
+		newWorkImage = R_Berserk(workImage, width, height);
+		if(workImage != pic) {
+			ri.Free(workImage);
+		}
+		workImage = newWorkImage;
+	}
 	if(hueShift != 0.0f) {
 		any = qtrue;
 		newWorkImage = R_HueShift(hueShift, workImage, width, height);
@@ -1116,7 +1124,7 @@ byte *R_LoadAlternateImage_real( byte *pic, int width, int height, float greysca
 }
 
 byte *R_LoadAlternateImage( byte *pic, int width, int height ) {
-	byte *workImage = R_LoadAlternateImage_real(pic, width, height, r_greyscale->value, r_invert->integer, r_edgy->integer, r_rainbow->integer, 0.0f, 0.0f, 0.0f);
+	byte *workImage = R_LoadAlternateImage_real(pic, width, height, r_greyscale->value, r_invert->integer, r_edgy->integer, r_rainbow->integer, r_berserk->integer, 0.0f, 0.0f, 0.0f);
 	if(workImage) {
 		shouldUseAlternate = qtrue;
 		return workImage;
@@ -1135,6 +1143,10 @@ byte *R_LoadAlternateImageVariables( byte *pic, int width, int height, const cha
 	int invert = 0;
 	int edgy = 0;
 	int rainbow = 0;
+	int berserk = 0;
+	if(Q_stristr(variables, "%berserk")) {
+		berserk = 1;
+	}
 	if(Q_stristr(variables, "%rainbow")) {
 		rainbow = 1;
 	}
@@ -1157,7 +1169,7 @@ byte *R_LoadAlternateImageVariables( byte *pic, int width, int height, const cha
 			invert = 2;
 		}
 	}
-	return R_LoadAlternateImage_real(pic, width, height, greyscale, invert, edgy, rainbow, hueShift, satShift, lumShift);
+	return R_LoadAlternateImage_real(pic, width, height, greyscale, invert, edgy, rainbow, berserk, hueShift, satShift, lumShift);
 }
 
 

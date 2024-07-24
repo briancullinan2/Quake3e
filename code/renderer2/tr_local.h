@@ -1855,6 +1855,7 @@ extern	cvar_t	*r_showverts;
 extern	cvar_t	*r_edgy;
 extern	cvar_t	*r_invert;
 extern	cvar_t	*r_rainbow;
+extern	cvar_t	*r_berserk;
 
 
 #ifdef USE_AUTO_TERRAIN

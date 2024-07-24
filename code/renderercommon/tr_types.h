@@ -271,6 +271,7 @@ byte *R_RtoRGBA(byte *pic, byte *pic2, int width, int height);
 byte *R_RGBAtoR(byte *pic, int width, int height);
 byte *R_Rainbow2(byte *pic, int width, int height);
 byte *R_Rainbow(byte *pic, int width, int height);
+byte *R_Berserk(byte *pic, int width, int height);
 byte *R_HueShift(float hueShift, byte *pic, int width, int height);
 byte *R_SatShift(float hueShift, byte *pic, int width, int height);
 byte *R_LumShift(float hueShift, byte *pic, int width, int height);
