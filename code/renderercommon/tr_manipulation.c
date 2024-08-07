@@ -267,7 +267,7 @@ void R_AddPalette(const char *name, int a, int r, int g, int b) {
 		}
 	}
 
-	palette = ri.Malloc( sizeof( *palette ) + namelen + 1 );
+	palette = ri.Hunk_Alloc( sizeof( *palette ) + namelen + 1, h_low );
 	palette->imgName = (char *)( palette + 1 );
 	strcpy( palette->imgName, normalName );
 	palette->a = a;

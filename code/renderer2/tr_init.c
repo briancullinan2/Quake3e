@@ -1414,7 +1414,7 @@ static void R_Register( void )
 	r_maxpolybuffers = ri.Cvar_Get( "r_maxpolybuffers", va("%i", MAX_POLYBUFFERS), CVAR_LATCH);
 
   r_paletteMode = ri.Cvar_Get("r_paletteMode", "0", CVAR_ARCHIVE);
-
+	ri.Cvar_SetGroup( r_paletteMode, CVG_RENDERER );
 	r_edgy = ri.Cvar_Get( "r_edgy", "0", CVAR_ARCHIVE_ND );
 	ri.Cvar_SetGroup( r_edgy, CVG_RENDERER );
 	r_invert = ri.Cvar_Get( "r_invert", "0", CVAR_ARCHIVE_ND );

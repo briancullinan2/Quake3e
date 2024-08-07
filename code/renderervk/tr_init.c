@@ -177,9 +177,29 @@ cvar_t	*r_aviMotionJpegQuality;
 cvar_t	*r_screenshotJpegQuality;
 
 static cvar_t *r_maxpolys;
-static cvar_t* r_maxpolyverts;
+static cvar_t *r_maxpolyverts;
+static cvar_t	*r_maxpolybuffers;
 int		max_polys;
 int		max_polyverts;
+int		max_polybuffers;
+
+#ifdef USE_MULTIVM_RENDERER
+float dvrXScale = 1;
+float dvrYScale = 1;
+float dvrXOffset = 0;
+float dvrYOffset = 0;
+#endif
+
+cvar_t  *r_paletteMode;
+cvar_t	*r_edgy;
+cvar_t	*r_invert;
+cvar_t	*r_rainbow;
+cvar_t	*r_berserk;
+cvar_t	*r_showverts;
+
+#ifdef USE_AUTO_TERRAIN
+cvar_t	*r_autoTerrain;
+#endif
 
 #ifdef USE_VULKAN
 
@@ -1537,7 +1557,11 @@ static void R_Register( void )
 	r_texturebits = ri.Cvar_Get( "r_texturebits", "0", CVAR_ARCHIVE_ND | CVAR_LATCH );
 	ri.Cvar_SetDescription( r_texturebits, "Number of texture bits per texture." );
 
+#if defined(USE_MULTIVM_SERVER) || defined(USE_MULTIVM_RENDERER)
+	r_mergeLightmaps = ri.Cvar_Get( "r_mergeLightmaps", "0", CVAR_ROM );
+#else
 	r_mergeLightmaps = ri.Cvar_Get( "r_mergeLightmaps", "1", CVAR_ARCHIVE_ND | CVAR_LATCH );
+#endif
 	ri.Cvar_SetDescription( r_mergeLightmaps, "Merge built-in small lightmaps into bigger lightmaps (atlases)." );
 #if defined (USE_VULKAN) && defined (USE_VBO)
 	r_vbo = ri.Cvar_Get( "r_vbo", "1", CVAR_ARCHIVE | CVAR_LATCH );
@@ -1834,10 +1858,17 @@ void R_Init( void ) {
 	ri.Printf( PRINT_ALL, "----- R_Init -----\n" );
 
 	// clear all our internal state
+#ifdef USE_MULTIVM_RENDERER
+	Com_Memset( &trWorlds, 0, sizeof( trWorlds ) );
+	Com_Memset( &backEnd, 0, sizeof( backEnd ) );
+	Com_Memset( &tess, 0, sizeof( tess ) );
+	Com_Memset( &glState, 0, sizeof( glState ) );
+#else
 	Com_Memset( &tr, 0, sizeof( tr ) );
 	Com_Memset( &backEnd, 0, sizeof( backEnd ) );
 	Com_Memset( &tess, 0, sizeof( tess ) );
 	Com_Memset( &glState, 0, sizeof( glState ) );
+#endif
 
 	if (sizeof(glconfig_t) != 11332)
 		ri.Error( ERR_FATAL, "Mod ABI incompatible: sizeof(glconfig_t) == %u != 11332", (unsigned int) sizeof(glconfig_t));
@@ -2018,6 +2049,19 @@ static void RE_EndRegistration( void ) {
 }
 
 
+#ifdef USE_LAZY_MEMORY
+#ifdef USE_MULTIVM_RENDERER
+void RE_SetDvrFrame(float x, float y, float width, float height) {
+	dvrXScale = width;
+	dvrYScale = height;
+	dvrXOffset = x;
+	dvrYOffset = y;
+}
+#endif
+#endif
+
+
+
 /*
 @@@@@@@@@@@@@@@@@@@@@
 GetRefAPI
@@ -2090,6 +2134,14 @@ refexport_t *GetRefAPI ( int apiVersion, refimport_t *rimp ) {
 	re.GetConfig = RE_GetConfig;
 	re.VertexLighting = RE_VertexLighting;
 	re.SyncRender = RE_SyncRender;
+
+#if defined(USE_MULTIVM_RENDERER) || defined(USE_MULTIVM_SERVER)
+	re.InitShaders = R_InitShaders;
+#endif
+
+#ifdef USE_MULTIVM_RENDERER
+	re.SetDvrFrame = RE_SetDvrFrame;
+#endif
 
 	return &re;
 }

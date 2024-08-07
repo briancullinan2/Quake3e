@@ -4361,6 +4361,12 @@ static void ScanAndLoadShaderFiles( void )
 		SkipBracedSection(&p, 0);
 	}
 
+	const char *shaderText = FindShaderInShaderText("palettes/default");
+	if ( !shaderText ) {
+    ri.Printf(PRINT_WARNING, "Error: parsing default palette\n");
+  } else {
+    ParseShader( &shaderText );
+  }
 }
 
 
@@ -4370,6 +4376,7 @@ CreateInternalShaders
 ====================
 */
 static void CreateInternalShaders( void ) {
+	tr.numShaders = 0;
 
 	// init the default shader
 	InitShader( "<default>", LIGHTMAP_NONE );

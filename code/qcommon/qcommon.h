@@ -1319,8 +1319,7 @@ void	Sys_SetClipboardBitmap( const byte *bitmap, int length );
 void	Sys_Print( const char *msg );
 
 // dedicated console status, win32-only at the moment
-//void	QDECL Sys_SetStatus( const char *format, ...) __attribute__ ((format (printf, 1, 2)));
-#define Sys_SetStatus Com_Printf
+void	QDECL Sys_SetStatus( const char *format, ...) __attribute__ ((format (printf, 1, 2)));
 
 #ifdef USE_AFFINITY_MASK
 uint64_t Sys_GetAffinityMask( void );

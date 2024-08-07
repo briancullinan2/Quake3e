@@ -1555,7 +1555,6 @@ static void R_Register( void )
 	r_mapGreyScale = ri.Cvar_Get( "r_mapGreyScale", "0", CVAR_ARCHIVE_ND | CVAR_LATCH );
 	ri.Cvar_CheckRange( r_mapGreyScale, "-1", "1", CV_FLOAT );
 	ri.Cvar_SetDescription(r_mapGreyScale, "Desaturate world map textures only, works independently from \\r_greyscale, negative values only desaturate lightmaps.");
-  r_paletteMode = ri.Cvar_Get("r_paletteMode", "0", CVAR_ARCHIVE);
 
 	r_subdivisions = ri.Cvar_Get( "r_subdivisions", "4", CVAR_ARCHIVE_ND | CVAR_LATCH );
 	ri.Cvar_SetDescription(r_subdivisions, "Distance to subdivide bezier curved surfaces. Higher values mean less subdivision and less geometric complexity.");
@@ -1694,8 +1693,8 @@ static void R_Register( void )
 	ri.Cvar_SetDescription( r_greyscale, "Desaturate rendered frame, requires \\r_fbo 1." );
 	ri.Cvar_SetGroup( r_greyscale, CVG_RENDERER );
 
-	r_paletteMode = ri.Cvar_Get("r_paletteMode", "0", CVAR_ARCHIVE | CVAR_LATCH);
-	
+	r_paletteMode = ri.Cvar_Get("r_paletteMode", "0", CVAR_ARCHIVE_ND);
+	ri.Cvar_SetGroup( r_paletteMode, CVG_RENDERER );
 	r_edgy = ri.Cvar_Get( "r_edgy", "0", CVAR_ARCHIVE_ND );
 	ri.Cvar_SetGroup( r_edgy, CVG_RENDERER );
 	r_invert = ri.Cvar_Get( "r_invert", "0", CVAR_ARCHIVE_ND );

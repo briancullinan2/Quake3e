@@ -25,7 +25,11 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include <string.h> // memcpy
 
+#ifdef USE_MULTIVM_RENDERER
+trGlobals_t		trWorlds[MAX_NUM_WORLDS];
+#else
 trGlobals_t		tr;
+#endif
 
 static const float s_flipMatrix[16] = {
 	// convert from our coordinate system (looking down X)
@@ -780,7 +784,11 @@ Returns qtrue if it should be mirrored
 */
 static qboolean R_GetPortalOrientations( const drawSurf_t *drawSurf, int entityNum,
 							 orientation_t *surface, orientation_t *camera,
-							 vec3_t pvsOrigin, portalView_t *portalView ) {
+							 vec3_t pvsOrigin, portalView_t *portalView 
+#ifdef USE_MULTIVM_RENDERER
+							 , int *world 
+#endif
+) {
 	int			i;
 	cplane_t	originalPlane, plane;
 	trRefEntity_t	*e;
@@ -855,8 +863,12 @@ static qboolean R_GetPortalOrientations( const drawSurf_t *drawSurf, int entityN
 		VectorSubtract( vec3_origin, camera->axis[0], camera->axis[0] );
 		VectorSubtract( vec3_origin, camera->axis[1], camera->axis[1] );
 
+#ifdef USE_MULTIVM_RENDERER
+		*world = e->e.oldframe >> 8;
+#endif
+
 		// optionally rotate
-		if ( e->e.oldframe ) {
+		if ( e->e.oldframe & (0xFF) ) {
 			// if a speed is specified
 			if ( e->e.frame ) {
 				// continuous rotate
@@ -1174,7 +1186,11 @@ static qboolean R_MirrorViewBySurface( const drawSurf_t *drawSurf, int entityNum
 	newParms.portalView = PV_NONE;
 
 	if ( !R_GetPortalOrientations( drawSurf, entityNum, &surface, &camera, 
-		newParms.pvsOrigin, &newParms.portalView ) ) {
+		newParms.pvsOrigin, &newParms.portalView
+#ifdef USE_MULTIVM_RENDERER
+		, &newParms.newWorld
+#endif
+	) ) {
 		return qfalse;		// bad portal, no portalentity
 	}
 
@@ -1459,7 +1475,11 @@ R_DecomposeLitSort
 */
 void R_DecomposeLitSort( unsigned sort, int *entityNum, shader_t **shader, int *fogNum ) {
 	*fogNum = ( sort >> QSORT_FOGNUM_SHIFT ) & FOGNUM_MASK;
+#ifdef USE_MULTIVM_RENDERER
+	*shader = trWorlds[0].sortedShaders[ ( sort >> QSORT_SHADERNUM_SHIFT ) & SHADERNUM_MASK ];
+#else
 	*shader = tr.sortedShaders[ ( sort >> QSORT_SHADERNUM_SHIFT ) & SHADERNUM_MASK ];
+#endif
 	*entityNum = ( sort >> QSORT_REFENTITYNUM_SHIFT ) & REFENTITYNUM_MASK;
 }
 
@@ -1476,6 +1496,14 @@ R_AddDrawSurf
 void R_AddDrawSurf( surfaceType_t *surface, shader_t *shader, 
 				   int fogIndex, int dlightMap ) {
 	int			index;
+#ifdef USE_MULTIVM_RENDERER
+	index = trWorlds[0].refdef.numDrawSurfs & DRAWSURF_MASK;
+	trWorlds[0].refdef.drawSurfs[index].sort = (shader->sortedIndex << QSORT_SHADERNUM_SHIFT) 
+		| trWorlds[0].shiftedEntityNum | ( fogIndex << QSORT_FOGNUM_SHIFT ) | (int)dlightMap;
+	trWorlds[0].refdef.drawSurfs[index].surface = surface;
+	trWorlds[0].refdef.numDrawSurfs++;
+
+#else
 
 	// instead of checking for overflow, we just mask the index
 	// so it wraps around
@@ -1486,6 +1514,7 @@ void R_AddDrawSurf( surfaceType_t *surface, shader_t *shader,
 		| tr.shiftedEntityNum | ( fogIndex << QSORT_FOGNUM_SHIFT ) | (int)dlightMap;
 	tr.refdef.drawSurfs[index].surface = surface;
 	tr.refdef.numDrawSurfs++;
+#endif
 }
 
 
@@ -1608,6 +1637,12 @@ static void R_AddEntitySurfaces( void ) {
 			continue;
 		}
 
+#ifdef USE_MULTIVM_RENDERER
+		if(ent->world != tr.viewParms.newWorld) {
+			continue;
+		}
+#endif
+
 		// simple generated models, like sprites and beams, are not culled
 		switch ( ent->e.reType ) {
 		case RT_PORTALSURFACE:
@@ -1715,6 +1750,13 @@ void R_RenderView( const viewParms_t *parms ) {
 	tr.viewParms = *parms;
 	tr.viewParms.frameSceneNum = tr.frameSceneNum;
 	tr.viewParms.frameCount = tr.frameCount;
+#ifdef USE_MULTIVM_RENDERER
+	world_t *previous = tr.world;
+	if(tr.viewParms.newWorld != rwi && 
+		trWorlds[tr.viewParms.newWorld].world) {
+		tr.world = trWorlds[tr.viewParms.newWorld].world;
+	}
+#endif
 
 	firstDrawSurf = tr.refdef.numDrawSurfs;
 
@@ -1734,4 +1776,10 @@ void R_RenderView( const viewParms_t *parms ) {
 	}
 
 	R_SortDrawSurfs( tr.refdef.drawSurfs + firstDrawSurf, numDrawSurfs - firstDrawSurf );
+
+#ifdef USE_MULTIVM_RENDERER
+	if(tr.viewParms.newWorld != rwi) {
+		tr.world = previous;
+	}
+#endif
 }

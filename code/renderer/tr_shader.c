@@ -3829,13 +3829,12 @@ static void ScanAndLoadShaderFiles( void )
 	}
 
 
-  // const char *shaderText = FindShaderInShaderText("palettes/default");
-	// if ( !shaderText ) {
-  //   ri.Printf(PRINT_WARNING, "Error: parsing default palette\n");
-  // } else {
-  //   ParseShader( &shaderText );
-  // }
-	
+  const char *shaderText = FindShaderInShaderText("palettes/default");
+	if ( !shaderText ) {
+    ri.Printf(PRINT_WARNING, "Error: parsing default palette\n");
+  } else {
+    ParseShader( &shaderText );
+  }
 }
 
 

@@ -1034,6 +1034,7 @@ Q3RENDVOBJ = \
   $(B)/rendv/tr_marks.o \
   $(B)/rendv/tr_mesh.o \
   $(B)/rendv/tr_model.o \
+  $(B)/rendv/tr_manipulation.o \
   $(B)/rendv/tr_model_iqm.o \
   $(B)/rendv/tr_noise.o \
   $(B)/rendv/tr_scene.o \
