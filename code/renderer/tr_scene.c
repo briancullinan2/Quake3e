@@ -22,6 +22,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "tr_local.h"
 
+
 static int			r_firstSceneDrawSurf;
 #ifdef USE_PMLIGHT
 static int			r_firstSceneLitSurf;
@@ -41,6 +42,12 @@ static int     r_numindexes;
 
 static int r_firstScenePolybuffer;
 static int r_numpolybuffers;
+
+
+#ifdef USE_MULTIVM_RENDERER
+// TODO: don't re-init. redraw an existing portal frame to limit frame rate by leaving the same render commands in the back buffer
+// Maybe add a repeat command at the end with the frame timing specified 13/26 ms etc.
+#endif
 
 /*
 ====================
@@ -122,7 +129,12 @@ RE_AddPolyToScene
 
 =====================
 */
-void RE_AddPolyToScene( qhandle_t hShader, int numVerts, const polyVert_t *verts, int numPolys ) {
+#ifdef USE_MULTIVM_RENDERER
+void RE_AddPolyToScene( qhandle_t hShader, int numVerts, const polyVert_t *verts, int numPolys, int world ) 
+#else
+void RE_AddPolyToScene( qhandle_t hShader, int numVerts, const polyVert_t *verts, int numPolys ) 
+#endif
+{
 	srfPoly_t	*poly;
 	int			i, j;
 	int			fogIndex;
@@ -146,7 +158,8 @@ void RE_AddPolyToScene( qhandle_t hShader, int numVerts, const polyVert_t *verts
       since we don't plan on changing the const and making for room for those effects
       simply cut this message to developer only
       */
-			ri.Printf( PRINT_DEVELOPER, "WARNING: RE_AddPolyToScene: r_max_polys or r_max_polyverts reached\n");
+			ri.Printf( PRINT_DEVELOPER, "WARNING: RE_AddPolyToScene: r_max_polys or r_max_polyverts reached %i > %i || %i > %i\n",
+				r_numpolyverts + numVerts, max_polyverts, r_numpolys, max_polys);
 			return;
 		}
 
@@ -218,12 +231,22 @@ static int isnan_fp( const float *f )
 RE_AddRefEntityToScene
 =====================
 */
-void RE_AddRefEntityToScene( const refEntity_t *ent, qboolean intShaderTime ) {
+#ifdef USE_MULTIVM_RENDERER
+void RE_AddRefEntityToScene( const refEntity_t *ent, qboolean intShaderTime, int world ) 
+#else
+void RE_AddRefEntityToScene( const refEntity_t *ent, qboolean intShaderTime ) 
+#endif
+{
+
 	if ( !tr.registered ) {
 		return;
 	}
 	if ( r_numentities >= MAX_REFENTITIES ) {
+#ifdef USE_MULTIVM_RENDERER
+		ri.Printf( PRINT_DEVELOPER, "RE_AddRefEntityToScene (%i): Dropping refEntity, reached MAX_REFENTITIES\n", rwi );
+#else
 		ri.Printf( PRINT_DEVELOPER, "RE_AddRefEntityToScene: Dropping refEntity, reached MAX_REFENTITIES\n" );
+#endif
 		return;
 	}
 	if ( isnan_fp( &ent->origin[0] ) || isnan_fp( &ent->origin[1] ) || isnan_fp( &ent->origin[2] ) ) {
@@ -241,6 +264,9 @@ void RE_AddRefEntityToScene( const refEntity_t *ent, qboolean intShaderTime ) {
 	backEndData->entities[r_numentities].e = *ent;
 	backEndData->entities[r_numentities].lightingCalculated = qfalse;
 	backEndData->entities[r_numentities].intShaderTime = intShaderTime;
+#ifdef USE_MULTIVM_RENDERER
+	backEndData->entities[r_numentities].world = world;
+#endif
 
 	r_numentities++;
 }
@@ -311,7 +337,12 @@ static void RE_AddDynamicLightToScene( const vec3_t org, float intensity, float 
 RE_AddLinearLightToScene
 =====================
 */
-void RE_AddLinearLightToScene( const vec3_t start, const vec3_t end, float intensity, float r, float g, float b  ) {
+#ifdef USE_MULTIVM_RENDERER
+void RE_AddLinearLightToScene( const vec3_t start, const vec3_t end, float intensity, float r, float g, float b, int world  ) 
+#else
+void RE_AddLinearLightToScene( const vec3_t start, const vec3_t end, float intensity, float r, float g, float b  ) 
+#endif
+{
 	dlight_t	*dl;
 	if ( VectorCompare( start, end ) ) {
 		RE_AddDynamicLightToScene( start, intensity, r, g, b, 0 );
@@ -365,7 +396,12 @@ RE_AddLightToScene
 
 =====================
 */
-void RE_AddLightToScene( const vec3_t org, float intensity, float r, float g, float b ) {
+#ifdef USE_MULTIVM_RENDERER
+void RE_AddLightToScene( const vec3_t org, float intensity, float r, float g, float b, int world ) 
+#else
+void RE_AddLightToScene( const vec3_t org, float intensity, float r, float g, float b ) 
+#endif
+{
 	RE_AddDynamicLightToScene( org, intensity, r, g, b, qfalse );
 }
 
@@ -376,7 +412,12 @@ RE_AddAdditiveLightToScene
 
 =====================
 */
-void RE_AddAdditiveLightToScene( const vec3_t org, float intensity, float r, float g, float b ) {
+#ifdef USE_MULTIVM_RENDERER
+void RE_AddAdditiveLightToScene( const vec3_t org, float intensity, float r, float g, float b, int world ) 
+#else
+void RE_AddAdditiveLightToScene( const vec3_t org, float intensity, float r, float g, float b ) 
+#endif
+{
 	RE_AddDynamicLightToScene( org, intensity, r, g, b, qtrue );
 }
 
@@ -392,7 +433,12 @@ Rendering a scene may require multiple views to be rendered
 to handle mirrors,
 @@@@@@@@@@@@@@@@@@@@@
 */
-void RE_RenderScene( const refdef_t *fd ) {
+#ifdef USE_MULTIVM_RENDERER
+void RE_RenderScene( const refdef_t *fd, int world ) 
+#else
+void RE_RenderScene( const refdef_t *fd ) 
+#endif
+{
 	viewParms_t		parms;
 	int				startTime;
 
@@ -478,6 +524,7 @@ void RE_RenderScene( const refdef_t *fd ) {
 		tr.refdef.num_dlights = 0;
 	}
 
+
 	// a single frame may have multiple scenes draw inside it --
 	// a 3D game view, 3D status bar renderings, 3D menus, etc.
 	// They need to be distinguished by the light flare code, because
@@ -493,10 +540,20 @@ void RE_RenderScene( const refdef_t *fd ) {
 	// convert to GL's 0-at-the-bottom space
 	//
 	Com_Memset( &parms, 0, sizeof( parms ) );
+
+#ifdef USE_MULTIVM_RENDERER
+	parms.newWorld = world;
+
+	parms.viewportX = tr.refdef.x * dvrXScale + (dvrXOffset * glConfig.vidWidth);
+	parms.viewportY = glConfig.vidHeight - ( (tr.refdef.y * dvrYScale + (dvrYOffset * glConfig.vidHeight)) + (tr.refdef.height * dvrYScale) );
+	parms.viewportWidth = tr.refdef.width * dvrXScale;
+	parms.viewportHeight = tr.refdef.height * dvrYScale;
+#else
 	parms.viewportX = tr.refdef.x;
 	parms.viewportY = glConfig.vidHeight - ( tr.refdef.y + tr.refdef.height );
 	parms.viewportWidth = tr.refdef.width;
 	parms.viewportHeight = tr.refdef.height;
+#endif
 
 	parms.scissorX = parms.viewportX;
 	parms.scissorY = parms.viewportY;
@@ -539,6 +596,7 @@ void RE_RenderScene( const refdef_t *fd ) {
 }
 
 
+
 /*
 =====================
 R_AddPolygonBufferSurfaces
@@ -568,15 +626,20 @@ RE_AddPolyBufferToScene
 
 =====================
 */
-void RE_AddPolyBufferToScene( polyBuffer_t* pPolyBuffer ) {
+#ifdef USE_MULTIVM_RENDERER
+void RE_AddPolyBufferToScene( polyBuffer_t* pPolyBuffer, int world ) 
+#else
+void RE_AddPolyBufferToScene( polyBuffer_t* pPolyBuffer ) 
+#endif
+{
 	srfPolyBuffer_t*    pPolySurf;
 	int fogIndex;
 	fog_t*              fog;
 	vec3_t bounds[2];
 	int i;
 
-	if ( r_numpolybuffers >= max_polybuffers 
-		|| r_numpolyverts + pPolyBuffer->numVerts >= max_polyverts 
+	if ( r_numpolybuffers >= r_maxpolybuffers->integer 
+		|| r_numpolyverts + pPolyBuffer->numVerts >= r_maxpolyverts->integer 
 	) {
 		ri.Printf( PRINT_DEVELOPER, "WARNING: RE_AddPolyBufferToScene: r_numpolybuffers or r_maxpolyverts reached\n");
 		return;

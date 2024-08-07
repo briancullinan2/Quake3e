@@ -444,7 +444,7 @@ static void Console_Key( int key ) {
 		g_consoleField.widthInChars = g_console_field_width;
 
 		if ( cls.state == CA_DISCONNECTED ) {
-			SCR_UpdateScreen ();	// force an update, because the command
+			SCR_UpdateScreen ( qfalse );	// force an update, because the command
 		}							// may take some time
 		return;
 	}
@@ -627,6 +627,7 @@ extern qboolean s_soundMuted;
 
 #endif
 
+
 	// escape is always handled special
 	if ( key == K_ESCAPE ) {
 #ifdef USE_CURL
@@ -654,7 +655,7 @@ extern qboolean s_soundMuted;
 		}
 
 		if ( !( Key_GetCatcher( ) & KEYCATCH_UI ) ) {
-			if ( cls.state == CA_ACTIVE && !clc.demoplaying ) {
+			if ( uivm && cls.state == CA_ACTIVE && !clc.demoplaying ) {
 				VM_Call( uivm, 1, UI_SET_ACTIVE_MENU, UIMENU_INGAME );
 			}
 			else if ( cls.state != CA_DISCONNECTED ) {
@@ -676,7 +677,8 @@ extern qboolean s_soundMuted;
 			return;
 		}
 
-		VM_Call( uivm, 2, UI_KEY_EVENT, key, qtrue );
+		if(uivm)
+			VM_Call( uivm, 2, UI_KEY_EVENT, key, qtrue );
 		return;
 	}
 

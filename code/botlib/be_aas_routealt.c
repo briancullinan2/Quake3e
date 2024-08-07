@@ -53,9 +53,18 @@ typedef struct midrangearea_s
 	unsigned short goaltime;
 } midrangearea_t;
 
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
+midrangearea_t *midrangeareasWorlds[MAX_NUM_VMS];
+#define midrangeareas midrangeareasWorlds[aasgvm]
+int *clusterareasWorlds[MAX_NUM_VMS];
+#define clusterareas clusterareasWorlds[aasgvm]
+int numclusterareasWorlds[MAX_NUM_VMS];
+#define numclusterareas numclusterareasWorlds[aasgvm]
+#else
 static midrangearea_t *midrangeareas;
 static int *clusterareas;
 static int numclusterareas;
+#endif
 
 //===========================================================================
 //

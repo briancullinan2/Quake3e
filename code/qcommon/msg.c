@@ -152,7 +152,12 @@ void MSG_WriteBits( msg_t *msg, int value, int bits ) {
 }
 
 
-static int MSG_ReadBits( msg_t *msg, int bits ) {
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
+int MSG_ReadBits( msg_t *msg, int bits ) 
+#else
+static int MSG_ReadBits( msg_t *msg, int bits ) 
+#endif
+{
 	int		value;
 	qboolean	sgn;
 	int		i;
@@ -674,6 +679,7 @@ typedef struct {
 	const int	bits;	// 0 = float
 } netField_t;
 
+
 // using the stringizing operator to save typing...
 #define	NETF(x) #x,(size_t)&((entityState_t*)0)->x
 
@@ -732,7 +738,6 @@ static const netField_t entityStateFields[] =
 { NETF(frame), 16 }
 };
 
-
 // if (int)f == f and (int)f + ( 1<<(FLOAT_INT_BITS-1) ) < ( 1 << FLOAT_INT_BITS )
 // the float will be sent with FLOAT_INT_BITS, otherwise all 32 bits will be sent
 #define	FLOAT_INT_BITS	13
@@ -784,6 +789,7 @@ void MSG_WriteDeltaEntity( msg_t *msg, const entityState_t *from, const entitySt
 	for ( i = 0, field = entityStateFields ; i < numFields ; i++, field++ ) {
 		fromF = (int *)( (byte *)from + field->offset );
 		toF = (int *)( (byte *)to + field->offset );
+
 		if ( *fromF != *toF ) {
 			lc = i+1;
 		}

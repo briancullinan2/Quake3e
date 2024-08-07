@@ -76,6 +76,7 @@ typedef struct image_s {
 	struct image_s *alternate;
 } image_t;
 
+
 // any change in the LIGHTMAP_* defines here MUST be reflected in
 // R_FindShader() in tr_bsp.c
 #define LIGHTMAP_2D         -4	// shader is for 2D rendering

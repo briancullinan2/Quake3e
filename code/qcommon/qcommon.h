@@ -145,16 +145,19 @@ NET
 #define NET_DISABLEMCAST        0x08
 
 
-#define	PACKET_BACKUP	32	// number of old messages that must be kept on client and
+#define	PACKET_BACKUP	64	// number of old messages that must be kept on client and
 							// server for delta compression and ping estimation
 #define	PACKET_MASK		(PACKET_BACKUP-1)
 
 #define	MAX_PACKET_USERCMDS		32		// max number of usercmd_t in a packet
 
-#ifdef USE_HORDES
-#endif
-// 256
+
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_HORDES)
 #define	MAX_SNAPSHOT_ENTITIES	MAX_GENTITIES
+#else
+#define	MAX_SNAPSHOT_ENTITIES	256
+#endif
+
 
 #define	PORT_ANY			-1
 
@@ -199,6 +202,11 @@ typedef struct {
 #endif
 	char name[256];
 	char protocol[10];
+#ifdef USE_MULTIVM_SERVER
+  // the socket the connection came in on, 
+  //   so we know which world to join based on port number
+  int  netWorld; 
+#endif
 } netadr_t;
 
 void		NET_Init( void );
@@ -347,6 +355,10 @@ enum svc_ops_e {
 	// new commands, supported only by ioquake3 protocol but not legacy
 	svc_voipSpeex,     // not wrapped in USE_VOIP, so this value is reserved.
 	svc_voipOpus,      //
+	
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
+	svc_mvWorld = 18, // 1.32e multiview extension
+#endif
 };
 
 
@@ -360,6 +372,11 @@ enum clc_ops_e {
 	clc_moveNoDelta,		// [[usercmd_t]
 	clc_clientCommand,		// [string] message
 	clc_EOF,
+
+#if defined(USE_MULTIVM_SERVER) || defined(USE_MULTIVM_CLIENT)
+	clc_mvMove,
+	clc_mvMoveNoDelta,
+#endif
 
 	// new commands, supported only by ioquake3 protocol but not legacy
 	clc_voipSpeex,   // not wrapped in USE_VOIP, so this value is reserved.
@@ -1208,7 +1225,11 @@ void Key_WriteBindings( fileHandle_t f );
 void S_ClearSoundBuffer( void );
 // call before filesystem access
 
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+void CL_SystemInfoChanged( qboolean onlyGame, int igs );
+#else
 void CL_SystemInfoChanged( qboolean onlyGame );
+#endif
 qboolean CL_GameSwitch( void );
 
 // AVI files have the start of pixel lines 4 byte-aligned
@@ -1298,7 +1319,8 @@ void	Sys_SetClipboardBitmap( const byte *bitmap, int length );
 void	Sys_Print( const char *msg );
 
 // dedicated console status, win32-only at the moment
-void	QDECL Sys_SetStatus( const char *format, ...) __attribute__ ((format (printf, 1, 2)));
+//void	QDECL Sys_SetStatus( const char *format, ...) __attribute__ ((format (printf, 1, 2)));
+#define Sys_SetStatus Com_Printf
 
 #ifdef USE_AFFINITY_MASK
 uint64_t Sys_GetAffinityMask( void );

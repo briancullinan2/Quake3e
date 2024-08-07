@@ -37,8 +37,9 @@ function getQueryCommands() {
 		// FBO shows up all black and textures don't bind, 
 		//   but this should work in theory with WebGL
 		'+set', 'r_ext_framebuffer_object', '0',
+		'+set', 'r_ext_direct_state_access', '0',
 		// Cause of FBO bug above?
-		'+set', 'r_overBrightBits', '0`',
+		'+set', 'r_overBrightBits', '0',
 		// this was replaced in QuakeJS, instead of replacing, just change cvar
 		'+set', 'r_drawBuffer', 'GL_NONE',
 		'+set', 'r_ext_texture_filter_anisotropic', '1',
@@ -46,6 +47,7 @@ function getQueryCommands() {
 		// save time loading???
 		'+set', 'r_vertexLight', '0',
 		'+set', 'r_dynamiclight', '1',
+		
 		//'+set', 'r_ext_framebuffer_multisample', '0',
 		// this prevents lightmap from being wrong when switching maps
 		//   renderer doesn't restart between maps, but BSP loading updates
