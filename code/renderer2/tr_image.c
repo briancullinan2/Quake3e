@@ -2478,81 +2478,6 @@ void R_FinishImage3( image_t *image, byte *pic, GLenum picFormat, int numMips ) 
 		ri.Free(variableImage);
 	}
 
-#if 0
-	int      glWrapClampMode, mipWidth, mipHeight, miplevel;
-	qboolean mipmap = !!(image->flags & IMGFLAG_MIPMAP);
-	qboolean lastMip = qfalse;
-	qboolean cubemap = qfalse;
-	GLenum   textureTarget = cubemap ? GL_TEXTURE_CUBE_MAP : GL_TEXTURE_2D;
-
-	image->uploadWidth = image->width;
-	image->uploadHeight = image->height;
-
-	// Allocate texture storage so we don't have to worry about it later.
-	mipWidth = image->width;
-	mipHeight = image->height;
-	miplevel = 0;
-	do
-	{
-		lastMip = !mipmap || (mipWidth == 1 && mipHeight == 1);
-		if (cubemap)
-		{
-			int i;
-
-			for (i = 0; i < 6; i++)
-				qglTextureImage2DEXT(image->texnum, GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, miplevel, image->internalFormat, mipWidth, mipHeight, 0, image->internalFormat, GL_UNSIGNED_BYTE, NULL);
-		}
-		else
-		{
-			qglTextureImage2DEXT(image->texnum, GL_TEXTURE_2D, miplevel, image->internalFormat, mipWidth, mipHeight, 0, image->internalFormat, GL_UNSIGNED_BYTE, NULL);
-		}
-
-		// Upload data.
-
-		qglTextureSubImage2DEXT(image->texnum, GL_TEXTURE_2D, miplevel, 0, 0, mipWidth, mipHeight, image->internalFormat, picFormat == GL_RGBA16 ? GL_UNSIGNED_SHORT : GL_UNSIGNED_BYTE, 0);
-
-		mipWidth  = MAX(1, mipWidth >> 1);
-		mipHeight = MAX(1, mipHeight >> 1);
-		miplevel++;
-	}
-	while (!lastMip);
-
-	if (image->flags & IMGFLAG_CLAMPTOEDGE)
-		glWrapClampMode = GL_CLAMP_TO_EDGE;
-	else
-		glWrapClampMode = GL_REPEAT;
-
-	// Set all necessary texture parameters.
-	qglTextureParameterfEXT(image->texnum, textureTarget, GL_TEXTURE_WRAP_S, glWrapClampMode);
-	qglTextureParameterfEXT(image->texnum, textureTarget, GL_TEXTURE_WRAP_T, glWrapClampMode);
-
-	if (cubemap)
-		qglTextureParameteriEXT(image->texnum, textureTarget, GL_TEXTURE_WRAP_R, glWrapClampMode);
-
-	if (textureFilterAnisotropic && !cubemap)
-		qglTextureParameteriEXT(image->texnum, textureTarget, GL_TEXTURE_MAX_ANISOTROPY_EXT,
-			mipmap ? (GLint)Com_Clamp(1, maxAnisotropy, r_ext_max_anisotropy->integer) : 1);
-
-	switch(image->internalFormat)
-	{
-		case GL_DEPTH_COMPONENT:
-		case GL_DEPTH_COMPONENT16_ARB:
-		case GL_DEPTH_COMPONENT24_ARB:
-		case GL_DEPTH_COMPONENT32_ARB:
-			// Fix for sampling depth buffer on old nVidia cards.
-			// from http://www.idevgames.com/forums/thread-4141-post-34844.html#pid34844
-			qglTextureParameterfEXT(image->texnum, textureTarget, GL_DEPTH_TEXTURE_MODE, GL_LUMINANCE);
-			qglTextureParameterfEXT(image->texnum, textureTarget, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-			qglTextureParameterfEXT(image->texnum, textureTarget, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-			break;
-		default:
-			qglTextureParameterfEXT(image->texnum, textureTarget, GL_TEXTURE_MIN_FILTER, mipmap ? gl_filter_min : GL_LINEAR);
-			qglTextureParameterfEXT(image->texnum, textureTarget, GL_TEXTURE_MAG_FILTER, mipmap ? gl_filter_max : GL_LINEAR);
-			break;
-	}
-
-	GL_CheckErrors();
-#endif
 }
 #endif
 
@@ -2979,6 +2904,28 @@ void COM_StripVariables( const char *in, char *out, int destsize )
 }
 
 
+/*
+============
+COM_StripExtension
+============
+*/
+void COM_StripFilename( const char *in, char *out, int destsize )
+{
+	const char *dot = strrchr(in, '\\'), *slash;
+	if(!dot) {
+		dot = strrchr(in, '/');
+	}
+
+	if (dot && ((slash = strchr(in, '/')) == NULL || slash < dot))
+		destsize = (destsize < dot-in+1 ? destsize : dot-in+1);
+
+	if ( in == out && destsize > 1 )
+		out[destsize-1] = '\0';
+	else
+		Q_strncpyz(out, in, destsize);
+}
+
+
 
 /*
 ===============
@@ -3082,9 +3029,6 @@ image_t	*R_FindImageFile( const char *name, imgType_t type, imgFlags_t flags )
 
 	checkFlagsTrue = IMGFLAG_PICMIP | IMGFLAG_MIPMAP | IMGFLAG_GENNORMALMAP;
 	checkFlagsFalse = IMGFLAG_CUBEMAP;
-#if 0 //def __WASM__
-	if(!dynamicLoad) // not done from emgl.js but internally instead
-#endif
 	if (r_normalMapping->integer && (picFormat == GL_RGBA8) && (type == IMGTYPE_COLORALPHA) &&
 		((flags & checkFlagsTrue) == checkFlagsTrue) && !(flags & checkFlagsFalse))
 	{
@@ -3784,6 +3728,7 @@ qhandle_t RE_RegisterSkin( const char *name ) {
 	int			totalSurfaces;
 	char	strippedName[ MAX_QPATH ];
 	char	variables[ MAX_QPATH ];
+	char	dirName[ MAX_QPATH ];
 
 	if ( !name || !name[0] ) {
 		ri.Printf( PRINT_DEVELOPER, "Empty name passed to RE_RegisterSkin\n" );
@@ -3827,6 +3772,7 @@ qhandle_t RE_RegisterSkin( const char *name ) {
 		variables[0] = '\0';
 	}
 	COM_StripVariables(name, strippedName, MAX_QPATH);
+	COM_StripFilename(strippedName, dirName, MAX_QPATH);
 
 	// If not a .skin file, load as a single shader
 	if ( strcmp( strippedName + strlen( strippedName ) - 5, ".skin" ) ) {
@@ -3859,6 +3805,17 @@ qhandle_t RE_RegisterSkin( const char *name ) {
 				// reload shaders with variable args
 				for(int i = 0; i < skin->numSurfaces; i++) {
 					skin->surfaces[i].shader = R_FindShader(va("%s%s", skin->surfaces[i].shader->name, variables), LIGHTMAP_NONE, qtrue);
+					if(!skin->surfaces[i].shader || skin->surfaces[i].shader->defaultShader) {
+						const char *temp;
+						const char *fname;
+						fname = strrchr(skin->surfaces[i].shader->name, '/');
+						if(!fname) {
+							fname = strrchr(skin->surfaces[i].shader->name, '\\');
+						}
+						temp = va("%s%s%s", dirName, fname, variables);
+
+						skin->surfaces[i].shader = R_FindShader( temp, LIGHTMAP_NONE, qtrue );
+					}
 				}
 
 				return hSkin;
@@ -3874,6 +3831,9 @@ qhandle_t RE_RegisterSkin( const char *name ) {
 	totalSurfaces = 0;
 	text_p = text.c;
 	while ( text_p && *text_p ) {
+		const char *temp;
+		const char *fname;
+
 		// get surface name
 		token = CommaParse( &text_p );
 		Q_strncpyz( surfName, token, sizeof( surfName ) );
@@ -3894,14 +3854,26 @@ qhandle_t RE_RegisterSkin( const char *name ) {
 		
 		// parse the shader name
 		token = CommaParse( &text_p );
+		fname = strrchr(token, '/');
+		if(!fname) {
+			fname = strrchr(token, '\\');
+		}
 
 		if ( skin->numSurfaces < MAX_SKIN_SURFACES ) {
 			surf = &parseSurfaces[skin->numSurfaces];
 			Q_strncpyz( surf->name, surfName, sizeof( surf->name ) );
 			if(varStart) {
 				surf->shader = R_FindShader( va("%s%s", token, variables), LIGHTMAP_NONE, qtrue );
+				if(!surf->shader || surf->shader->defaultShader) {
+					temp = va("%s%s%s", dirName, fname, variables);
+					surf->shader = R_FindShader( temp, LIGHTMAP_NONE, qtrue );
+				}
 			} else {
 				surf->shader = R_FindShader( token, LIGHTMAP_NONE, qtrue );
+				if(!surf->shader || surf->shader->defaultShader) {
+					temp = va("%s%s", dirName, fname);
+					surf->shader = R_FindShader( temp, LIGHTMAP_NONE, qtrue );
+				}
 			}
 			skin->numSurfaces++;
 		}

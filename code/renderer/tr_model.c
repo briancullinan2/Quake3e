@@ -466,6 +466,7 @@ qhandle_t RE_RegisterModel( const char *name ) {
 	return hModel;
 }
 
+void COM_StripFilename( const char *in, char *out, int destsize );
 
 /*
 =================
@@ -484,6 +485,7 @@ static qboolean R_LoadMD3( model_t *mod, int lod, void *buffer, int fileSize, co
 	md3Tag_t			*tag;
 	int					version;
 	int					size;
+	char	dirName[ MAX_QPATH ];
 
 	pinmodel = (md3Header_t *)buffer;
 
@@ -640,6 +642,8 @@ static qboolean R_LoadMD3( model_t *mod, int lod, void *buffer, int fileSize, co
 			surf->name[j-2] = 0;
 		}
 
+		COM_StripFilename(mod->name, dirName, MAX_QPATH);
+
 		// register the shaders
 		shader = (md3Shader_t *) ( (byte *)surf + surf->ofsShaders );
 		for ( j = 0 ; j < surf->numShaders ; j++, shader++ ) {
@@ -650,7 +654,23 @@ static qboolean R_LoadMD3( model_t *mod, int lod, void *buffer, int fileSize, co
 
 			sh = R_FindShader( shader->name, LIGHTMAP_NONE, qtrue );
 			if ( sh->defaultShader ) {
-				shader->shaderIndex = 0;
+				const char *temp;
+				const char *fname = strrchr(shader->name, '/');
+				if(!fname) {
+					fname = strrchr(shader->name, '\\');
+				}
+				temp = va("%s%s", dirName, fname);
+				if(fname) {
+					sh = R_FindShader( temp, LIGHTMAP_NONE, qtrue );
+					//Com_Printf("shader found! %s, %s, %s\n", dirName, fname, shader->name);
+				}
+				if ( sh->defaultShader ) {
+					shader->shaderIndex = 0;
+				} else {
+					shader->shaderIndex = sh->index;
+					if(makeSkin)
+						R_AddSkinSurface((char *)temp, sh);
+				}
 			} else {
 				shader->shaderIndex = sh->index;
 				if(makeSkin)
