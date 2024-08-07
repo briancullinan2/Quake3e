@@ -21,7 +21,9 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 // common.c -- misc functions used in client and server
 #ifdef _DEBUG
+#ifndef _WIN32
 #include <execinfo.h>
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
