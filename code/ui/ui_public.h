@@ -131,6 +131,11 @@ typedef enum {
 	// engine extensions
 	UI_R_ADDREFENTITYTOSCENE2,
 	UI_R_ADDLINEARLIGHTTOSCENE,
+
+#ifdef __WASM__
+	UI_GETASYNCFILES,
+#endif
+
 	UI_TRAP_GETVALUE = COM_TRAP_GETVALUE,
 
 } uiImport_t;

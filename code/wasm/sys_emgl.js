@@ -225,6 +225,13 @@ let GL = {
   makeContextCurrent: function (contextHandle) {
     GL.currentContext = GL.contexts[contextHandle];
     window.ctx = GLctx = GL.currentContext && GL.currentContext.GLctx;
+
+    if(!EMGL.location) {
+      // this causes the engine to crash, it doesn't like a random allocs
+      //EMGL.location = Z_Malloc(rgba.length)
+      EMGL.location = malloc(MAX_IMAGE_SIZE)
+      EMGL.locationBuffer = malloc(8)
+    }
     return !(contextHandle && !GLctx);
   },
   getContext: function (contextHandle) {
@@ -755,219 +762,138 @@ function convertBMP(imgData, quality) {
 };
 
 
-const RENDER_IMAGES = []
+//const RENDER_IMAGES = []
 
-function createImageFromBuffer(filenameStr, imageView) {
+function createImageFromBuffer(filenameStr, imageView, mimeType) {
   let thisImage = document.createElement('IMG')
   let utfEncoded = imageView.map(function (c) {
     return String.fromCharCode(c)
   }).join('')
-  thisImage.src = 'data:image/' + (/\.(.+)$/gi).exec(filenameStr)[1]
-    + ';base64,' + btoa(utfEncoded)
+  thisImage.src = 'data:image/' + mimeType + ';base64,' + btoa(utfEncoded)
   thisImage.name = filenameStr
   thisImage.setAttribute('title', filenameStr)
-  RENDER_IMAGES.push(thisImage)
+  //RENDER_IMAGES.push(thisImage)
   //document.body.appendChild(thisImage)
   return thisImage
 }
 
 
-function loadImage(filename, pic, ext) {
+const MAX_IMAGE_SIZE = 20 * 1024 * 1024
+
+
+async function R_LoadRemote(filename, widthAddress, heightAddress, imageAddress) {
   let gamedir = addressToString(FS_GetCurrentGameDir())
   let filenameStr = addressToString(filename)
-  if (!filenameStr.match(/\.jpeg$|\.jpg$|\.png$|/gi)) {
-    filenameStr += ext
-  }
+  let filenameStripped = filenameStr.replace(/\.[^\/\\]*?$/, '')
 
+  /*
   let localName = filenameStr
   if (localName[0] == '/')
     localName = localName.substring(1)
   if (localName.startsWith(gamedir + '/'))
     localName = localName.substring(gamedir.length  +1)
-
-  let buf = Z_Malloc(8) // pointer to pointer
-  EMGL.previousImage = null
-  EMGL.previousName = ''
-  HEAPU32[buf >> 2] = 0
-
-  // TODO: merge with virtual filesystem...
-  //   But doing it this way, it's possible for images to load with the page
-  //   If I switch back to FS.virtual mode, this part will always reload async
-  // TODO: save time loading on map-review page aka LiveView
-  /*
-  let preloadedImage = document.querySelector(`IMG[title="${filenameStr}"]`)
-  if (preloadedImage) {
-    EMGL.previousName = filenameStr
-    EMGL.previousImage = preloadedImage
-    HEAPU32[pic >> 2] = 1
-    return
-  }
   */
-
-  let palette = R_FindPalette(filename)
-  if (palette) {
-    if (filenameStr.match(/\.jpg$/gi) && HEAPU8[palette + 3] == 255) {
-    } else
-      if (filenameStr.match(/\.png$/gi) && HEAPU8[palette + 3] < 255) {
-      } else {
-        palette = null
-      }
+  if(!EMGL.locationBuffer) {
+    throw new Error('EMGL.locationBuffer not initialized')
   }
+  HEAPU32[EMGL.locationBuffer >> 2] = 0
 
-  let length = FS_ReadFile(filename, buf)
+
   let thisImage
-  for (let i = 0; i < RENDER_IMAGES.length; i++) {
-    if (RENDER_IMAGES[i].name == filenameStr) {
-      thisImage = RENDER_IMAGES[i]
-      break
-    }
-  }
+  //for (let i = 0; i < RENDER_IMAGES.length; i++) {
+  //  if (RENDER_IMAGES[i].name == filenameStr) {
+  //    thisImage = RENDER_IMAGES[i]
+  //    break
+  //  }
+  //}
 
-  if (!thisImage && HEAPU32[buf >> 2]) {
-    imageView = Array.from(HEAPU8.slice(HEAPU32[buf >> 2],
-      HEAPU32[buf >> 2] + length))
-    thisImage = createImageFromBuffer(filenameStr, imageView)
-  } else
-    if (!thisImage && palette) {
-      imageView = Array.from(Uint8Array.from(convertBMP({
-        data: HEAPU8.slice(palette, palette + 16 * 16 * 4),
-        height: 16,
-        width: 16,
-      }).data))
-      // create palette image now and TODO: replace with real shader later
-      thisImage = createImageFromBuffer('*pal'
-        + HEAPU8[palette] + '-' + HEAPU8[palette + 1] + '-'
-        + HEAPU8[palette + 2] + '-' + HEAPU8[palette + 3] + '.bmp', imageView)
-    }
+  
 
   if (!thisImage) {
-    return -1
-  }
-
-  // async with below
-  if (palette) {
-    HEAPU32[pic >> 2] = palette // TO BE COPIED OUT
-  } else {
-    HEAPU32[pic >> 2] = 1
-  }
-
-  EMGL.previousName = filenameStr
-  EMGL.previousImage = thisImage
-  thisImage.addEventListener('load', ((thisImage) => (function () {
-    HEAP32[(thisImage.address - 4 * 4) >> 2] = thisImage.width
-    HEAP32[(thisImage.address - 3 * 4) >> 2] = thisImage.height
-
-    let location = null
-    if(!thisImage.name.startsWith('*pal')) {
-      GL.canvas2D.width = thisImage.width
-      GL.canvas2D.height = thisImage.height
-      GL.context2D.drawImage(thisImage, 0, 0)
-      const rgba = GL.context2D.getImageData( 
-        0, 0, thisImage.width, thisImage.height 
-      ).data;
-      location = Z_Malloc(rgba.length)
-      HEAPU8.set(rgba, location)
+    let length = FS_ReadFile(stringToAddress(filenameStripped + '.png'), EMGL.locationBuffer)
+    let mime = 'png'
+    if(!HEAPU32[EMGL.locationBuffer >> 2]) {
+      length = FS_ReadFile(stringToAddress(filenameStripped + '.jpg'), EMGL.locationBuffer)
+      mime = 'jpg'
     }
-    
-    CL_R_FinishImage3(thisImage.address - 7 * 4, location, 0x1908 /* GL_RGBA */, 0)
-
-    if(location) {
-      Z_Free(location)
+    if(!HEAPU32[EMGL.locationBuffer >> 2]) {
+      length = FS_ReadFile(stringToAddress(filenameStripped + '.jpeg'), EMGL.locationBuffer)
+      mime = 'jpg'
     }
-  }))(thisImage), false)
-
-  if (HEAPU32[buf >> 2]) {
-    FS_FreeFile(HEAPU32[buf >> 2])
-    Z_Free(buf)
-  } else {
-    // TODO: Promise.any(altImages) based on palette.shader list
-    // TODO: init XHR alt-name requests
-    // Promise.any(CL_DL_Begin()).then(new Promise(resolve .onload = resolve(evt).then(R_Finish)))
-    // TODO: does updating texnum switch the texture in game or is it already collapsed into the GPU?
-    // TODO: save both images and switch them using the shader->remappedShader interface?
-    Promise.resolve((async function () {
-      let remoteFile = gamedir + '/pak0.pk3dir/' + filenameStr
-      if (!remoteFile.includes('.')) {
-        remoteFile += '.tga'
-      }
-
-      let responseData = (await Promise.all([
-        /* Com_DL_Begin(remoteFile, '/' + remoteFile.toLocaleLowerCase()
-          .replace(/\.[^\/]*?$/, '.tga') + '?alt')
-          .then(responseData => {
-            if(!responseData) {
-              return
-            }
-            Com_DL_Perform(remoteFile
-              .replace(/\.[^\/]*?$/, '.tga'), remoteFile, responseData)
-            return responseData
-          }), */
-        Com_DL_Begin(remoteFile, '/' + remoteFile.toLocaleLowerCase()
-          .replace(/\.[^\/]*?$/, '.jpg') + '?alt')
-          .then(responseData => {
-            if(!responseData) {
-              return
-            }
-            Com_DL_Perform(remoteFile
-              .replace(/\.[^\/]*?$/, '.jpg'), remoteFile, responseData)
-            return responseData
-          }),
-        Com_DL_Begin(remoteFile, '/' + remoteFile.toLocaleLowerCase()
-          .replace(/\.[^\/]*?$/, '.png') + '?alt')
-          .then(responseData => {
-            if(!responseData) {
-              return
-            }
-            Com_DL_Perform(remoteFile
-              .replace(/\.[^\/]*?$/, '.png'), remoteFile, responseData)
-            return responseData
-          })])).filter(f => f)[0]
-
-      let replaceImage = createImageFromBuffer(filenameStr, 
-            Array.from(new Uint8Array(responseData)))
-      // same thing as above but synchronously after the images loads async
-      replaceImage.addEventListener('load', function () {
-        GL.canvas2D.width = replaceImage.width
-        GL.canvas2D.height = replaceImage.height
-        GL.context2D.drawImage(replaceImage, 0, 0)
-        const rgba = GL.context2D.getImageData( 
-          0, 0, replaceImage.width, replaceImage.height 
-        ).data;
-        let location = Z_Malloc(rgba.length)
-        HEAPU8.set(rgba, location)
-
-
-        // TODO: not working, need to try remapShader
-        // CODE REVIEW: replace texnum?
-        EMGL.previousName = filenameStr
-        EMGL.previousImage = replaceImage
-
-        // TODO: R_LoadAlternateImageVariables manipulations
-
-        glGenTextures(1, thisImage.address);
-        HEAP32[(thisImage.address - 4 * 4) >> 2] = replaceImage.width
-        HEAP32[(thisImage.address - 3 * 4) >> 2] = replaceImage.height
-        CL_R_FinishImage3(thisImage.address - 7 * 4, location, 0x1908 /* GL_RGBA */, 0)
-        HEAP32[(thisImage.address + 8 * 4) >> 2] = 0 // remove palette
-
-        Z_Free(location)
-      }, false)
-    })())
-    return true
+    /*
+    if(!HEAPU32[EMGL.locationBuffer >> 2]) {
+      length = FS_ReadFile(filename.replace(/\..*?$/, '.bmp'), EMGL.locationBuffer)
+    }
+    if(!HEAPU32[EMGL.locationBuffer >> 2]) {
+      length = FS_ReadFile(filename.replace(/\..*?$/, '.pcx'), EMGL.locationBuffer)
+    }
+    */
+    if(HEAPU32[EMGL.locationBuffer >> 2]) {
+      imageView = Array.from(HEAPU8.slice(HEAPU32[EMGL.locationBuffer >> 2],
+        HEAPU32[EMGL.locationBuffer >> 2] + length))
+      thisImage = createImageFromBuffer(filenameStr, imageView, mime)
+      FS_FreeFile(HEAPU32[EMGL.locationBuffer >> 2])
+    }
   }
-}
 
 
-function R_LoadTGA(filename, pic) {
-  return loadImage(filename, pic, 'tga')
-}
+  if (!thisImage) {
+    let remoteFile = gamedir + '/pak0.pk3dir/' + filenameStripped
 
-function R_LoadPNG(filename, pic) {
-  return loadImage(filename, pic, 'png')
-}
+    let mimes = []
+    let responseData = (await Promise.all([
+      Com_DL_Begin(remoteFile, '/' + remoteFile + '.jpg?alt')
+        .then(responseData => {
+          if(!responseData) {
+            return
+          }
+          mimes[0] = 'jpg'
+          Com_DL_Perform(remoteFile + '.jpg', remoteFile, responseData)
+          return responseData
+        }),
+      Com_DL_Begin(remoteFile, '/' + remoteFile + '.png?alt')
+        .then(responseData => {
+          if(!responseData) {
+            return
+          }
+          mimes[1] = 'png'
+          Com_DL_Perform(remoteFile + '.png', remoteFile, responseData)
+          return responseData
+    })]))
 
-function R_LoadJPG(filename, pic) {
-  return loadImage(filename, pic, 'jpg')
+    if(responseData[0]) {
+      thisImage = createImageFromBuffer(filenameStr, Array.from(new Uint8Array(responseData[0])), mimes[0])
+    } else
+    if(responseData[1]) {
+      thisImage = createImageFromBuffer(filenameStr, Array.from(new Uint8Array(responseData[1])), mimes[1])
+    }
+
+  }
+
+  if(!thisImage) {
+    return
+  }
+
+  thisImage.addEventListener('load', function () {
+    GL.canvas2D.width = thisImage.width
+    GL.canvas2D.height = thisImage.height
+    GL.context2D.drawImage(thisImage, 0, 0)
+    const rgba = GL.context2D.getImageData( 
+      0, 0, thisImage.width, thisImage.height 
+    ).data;
+    HEAPU8.set(rgba.slice(0, MAX_IMAGE_SIZE), EMGL.location)
+
+    HEAP32[widthAddress >> 2] = thisImage.width
+    if(rgba.length > MAX_IMAGE_SIZE) {
+      // truncate image because what else can we do?
+      thisImage.height = HEAP32[heightAddress >> 2] = floor(MAX_IMAGE_SIZE / 4 / thisImage.width) 
+    } else
+      HEAP32[heightAddress >> 2] = thisImage.height
+    // notify engine that pixel data is ready
+    CL_R_FinishImage3(imageAddress, EMGL.location, 0x1908 /* GL_RGBA */, 0)
+
+  }, false)
+
 }
 
 
@@ -1763,11 +1689,7 @@ let EMGL = window.EMGL = {
   texFiles: [],
   GL_GetDrawableSize: GL_GetDrawableSize,
   GL_GetProcAddress: function () { },
-  R_LoadTGA: R_LoadTGA,
-  R_LoadPNG: R_LoadPNG,
-  R_LoadJPG: R_LoadJPG,
-  R_LoadPNG_Remote: R_LoadPNG,
-  R_LoadJPG_Remote: R_LoadJPG,
+  R_LoadRemote: R_LoadRemote,
   "getTempRet0": _getTempRet0,
   "glActiveTexture": _glActiveTexture,
   "glAlphaFunc": _glAlphaFunc,

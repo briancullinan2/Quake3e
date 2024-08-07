@@ -1262,8 +1262,8 @@ typedef enum {
 	SE_MOUSE,	// evValue and evValue2 are relative signed x / y moves
 	SE_JOYSTICK_AXIS,	// evValue is an axis number and evValue2 is the current state (-127 to 127)
 	SE_CONSOLE,	// evPtr is a char*
-#ifdef __WASM__ //USE_ABS_MOUSE
 	SE_MOUSE_ABS,
+#ifdef __WASM__ //USE_ABS_MOUSE
 	SE_FINGER_DOWN,
 	SE_FINGER_UP,
 #endif

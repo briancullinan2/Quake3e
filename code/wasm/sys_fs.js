@@ -136,6 +136,8 @@ function Sys_FOpen(filename, mode) {
           .then(function (responseData) {
             Com_DL_Perform(gamedir + '/' + remoteFile, remoteFile, responseData)
 			      Cvar_Set( stringToAddress('ui_breadCrumb'), stringToAddress(localName) )
+						if(responseData)
+							FS_RecordFile(stringToAddress(localName))
           }))
     }
 

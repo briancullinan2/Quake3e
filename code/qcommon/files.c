@@ -230,12 +230,18 @@ static unsigned pak8ajs[] = {0,4168817368,648165122,3945419347,1851007370,420276
 
 static unsigned pak8pk3[] = {0,695294960,269430381,2656948387,485997170,1095318617};
 
+#include "./files_checksums.h"
+
 static altChecksumFiles_t hardcoded_checksums[] = {
 //	{"pak8a", {-231307135}}
-	{"pak8.pk3", 977125798u, (int *)pak8pk3, sizeof(pak8pk3) / sizeof(pak8pk3[0])},
-	{"pak8a.pk3", 3665059719u, (int *)pak8a, sizeof(pak8a) / sizeof(pak8a[0])},
-	{"pak8a.pk3", 4063660161u, (int *)pak8ajs, sizeof(pak8ajs) / sizeof(pak8ajs[0])},
+	{"baseq3/pak8.pk3", 977125798u, (int *)pak8pk3, sizeof(pak8pk3) / sizeof(pak8pk3[0])},
+	{"baseq3/pak8a.pk3", 3665059719u, (int *)pak8a, sizeof(pak8a) / sizeof(pak8a[0])},
+	{"baseq3/pak8a.pk3", 4063660161u, (int *)pak8ajs, sizeof(pak8ajs) / sizeof(pak8ajs[0])},
+	{"demoq3/pak0.pk3", 3376155515u, (int *)demo0pk3, sizeof(demo0pk3) / sizeof(demo0pk3[0])},
 };
+
+static int getAltChecksum(const char *pakName, int *altChecksum);
+
 
 #endif
 
@@ -4908,6 +4914,8 @@ static void FS_Startup( void ) {
 }
 
 
+#ifndef __WASM__
+
 static void FS_PrintSearchPaths( void )
 {
 	const searchpath_t *path = fs_searchpaths;
@@ -4922,8 +4930,6 @@ static void FS_PrintSearchPaths( void )
 		path = path->next;
 	}
 }
-
-#ifndef __WASM__
 
 /*
 ===================
@@ -5140,6 +5146,14 @@ const char *FS_ReferencedPakChecksums( void ) {
 	static char	info[BIG_INFO_STRING];
 	const searchpath_t *search;
 
+#if defined(USE_ALTCHECKSUM) || defined(__WASM__)
+	int c;
+	const altChecksumFiles_t *alt;
+	int altChecksum = 0;
+	qboolean found = qfalse;
+#endif
+
+
 	info[0] = '\0';
 
 	for ( search = fs_searchpaths ; search ; search = search->next ) {
@@ -5148,9 +5162,33 @@ const char *FS_ReferencedPakChecksums( void ) {
 			if ( search->pack->exclude ) {
 				continue;
 			}
+#ifndef __WASM__
 			if ( search->pack->referenced || !FS_IsBaseGame( search->pack->pakGamename ) ) {
+#endif
+#if defined(USE_ALTCHECKSUM) || defined(__WASM__)
+				found = qfalse;
+				// serve the original checksum if running the server from the web
+				for(c = 0; c < ARRAY_LEN(hardcoded_checksums); c++) {
+					alt = &hardcoded_checksums[c];
+					if(Q_stristr(search->pack->pakFilename, alt->pakFilename)) {
+						found = qtrue;
+						alt->headerLongs[0] = 0;
+						altChecksum = Com_BlockChecksum( alt->headerLongs + 1, sizeof( alt->headerLongs[0] ) * (alt->numHeaderLongs - 1) );
+						Q_strcat( info, sizeof( info ), va( "%i ", LittleLong(altChecksum) ) );
+						break;
+					}
+				}
+
+				if(!found) {
+				Com_Printf("FS_ReferencedPakChecksums: %s not found in hardcoded_checksums\n", search->pack->pakFilename);
+#endif
 				Q_strcat( info, sizeof( info ), va( "%i ", search->pack->checksum ) );
+#if defined(USE_ALTCHECKSUM) || defined(__WASM__)
+				}
+#endif
+#ifndef __WASM__
 			}
+#endif
 		}
 	}
 
@@ -5160,8 +5198,46 @@ const char *FS_ReferencedPakChecksums( void ) {
 
 #ifdef __WASM__
 
+qboolean fs_cgameSawAsync = qfalse;
+qboolean fs_uiSawAsync = qfalse;
+qboolean fs_gameSawAsync = qfalse;
 
-int getAltChecksum(const char *pakName, int *altChecksum) {
+char asyncFiles[1024][MAX_QPATH];
+int numAsyncFiles = 0;
+
+int FS_GetAsyncFiles(char **files, int max) {
+	int i;
+	for(i = 0; i < max && i < numAsyncFiles; i++) {
+		files[i] = asyncFiles[i];
+	}
+	return i;
+}
+
+
+Q_EXPORT void FS_RecordFile(const char *file) {
+
+	if(fs_cgameSawAsync /*&& fs_uiSawAsync
+		&& (!com_sv_running->integer || fs_gameSawAsync)*/
+	) {
+		numAsyncFiles = 0;
+		asyncFiles[numAsyncFiles][0] = '\0';
+	}
+
+	if(!Q_stristr(file, ".md3")) {
+		return;
+	}
+
+	fs_cgameSawAsync = qfalse;
+	fs_uiSawAsync = qfalse;
+	fs_gameSawAsync = qfalse;
+
+	Q_strncpy(asyncFiles[numAsyncFiles], (char *)file, MAX_QPATH);
+	numAsyncFiles++;
+}
+
+
+
+static int getAltChecksum(const char *pakName, int *altChecksum) {
 	const altChecksumFiles_t *alt;
 	int c, i;
 	qboolean found = qfalse;
@@ -5170,19 +5246,17 @@ int getAltChecksum(const char *pakName, int *altChecksum) {
 	// add alternate checksums
 	for(c = 0; c < ARRAY_LEN(hardcoded_checksums); c++) {
 		alt = &hardcoded_checksums[c];
-		//if(Q_stristr(pakName, alt->pakFilename)) {
-			for(i = 0; i < fs_numServerReferencedPaks; i++) {
-				if(alt->altChecksum == (unsigned int)fs_serverReferencedPaks[i]) {
-					found = qtrue;
-					alt->headerLongs[0] = LittleLong( fs_checksumFeed );
-					useChecksum = Com_BlockChecksum( alt->headerLongs, sizeof( alt->headerLongs[0] ) * alt->numHeaderLongs );
-					//useChecksum2 = Com_BlockChecksum( alt->headerLongs + 1, sizeof( alt->headerLongs[0] ) * (alt->numHeaderLongs - 1) );
-					//Com_Printf( "FS_ReferencedPakPureChecksums: (%i) %i == %i (pure: %i, feed: %i)\n",
-					// 	alt->numHeaderLongs, alt->altChecksum, useChecksum2, useChecksum, fs_checksumFeed);
-					break;
-				}
+		for(i = 0; i < fs_numServerReferencedPaks; i++) {
+			if(alt->altChecksum == (unsigned int)fs_serverReferencedPaks[i]) {
+				found = qtrue;
+				alt->headerLongs[0] = LittleLong( fs_checksumFeed );
+				useChecksum = Com_BlockChecksum( alt->headerLongs, sizeof( alt->headerLongs[0] ) * alt->numHeaderLongs );
+				//useChecksum2 = Com_BlockChecksum( alt->headerLongs + 1, sizeof( alt->headerLongs[0] ) * (alt->numHeaderLongs - 1) );
+				//Com_Printf( "FS_ReferencedPakPureChecksums: (%i) %i == %i (pure: %i, feed: %i)\n",
+				// 	alt->numHeaderLongs, alt->altChecksum, useChecksum2, useChecksum, fs_checksumFeed);
+				break;
 			}
-		//}
+		}
 	}
 	
 	memcpy(altChecksum, &LittleLong(useChecksum), 4);
@@ -5208,17 +5282,17 @@ const char *FS_ReferencedPakPureChecksums( int maxlen ) {
 	const searchpath_t	*search;
 	int nFlags, numPaks, checksum;
 
+#if defined(USE_ALTCHECKSUM) || defined(__WASM__)
+	int altChecksum = 0;
+	qboolean found = qfalse;
+#endif
+
 	max = info + maxlen; // maxlen is always smaller than MAX_STRING_CHARS so we can overflow a bit
 	s = info;
 	*s = '\0';
 
 	checksum = fs_checksumFeed;
 	numPaks = 0;
-
-#if defined(USE_ALTCHECKSUM) || defined(__WASM__)
-	int altChecksum = 0;
-	qboolean found = qfalse;
-#endif
 
 	for ( nFlags = FS_CGAME_REF; nFlags; nFlags = nFlags >> 1 ) {
 		if ( nFlags & FS_GENERAL_REF ) {
@@ -5339,13 +5413,17 @@ const char *FS_ReferencedPakNames( void ) {
 			if ( search->pack->exclude ) {
 				continue;
 			}
+#ifndef __WASM__
 			if ( search->pack->referenced || !FS_IsBaseGame( search->pack->pakGamename ) ) {
+#endif
 				pakName = va( "%s/%s", search->pack->pakGamename, search->pack->pakBasename );
 				if ( *info != '\0' ) {
 					Q_strcat( info, sizeof( info ), " " );
 				}
 				Q_strcat( info, sizeof( info ), pakName );
+#ifndef __WASM__
 			}
+#endif
 		}
 	}
 
@@ -5592,10 +5670,9 @@ void FS_Restart( int checksumFeed ) {
 		Com_Error( ERR_FATAL, "Couldn't load default.cfg" );
 #else
 		if(com_errorEntered) {
-			Com_Printf( ERR_FATAL, "Couldn't load default.cfg" );
+			Com_Printf( "Couldn't load default.cfg" );
 			Sys_Exit(1);
 		}
-		//Cbuf_AddText( "dlmap q3dm17\n" );
 #endif
 	}
 

@@ -2599,7 +2599,7 @@ void R_RenderSunShadowMaps(const refdef_t *fd, int level)
 
 			R_AddPolygonSurfaces();
 
-			R_AddPolygonBufferSurfaces();
+			//R_AddPolygonBufferSurfaces();
 
 			R_AddEntitySurfaces ();
 

@@ -1217,10 +1217,25 @@ void HandleEvents( void )
 				break;
 
 			case SDL_MOUSEMOTION:
+				if(in_nograb->integer < 0) {
+					if (Key_GetCatcher() != 0) {
+						SDL_SetRelativeMouseMode( SDL_FALSE );
+						SDL_SetWindowGrab( SDL_window, SDL_FALSE );
+						SDL_ShowCursor( SDL_TRUE );
+					} else {
+						SDL_SetRelativeMouseMode( SDL_TRUE );
+						SDL_SetWindowGrab( SDL_window, SDL_TRUE );
+						SDL_ShowCursor( SDL_FALSE );
+					}
+				}
+
 				if( mouseActive )
 				{
 					if( !e.motion.xrel && !e.motion.yrel )
 						break;
+					if (in_nograb->integer < 0 && Key_GetCatcher() != 0)
+					Com_QueueEvent( in_eventTime, SE_MOUSE_ABS, e.motion.x, e.motion.y, 0, NULL );
+					else
 					Com_QueueEvent( in_eventTime, SE_MOUSE, e.motion.xrel, e.motion.yrel, 0, NULL );
 				}
 				break;
@@ -1359,7 +1374,7 @@ void IN_Frame( void )
 		}
 	}
 
-	if ( !gw_active || !mouse_focus || in_nograb->integer ) {
+	if ( !gw_active || !mouse_focus || in_nograb->integer > 0 ) {
 		IN_DeactivateMouse();
 		return;
 	}

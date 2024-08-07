@@ -1962,11 +1962,6 @@ static qboolean ParseCondition( const char **text, resultType *res )
 }
 
 
-#ifdef __WASM__
-void R_AddPalette(const char *name, int a, int r, int g, int b);
-#endif
-
-
 /*
 =================
 ParseShader
@@ -2291,34 +2286,38 @@ static qboolean ParseShader( const char **text )
 		// parse palette colors for filename
     else if ( !Q_stricmp( token, "palette" ) ) {
       char file[MAX_OSPATH];
-      char colors[MAX_OSPATH];
       token = COM_ParseExt( text, qfalse );
       memcpy(file, token, sizeof(file));
-      memcpy(colors, COM_ParseExt( text, qfalse ), sizeof(colors));
+      const char *colors = COM_ParseExt( text, qfalse );
+      char color[4];
       int a = 0, r = 0, g = 0, b = 0;
-      for(int i = 0; i < 16; i++) {
-				if (colors[i] >= '0' && colors[i] <= '9') {
-				} else {
-					colors[i] = ' ';
-				}
-			}
-			const char *color = COM_ParseExt( text, qfalse );
-			for(int i = 0; i < 4; i++) {
-				if(color[0]) {
-					if(i == 0) {
-						r = atoi(color);
-					}
-					if(i == 1) {
-						g = atoi(color);
-					}
-					if(i == 2) {
-						b = atoi(color);
-					}
-					if(i == 3) {
-						a = atoi(color);
-					}
-				}
-			}
+      int ci = 0;
+      int ri2 = 0;
+      int gi = 0;
+      int bi = 0;
+      for(int i = 0; i < 12; i++) {
+        if(colors[i] == ',') {
+          if(ri2 == 0) {
+            color[ci] = 0;
+            a = atoi(color);
+            ri2 = i + 1;
+          } else if(gi == 0) {
+            color[ci] = 0;
+            r = atoi(color);
+            gi = i + 1;
+          } else {
+            color[ci] = 0;
+            g = atoi(color);
+            bi = i + 1;
+            b = atoi(&colors[bi]);
+            break;
+          }
+          ci = 0;
+        } else if (colors[i] >= '0' && colors[i] <= '9') {
+          color[ci] = colors[i];
+          ci++;
+        }
+      }
       R_AddPalette(file, a, r, g, b);
 			continue;
 		}

@@ -21,7 +21,7 @@ function GLimp_StartDriverAndSetMode(mode, modeFS, fullscreen, fallback) {
     : (GL.canvas.getContext('webgl', webGLContextAttributes)
       || GL.canvas.getContext('experimental-webgl'))
 
-  GL.context2D = GL.canvas2D.getContext('2d')
+  GL.context2D = GL.canvas2D.getContext('2d', { willReadFrequently: true })
   
   GL.context.viewport(0, 0, GL.canvas.width, GL.canvas.height);
   if (!GL.context) return 2

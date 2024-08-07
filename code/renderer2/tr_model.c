@@ -248,13 +248,61 @@ model_t	*R_GetModelByHandle( qhandle_t index ) {
 //===============================================================================
 
 /*
+======================
+S_FreeOldestSound
+======================
+*/
+model_t *R_FreeOldestModel( void ) {
+	int	i, oldest, used;
+	int savedI;
+	model_t	*model;
+
+	oldest = 0;
+	used = 0;
+
+	for ( i = 1 ; i < tr.numModels ; i++ ) {
+		model = tr.models[i];
+		if ( model->type == MOD_BAD && model->name[0] != '*'
+		 	//&& model->lastTimeUsed < tr.lastRegistrationTime
+		) {
+			used = i;
+			if(oldest < model->lastTimeUsed) {
+				oldest = model->lastTimeUsed;
+			}
+		}
+	}
+
+	if(!used && i == MAX_MOD_KNOWN) {
+		return NULL;
+	}
+
+	model = tr.models[used];
+	
+	ri.Printf(PRINT_DEVELOPER, "R_FreeOldestModel: freeing model %s\n", model->name);
+	
+	savedI = model->index;
+	//if(model->modelData)
+	//	ri.Free( model->modelData );
+	//if(model->mdv)
+	//	ri.( model->mdv );
+	Com_Memset(model, 0, sizeof( model_t ));
+	model->index = savedI;
+
+	return model;
+}
+
+/*
 ** R_AllocModel
 */
 model_t *R_AllocModel( void ) {
 	model_t		*mod;
 
 	if ( tr.numModels == MAX_MOD_KNOWN ) {
-		return NULL;
+		mod = R_FreeOldestModel();
+		if(!mod) {
+			return NULL;
+		}
+		return mod;
 	}
 
 	mod = ri.Hunk_Alloc( sizeof( *tr.models[tr.numModels] ), h_low );
@@ -305,7 +353,11 @@ qhandle_t RE_RegisterModel( const char *name ) {
 		mod = tr.models[hModel];
 		if ( !strcmp( mod->name, name ) ) {
 			if( mod->type == MOD_BAD ) {
+#ifdef __WASM__
+				break;
+#else
 				return 0;
+#endif
 			}
 			return hModel;
 		}
@@ -317,6 +369,8 @@ qhandle_t RE_RegisterModel( const char *name ) {
 		ri.Printf( PRINT_WARNING, "RE_RegisterModel: R_AllocModel() failed for '%s'\n", name);
 		return 0;
 	}
+
+	mod->lastTimeUsed = tr.lastRegistrationTime;
 
 	// only set the name after the model has been successfully loaded
 	Q_strncpyz( mod->name, name, sizeof( mod->name ) );

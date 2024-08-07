@@ -541,8 +541,19 @@ Blends a fog texture on top of everything else
 static void RB_FogPass( void ) {
 	const fog_t *fog = tr.world->fogs + tess.fogNum;
 	int i;
+	color4ub_t red;
+	if(r_berserk->integer) {
+		int luma = LUMA(fog->colorInt.rgba[0], fog->colorInt.rgba[1], fog->colorInt.rgba[2]);
+		red.rgba[0] = luma;
+		red.rgba[1] = 0;
+		red.rgba[2] = 0;
+		red.rgba[3] = fog->colorInt.rgba[0];
+	}
 
 	for ( i = 0; i < tess.numVertexes; i++ ) {
+		if(r_berserk->integer) {
+			tess.svars.colors[i] = red;
+		} else
 		tess.svars.colors[i] = fog->colorInt;
 	}
 
@@ -645,7 +656,16 @@ void R_ComputeColors( const shaderStage_t *pStage )
 				fog = tr.world->fogs + tess.fogNum;
 
 				for ( i = 0; i < tess.numVertexes; i++ ) {
-					tess.svars.colors[i] = fog->colorInt;
+					if(r_berserk->integer) {
+						color4ub_t red;
+						int luma = LUMA(fog->colorInt.rgba[0], fog->colorInt.rgba[1], fog->colorInt.rgba[2]);
+						red.rgba[0] = luma;
+						red.rgba[1] = 0;
+						red.rgba[2] = 0;
+						red.rgba[3] = fog->colorInt.rgba[0];
+						tess.svars.colors[i] = red;
+					} else
+						tess.svars.colors[i] = fog->colorInt;
 				}
 			}
 			break;

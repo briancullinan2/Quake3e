@@ -1613,7 +1613,6 @@ static void SV_VerifyPaks_f( client_t *cl ) {
 
 		// we run the game, so determine which cgame and ui the client "should" be running
 		bGood = FS_FileIsInPAK( "vm/cgame.qvm", &nChkSum1, url );
-    Com_Printf("Pure pak: %s\n", url);
 		bGood &= FS_FileIsInPAK( "vm/ui.qvm", &nChkSum2, NULL );
 
 		nClientPaks = Cmd_Argc();
@@ -2312,10 +2311,6 @@ void SV_ExecuteClientMessage( client_t *cl, msg_t *msg ) {
 			// send initial gamestate, client may not acknowledge it in next command but start downloading after SV_ClientCommand()
 			if ( !SVC_RateLimit( &cl->gamestate_rate, 2, 1000 ) ) {
 				SV_SendClientGameState( cl );
-#ifdef __WASM__
-				SV_SendClientGameState( cl );
-				SV_SendClientGameState( cl );
-#endif
 			}
 			return;
 		}

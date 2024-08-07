@@ -1,34 +1,29 @@
 
 /* XXX Emscripten XXX */
-
-#if defined(__EMSCRIPTEN__) || defined(__WASM__)
-#define HAVE_MORECORE 1
+#if __EMSCRIPTEN__ || __WASM__
 // When building for wasm we export `malloc` and `emscripten_builtin_malloc` as
 // weak alias of the internal `dlmalloc` which is static to this file.
-//#define DLMALLOC_EXPORT static
-#define DLMALLOC_EXPORT extern __attribute__((visibility("default")))
-
+#define DLMALLOC_EXPORT static
 /* mmap uses malloc, so malloc can't use mmap */
 #define HAVE_MMAP 0
+/* Emscripten's sbrk can interpret unsigned values greater than (MAX_SIZE_T / 2U) (2GB) correctly */
+#define UNSIGNED_MORECORE 1
 /* we can only grow the heap up anyhow, so don't try to trim */
-//#define MORECORE_CANNOT_TRIM 1
+#define MORECORE_CANNOT_TRIM 1
 #ifndef DLMALLOC_DEBUG
 /* dlmalloc has many checks, calls to abort() increase code size,
    leave them only in debug builds */
 #define ABORT __builtin_unreachable()
 /* allow malloc stats only in debug builds, which brings in stdio code. */
-#endif
-
 #define NO_MALLOC_STATS 1
-
-//#define PROCEED_ON_ERROR 1
-
-//#define ABORT_ON_ASSERT_FAILURE 0
-
-//#define MALLOC_FAILURE_ACTION 
-
+#define MALLINFO_FIELD_TYPE int
+#endif
 /* XXX Emscripten Tracing API. This defines away the code if tracing is disabled. */
 //#include <emscripten/trace.h>
+
+#ifdef __EMSCRIPTEN_WASM_WORKERS__
+#define USE_LOCKS 1
+#endif
 
 /* Make malloc() and free() threadsafe by securing the memory allocations with pthread mutexes. */
 #if __EMSCRIPTEN_PTHREADS__
@@ -36,7 +31,18 @@
 #define USE_SPIN_LOCKS 0 // Ensure we use pthread_mutex_t.
 #endif
 
+#ifndef MALLOC_ALIGNMENT
+#include <stddef.h>
+/* `malloc`ed pointers must be aligned at least as strictly as max_align_t. */
+#define MALLOC_ALIGNMENT (__alignof__(max_align_t))
+/*
+  Emscripten aligns even float128 to 64-bits, to save size and increase speed.
+  See https://github.com/emscripten-core/emscripten/issues/10072
+*/
+//_Static_assert(MALLOC_ALIGNMENT == 8, "max_align_t must be 8");
 #endif
+
+#endif // __EMSCRIPTEN__
 
 
 #define __THROW
@@ -415,6 +421,10 @@
  Setting it false when definitely non-contiguous saves time
  and possibly wasted space it would take to discover this though.
  
+ UNSIGNED_MORECORE         default: 0 (false)
+ True if MORECORE can only handle unsigned arguments. This sets
+ MORECORE_CANNOT_TRIM to 1 (true).
+
  MORECORE_CANNOT_TRIM      default: NOT defined
  True if MORECORE cannot release space back to the system when given
  negative arguments. This is generally necessary only if you are
@@ -590,7 +600,7 @@
 #include <windows.h>
 #include <tchar.h>
 #define HAVE_MMAP 1
-#define HAVE_MORECORE 1
+#define HAVE_MORECORE 0
 #define LACKS_UNISTD_H
 #define LACKS_SYS_PARAM_H
 #define LACKS_SYS_MMAN_H
@@ -611,7 +621,6 @@
 #endif /*MMAP_CLEARS */
 #endif  /* WIN32 */
 
-#ifndef __EMSCRIPTEN__
 #if defined(DARWIN) || defined(_DARWIN)
 /* Mac OSX docs advise not to use sbrk; it seems better to use mmap */
 #ifndef HAVE_MORECORE
@@ -623,7 +632,6 @@
 #endif
 #endif  /* HAVE_MORECORE */
 #endif  /* DARWIN */
-#endif  /* !__EMSCRIPTEN__ */
 
 #ifndef LACKS_SYS_TYPES_H
 #include <sys/types.h>  /* For size_t */
@@ -715,6 +723,12 @@ defined(__i386__) || defined(__x86_64__))) ||                    \
 #define HAVE_MORECORE 1
 #endif  /* ONLY_MSPACES */
 #endif  /* HAVE_MORECORE */
+#ifndef UNSIGNED_MORECORE
+#define UNSIGNED_MORECORE 0
+#endif  /* UNSIGNED_MORECORE */
+#if UNSIGNED_MORECORE
+#define MORECORE_CANNOT_TRIM 1
+#endif  /* UNSIGNED_MORECORE */
 #if !HAVE_MORECORE
 #define MORECORE_CONTIGUOUS 0
 #else   /* !HAVE_MORECORE */
@@ -869,6 +883,11 @@ extern "C" {
     
 #ifndef USE_DL_PREFIX
 // XXX Emscripten XXX
+#if defined(__EMSCRIPTEN__) || defined(__WASM__)
+void* __libc_malloc(size_t) __attribute__((weak, alias("dlmalloc")));
+void  __libc_free(void*) __attribute__((weak, alias("dlfree")));
+void* __libc_calloc(size_t) __attribute__((weak, alias("dlcalloc")));
+void* __libc_realloc(void*, size_t) __attribute__((weak, alias("dlrealloc")));
 void* malloc(size_t) __attribute__((weak, alias("dlmalloc")));
 void  free(void*) __attribute__((weak, alias("dlfree")));
 void* calloc(size_t, size_t) __attribute__((weak, alias("dlcalloc")));
@@ -897,6 +916,7 @@ void malloc_inspect_all(void(*handler)(void*, void *, size_t, void*), void* arg)
 void** independent_calloc(size_t, size_t, void**) __attribute__((weak, alias("dlindependent_calloc")));
 void** independent_comalloc(size_t, size_t*, void**) __attribute__((weak, alias("dlindependent_comalloc")));
 size_t bulk_free(void**, size_t n_elements) __attribute__((weak, alias("dlbulk_free")));
+#endif /*__EMSCRIPTEN__*/
 #endif /* USE_DL_PREFIX */
     
     /*
@@ -1546,7 +1566,7 @@ size_t bulk_free(void**, size_t n_elements) __attribute__((weak, alias("dlbulk_f
 #ifndef LACKS_UNISTD_H
 #include <unistd.h>     /* for sbrk, sysconf */
 #else /* LACKS_UNISTD_H */
-#if !defined(__FreeBSD__) && !defined(__OpenBSD__) && !defined(__NetBSD__) && !defined(__WASM__) && !defined(__EMSCRIPTEN__)
+#if !defined(__FreeBSD__) && !defined(__OpenBSD__) && !defined(__NetBSD__)
 extern void*     sbrk(ptrdiff_t);
 #endif /* FreeBSD etc */
 #endif /* LACKS_UNISTD_H */
@@ -1616,7 +1636,7 @@ extern "C" {
 #    endif
 #  endif
 #  ifdef _SC_PAGE_SIZE
-#    if defined(__EMSCRIPTEN__)
+#    if defined(__EMSCRIPTEN__) || defined(__WASM__)
 #      define malloc_getpagesize (4096) /* avoid sysconf calls during startup */
 #    else
 #      define malloc_getpagesize sysconf(_SC_PAGE_SIZE)
@@ -2897,7 +2917,7 @@ static size_t traverse_and_check(mstate m);
 #define treebin_at(M,i)     (&((M)->treebins[i]))
 
 /* assign tree index for size S to variable I. Use x86 asm if possible  */
-#if defined(__GNUC__) && (defined(__i386__) || defined(__x86_64__))
+#if defined(__GNUC__) && (defined(__i386__) || defined(__x86_64__) || defined(__EMSCRIPTEN__) || defined(__WASM__))
 #define compute_tree_index(S, I)\
 {\
 unsigned int X = S >> TREEBIN_SHIFT;\
@@ -3000,7 +3020,7 @@ I = (K << 1) + ((S >> (K + (TREEBIN_SHIFT-1)) & 1));\
 
 /* index corresponding to given bit. Use x86 asm if possible */
 
-#if defined(__GNUC__) && (defined(__i386__) || defined(__x86_64__))
+#if defined(__GNUC__) && (defined(__i386__) || defined(__x86_64__) || defined(__EMSCRIPTEN__) || defined(__WASM__))
 #define compute_bit2idx(X, I)\
 {\
 unsigned int J;\
@@ -3235,7 +3255,7 @@ static int init_mparams(void) {
 #endif /* USE_DEV_RANDOM */
 #ifdef WIN32
                 magic = (size_t)(GetTickCount() ^ (size_t)0x55555555U);
-#elif defined(LACKS_TIME_H) || defined(__EMSCRIPTEN__)
+#elif defined(LACKS_TIME_H) || defined(__EMSCRIPTEN__) || defined(__WASM__)
             magic = (size_t)&magic ^ (size_t)0x55555555U;
 #else
             magic = (size_t)(time(0) ^ (size_t)0x55555555U);
@@ -4103,7 +4123,6 @@ static void* sys_alloc(mstate m, size_t nb) {
     flag_t mmap_flag = 0;
     size_t asize; /* allocation size */
     
-
     ensure_initialization();
     
     /* Directly map large chunks, but only if already initialized */
@@ -4149,7 +4168,7 @@ static void* sys_alloc(mstate m, size_t nb) {
         size_t ssize = asize; /* sbrk call size */
         msegmentptr ss = (m->top == 0)? 0 : segment_holding(m, (char*)m->top);
         ACQUIRE_MALLOC_GLOBAL_LOCK();
-
+        
         if (ss == 0) {  /* First time through or recovery */
             char* base = (char*)CALL_MORECORE(0);
             if (base != CMFAIL) {
@@ -4158,7 +4177,8 @@ static void* sys_alloc(mstate m, size_t nb) {
                 if (!is_page_aligned(base))
                     ssize += (page_align((size_t)base) - (size_t)base);
                 fp = m->footprint + ssize; /* recheck limits */
-                if (ssize > nb && ssize < HALF_MAX_SIZE_T &&
+                if (ssize > nb &&
+                    (UNSIGNED_MORECORE || ssize < HALF_MAX_SIZE_T) &&
                     (m->footprint_limit == 0 ||
                      (fp > m->footprint && fp <= m->footprint_limit)) &&
                     (br = (char*)(CALL_MORECORE(ssize))) == base) {
@@ -4171,7 +4191,7 @@ static void* sys_alloc(mstate m, size_t nb) {
             /* Subtract out existing available top space from MORECORE request. */
             ssize = granularity_align(nb - m->topsize + SYS_ALLOC_PADDING);
             /* Use mem here only if it did continuously extend old space */
-            if (ssize < HALF_MAX_SIZE_T &&
+            if ((UNSIGNED_MORECORE || ssize < HALF_MAX_SIZE_T) &&
                 (br = (char*)(CALL_MORECORE(ssize))) == ss->base+ss->size) {
                 tbase = br;
                 tsize = ssize;
@@ -4180,15 +4200,17 @@ static void* sys_alloc(mstate m, size_t nb) {
         
         if (tbase == CMFAIL) {    /* Cope with partial failure */
             if (br != CMFAIL) {    /* Try to use/extend the space we did get */
-                if (ssize < HALF_MAX_SIZE_T &&
+                if ((UNSIGNED_MORECORE || ssize < HALF_MAX_SIZE_T) &&
                     ssize < nb + SYS_ALLOC_PADDING) {
                     size_t esize = granularity_align(nb + SYS_ALLOC_PADDING - ssize);
-                    if (esize < HALF_MAX_SIZE_T) {
+                    if (UNSIGNED_MORECORE || esize < HALF_MAX_SIZE_T) {
                         char* end = (char*)CALL_MORECORE(esize);
                         if (end != CMFAIL)
                             ssize += esize;
                         else {            /* Can't use; try to release */
-                            (void) CALL_MORECORE(-ssize);
+                            if (!UNSIGNED_MORECORE) {
+                                (void) CALL_MORECORE(-ssize);
+                            }
                             br = CMFAIL;
                         }
                     }
@@ -4215,7 +4237,7 @@ static void* sys_alloc(mstate m, size_t nb) {
     }
     
     if (HAVE_MORECORE && tbase == CMFAIL) { /* Try noncontiguous MORECORE */
-        if (asize < HALF_MAX_SIZE_T) {
+        if (UNSIGNED_MORECORE || asize < HALF_MAX_SIZE_T) {
             char* br = CMFAIL;
             char* end = CMFAIL;
             ACQUIRE_MALLOC_GLOBAL_LOCK();
@@ -4384,6 +4406,7 @@ static int sys_trim(mstate m, size_t pad) {
                     }
                 }
                 else if (HAVE_MORECORE) {
+#ifndef MORECORE_CANNOT_TRIM
                     if (extra >= HALF_MAX_SIZE_T) /* Avoid wrapping negative */
                         extra = (HALF_MAX_SIZE_T) + SIZE_T_ONE - unit;
                     ACQUIRE_MALLOC_GLOBAL_LOCK();
@@ -4398,6 +4421,7 @@ static int sys_trim(mstate m, size_t pad) {
                         }
                     }
                     RELEASE_MALLOC_GLOBAL_LOCK();
+#endif
                 }
             }
             
@@ -4735,9 +4759,9 @@ void* dlmalloc(size_t bytes) {
         
     postaction:
         POSTACTION(gm);
-#if __WASM__
+#if 0 // __EMSCRIPTEN__
         /* XXX Emscripten Tracing API. */
-        //emscripten_trace_record_allocation(mem, bytes);
+        emscripten_trace_record_allocation(mem, bytes);
 #endif
         return mem;
     }
@@ -4755,9 +4779,9 @@ void dlfree(void* mem) {
      */
     
     if (mem != 0) {
-#if __EMSCRIPTEN__
+#if 0 // __EMSCRIPTEN__
         /* XXX Emscripten Tracing API. */
-        //emscripten_trace_record_free(mem);
+        emscripten_trace_record_free(mem);
 #endif
         mchunkptr p  = mem2chunk(mem);
 #if FOOTERS
@@ -5285,9 +5309,9 @@ void* dlrealloc(void* oldmem, size_t bytes) {
             if (newp != 0) {
                 check_inuse_chunk(m, newp);
                 mem = chunk2mem(newp);
-#if __EMSCRIPTEN__
+#if 0 //__EMSCRIPTEN__
                 /* XXX Emscripten Tracing API. */
-                //emscripten_trace_record_reallocation(oldmem, mem, bytes);
+                emscripten_trace_record_reallocation(oldmem, mem, bytes);
 #endif
             }
             else {
@@ -5331,9 +5355,9 @@ void* dlrealloc_in_place(void* oldmem, size_t bytes) {
             }
         }
     }
-#if __EMSCRIPTEN__
+#if 0 //__EMSCRIPTEN__
     /* XXX Emscripten Tracing API. */
-    //emscripten_trace_record_reallocation(oldmem, mem, bytes);
+    emscripten_trace_record_reallocation(oldmem, mem, bytes);
 #endif
     return mem;
 }
@@ -6057,12 +6081,11 @@ int mspace_mallopt(int param_number, int value) {
 // in their code, and make those replacements refer to the original dlmalloc
 // and dlfree from this file.
 // This allows an easy mechanism for hooking into memory allocation.
-#if defined(__EMSCRIPTEN__) && !ONLY_MSPACES
+#if (defined(__EMSCRIPTEN__) || defined(__WASM__)) && !ONLY_MSPACES
 extern __typeof(malloc) emscripten_builtin_malloc __attribute__((alias("dlmalloc")));
 extern __typeof(free) emscripten_builtin_free __attribute__((alias("dlfree")));
 extern __typeof(memalign) emscripten_builtin_memalign __attribute__((alias("dlmemalign")));
 #endif
-
 
 /* -------------------- Alternative MORECORE functions ------------------- */
 
@@ -6085,8 +6108,8 @@ extern __typeof(memalign) emscripten_builtin_memalign __attribute__((alias("dlme
  just return MFAIL when given negative arguments.
  Negative arguments are always multiples of pagesize. MORECORE
  must not misinterpret negative args as large positive unsigned
- args. You can suppress all such calls from even occurring by defining
- MORECORE_CANNOT_TRIM,
+ args unless UNSIGNED_MORECORE is defined. You can suppress all such calls
+ from even occurring by defining MORECORE_CANNOT_TRIM,
  
  As an example alternative MORECORE, here is a custom allocator
  kindly contributed for pre-OSX macOS.  It uses virtually but not

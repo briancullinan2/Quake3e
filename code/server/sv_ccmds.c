@@ -156,6 +156,9 @@ static void SV_Map_f( void ) {
 	const char		*map;
 	qboolean	killBots, cheat;
 	char		expanded[MAX_QPATH];
+#ifdef __WASM__
+	char		expanded2[MAX_QPATH];
+#endif
 	char		mapname[MAX_QPATH];
 	int			len;
 
@@ -167,9 +170,15 @@ static void SV_Map_f( void ) {
 	// make sure the level exists before trying to change, so that
 	// a typo at the server console won't end the game
 	Com_sprintf( expanded, sizeof( expanded ), "maps/%s.bsp", map );
+#ifdef __WASM__
+	Com_sprintf( expanded2, sizeof( expanded2 ), "maps/%s.aas", map );
+#endif
 	// bypass pure check so we can open downloaded map
 	FS_BypassPure();
 	len = FS_FOpenFileRead( expanded, NULL, qfalse );
+#ifdef __WASM__
+	len = len == -1 ? -1 : FS_FOpenFileRead( expanded2, NULL, qfalse );
+#endif
 	FS_RestorePure();
 	if ( len == -1 ) {
 #ifdef __WASM__

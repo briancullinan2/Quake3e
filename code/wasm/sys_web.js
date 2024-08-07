@@ -102,9 +102,9 @@ function getQueryCommands() {
 
 
 	// TODO: from URL or default.cfg?
-	if(!startup.includes('fs_basegame')) {
+	if(!startup.includes('fs_game')) {
 		startup.push.apply(startup, [
-			'+set', 'fs_basegame', 'demoq3',
+			'+set', 'fs_game', 'demoq3',
 		])
 		if(typeof FS.virtual['demoq3'] == 'undefined') {
 			FS.virtual['demoq3'] = {

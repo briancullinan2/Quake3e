@@ -405,6 +405,7 @@ void CL_SystemInfoChanged( qboolean onlyGame ) {
 
 		s = Info_ValueForKey( systemInfo, "sv_referencedPaks" );
 		t = Info_ValueForKey( systemInfo, "sv_referencedPakNames" );
+		Com_Printf("referenced paks: %s\n", s);
 		FS_PureServerSetReferencedPaks( s, t );
 	}
 

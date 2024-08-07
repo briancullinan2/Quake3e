@@ -2086,8 +2086,6 @@ static void CL_DownloadsComplete( void ) {
 }
 
 
-#ifndef __WASM__
-
 /*
 =================
 CL_BeginDownload
@@ -2118,7 +2116,6 @@ static void CL_BeginDownload( const char *localName, const char *remoteName ) {
 	CL_AddReliableCommand( va("download %s", remoteName), qfalse );
 }
 
-#endif
 
 /*
 =================
@@ -2168,7 +2165,7 @@ void CL_NextDownload( void )
 		else
 			s = localName + strlen(localName); // point at the null byte
 
-#ifdef USE_CURL
+#if defined(USE_CURL) || defined(__WASM__)
 		if(!(cl_allowDownload->integer & DLF_NO_REDIRECT)) {
 			if(clc.sv_allowDownload & DLF_NO_REDIRECT) {
 				Com_Printf("WARNING: server does not "
@@ -2181,13 +2178,19 @@ void CL_NextDownload( void )
 					"download redirection, but does not "
 					"have sv_dlURL set\n");
 			}
+#ifndef __WASM__
 			else if(!CL_cURL_Init()) {
 				Com_Printf("WARNING: could not load "
 					"cURL library\n");
 			}
+#endif
 			else {
+#ifdef __WASM__
+				CL_cURL_BeginDownload( localName, remoteName );
+#else
 				CL_cURL_BeginDownload(localName, va("%s/%s",
 					clc.sv_dlURL, remoteName));
+#endif
 				useCURL = qtrue;
 			}
 		}
@@ -2200,7 +2203,6 @@ void CL_NextDownload( void )
 #endif /* USE_CURL */
 
 		if( !useCURL ) {
-#ifndef __WASM__
 		if( (cl_allowDownload->integer & DLF_NO_UDP) ) {
 				Com_Error(ERR_DROP, "UDP Downloads are "
 					"disabled on your client. "
@@ -2212,20 +2214,6 @@ void CL_NextDownload( void )
 				CL_BeginDownload( localName, remoteName );
 			}
 		}
-#else
-		if( (cl_allowDownload->integer & DLF_NO_REDIRECT) ) {
-				Com_Error(ERR_DROP, "WARNING: server allows download "
-				"redirection, but it disabled by client "
-				"configuration (cl_allowDownload is %d)\n",
-				cl_allowDownload->integer);
-				return;
-			}
-			else {
-				CL_BeginDownload( localName, remoteName );
-			}
-		}
-#endif
-
 		clc.downloadRestart = qtrue;
 
 		// move over the rest
@@ -2264,8 +2252,6 @@ void CL_InitDownloads( void ) {
 		}
 	}
 	else if ( FS_ComparePaks( clc.downloadList, sizeof( clc.downloadList ) , qtrue ) ) {
-
-		Com_Printf( "Need paks: %s\n", clc.downloadList );
 
 		if ( *clc.downloadList ) {
 			// if autodownloading is not enabled on the server

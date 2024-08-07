@@ -1532,9 +1532,11 @@ static void R_SortDrawSurfs( drawSurf_t *drawSurfs, int numDrawSurfs ) {
 			if ( r_portalOnly->integer ) {
 				return;
 			}
+#ifdef THIS_IS_A_SLOW_COMPUTER
 			if ( r_fastsky->integer == 0 ) {
 				break;	// only one mirror view at a time
 			}
+#endif
 		}
 	}
 
@@ -1631,6 +1633,7 @@ static void R_AddEntitySurfaces( void ) {
 				case MOD_BRUSH:
 					R_AddBrushModelSurfaces( ent );
 					break;
+				case MOD_OBJ:
 				case MOD_BAD:		// null model axis
 					if ( (ent->e.renderfx & RF_THIRD_PERSON) && (tr.viewParms.portalView == PV_NONE) ) {
 						break;
@@ -1660,6 +1663,8 @@ static void R_GenerateDrawSurfs( void ) {
 	R_AddWorldSurfaces ();
 
 	R_AddPolygonSurfaces();
+
+	R_AddPolygonBufferSurfaces();
 
 	// set the projection matrix with the minimum zfar
 	// now that we have the world bounded

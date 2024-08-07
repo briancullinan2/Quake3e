@@ -559,7 +559,7 @@ function Com_DL_Begin(localName, remoteURL) {
 }
 
 
-function CL_BeginDownload(localName, remoteURL) {
+function CL_cURL_BeginDownload(localName, remoteURL) {
   Cvar_Set(stringToAddress('cl_downloadName'), localName)
   Cvar_SetIntegerValue(stringToAddress('cl_downloadSize'), 0)
   Cvar_SetIntegerValue(stringToAddress('cl_downloadCount'), 0)
@@ -632,7 +632,7 @@ function CL_Download(cmd, name, auto) {
   if (localName[0] == '/')
     localName = localName.substring(1)
   if (localName.startsWith(gamedir + '/'))
-    localName = localName.substring(gamedir.length  +1)
+    localName = localName.substring(gamedir.length + 1)
 
   let remoteURL
   if (dlURL.includes('%1')) {
@@ -660,60 +660,80 @@ function CL_Download(cmd, name, auto) {
     }
   }
 
-  let mapname = ''
+  var server = addressToString(Cvar_VariableString('cl_currentServerAddress'))
+  if(server.length && !window.location.includes(server))
+    history.pushState({location: window.location.toString()}, window.title, '?connect ' + server)
+
   let waitFor = Promise.resolve((async function () {
     try {
       NET.downloadCount++
       let result
-      if (nameStr.includes('version.json') || nameStr.includes('maps/maplist.json')) {
-      } else {
-        result = await readStore(nameStr)
-      }
+      //if (nameStr.includes('version.json') || nameStr.includes('maps/maplist.json')) {
+      //} else {
+      //  result = await readStore(nameStr)
+      //}
       let responseData
-      if (!result || (result.mode >> 12) == ST_DIR
+      //if (!result || (result.mode >> 12) == ST_DIR
         // bust the caches!
-        || result.timestamp.getTime() < NET.cacheBuster) {
+      //  || result.timestamp.getTime() < NET.cacheBuster) {
         responseData = (await Promise.all([
           await Com_DL_Begin(localName, remoteURL),
           await Com_DL_Begin(localName + '.pk3', remoteURL + '.pk3')
             .then(responseData => {
               if(responseData && !nameStr.match(/\.pk3$/)) {
-                mapname = nameStr
-                nameStr += '.pk3'
+                localName += '.pk3'
               }
               return responseData
             }),
           await Com_DL_Begin(localName + '.bsp', remoteURL + '.bsp')
           .then(responseData => {
             if(responseData && !nameStr.match(/\.bsp$/)) {
-              mapname = nameStr
-              nameStr = 'maps/' + nameStr + '.bsp'
+              nameStr = 'maps/' + localName + '.bsp'
             }
             return responseData
           }),
           await Com_DL_Begin(localName + '.bsp', basegame + '/pak0.pk3dir/maps/' + localName + '.bsp')
           .then(responseData => {
             if(responseData && !nameStr.match(/\.bsp$/)) {
-              mapname = nameStr
-              nameStr = 'maps/' + nameStr + '.bsp'
+              nameStr = 'maps/' + localName + '.bsp'
             }
             return responseData
           }),
-          
+          await Com_DL_Begin(localName + '.bsp', gamedir + '/pak0.pk3dir/maps/' + localName + '.bsp')
+          .then(responseData => {
+            if(responseData && !nameStr.match(/\.bsp$/)) {
+              nameStr = 'maps/' + localName + '.bsp'
+            }
+            return responseData
+          }),
         ])).filter(f => f)[0]
-      } else {
-        // valid from disk
-        responseData = result.contents
-      }
-      let rename = responseData.response.headers.get('content-disposition')
-      if (rename) {
-        let newFilename = (/filename=['"]*(.*?)['"]*$/i).exec(rename)
-        if (newFilename) {
-          localName = localName.replace(/[^\/]*$/, newFilename[1])
-          nameStr = nameStr.replace(/[^\/]*$/, newFilename[1])
+
+        let rename = responseData.response.headers.get('content-disposition')
+        let newFilename = localName
+        if (rename) {
+          let newFilename = (/filename=['"]*(.*?)['"]*$/i).exec(rename)
+          if (newFilename) {
+            newFilename = localName.replace(/[^\/]*$/, newFilename[1])
+            nameStr = nameStr.replace(/[^\/]*$/, newFilename[1])
+          }
         }
-      }
-      Com_DL_Perform(gamedir + '/' + nameStr, gamedir + '/' + localName, responseData)
+
+        Com_DL_Perform(gamedir + '/' + nameStr, gamedir + '/' + newFilename, responseData)
+  
+        let responseData2 = (await Promise.all([
+          await Com_DL_Begin(localName + '.aas', remoteURL + '.aas'),
+          await Com_DL_Begin(localName + '.aas', basegame + '/pak0.pk3dir/maps/' + localName + '.aas'),
+          await Com_DL_Begin(localName + '.aas', gamedir + '/pak0.pk3dir/maps/' + localName + '.aas'),
+        ])).filter(f => f)[0]
+
+        Com_DL_Perform(gamedir + '/maps/' + localName + '.aas', gamedir + '/' + localName, responseData2)
+
+
+      //} else {
+        // valid from disk
+      //  responseData = result.contents
+      //}
+
       Cvar_Set( stringToAddress('cl_downloadName'), stringToAddress('') );
       Cvar_Set( stringToAddress('cl_downloadSize'), stringToAddress('0') );
       Cvar_Set( stringToAddress('cl_downloadCount'), stringToAddress('0') );
@@ -722,7 +742,7 @@ function CL_Download(cmd, name, auto) {
         if(cmdStr == 'dlmap') {
           Cbuf_AddText(stringToAddress(` ; fs_restart ; vid_restart ; `))
         } else {
-          Cbuf_AddText(stringToAddress(` ; wait 100 ; fs_restart ; ${cmdStr} ${mapname} ; `))
+          Cbuf_AddText(stringToAddress(` ; wait 100 ; fs_restart ; ${cmdStr} ${localName} ; `))
         }
       }
     } catch (e) {
@@ -755,7 +775,7 @@ var NET = {
   Sys_NET_MulticastLocal: Sys_NET_MulticastLocal,
   CL_Download: CL_Download,
   Com_DL_Cleanup: Com_DL_Cleanup,
-  CL_BeginDownload: CL_BeginDownload,
+  CL_cURL_BeginDownload: CL_cURL_BeginDownload,
 }
 
 

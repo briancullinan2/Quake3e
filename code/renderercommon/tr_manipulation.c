@@ -251,12 +251,15 @@ void R_AddPalette(const char *name, int a, int r, int g, int b) {
 	palette_t *palette;
 	char normalName[MAX_OSPATH];
 	const char *s;
+	if(!name) {
+		return;
+	}
 	if((s = Q_stristr(name, ".pk3dir/"))) {
 		name = s + 8;
 	}
 	COM_StripExtension(name, normalName, MAX_OSPATH);
 	hash = generateHashValue(normalName);
-	//Com_Printf("palette: %s\n", name);
+	//Com_Printf("palette: %s %i %i %i\n", name, r, g, b);
 	int namelen = strlen(normalName);
 	for (palette=paletteTable[hash]; palette; palette=palette->next) {
 		if ( !Q_stricmp( normalName, palette->imgName ) ) {

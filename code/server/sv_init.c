@@ -869,7 +869,6 @@ before Sys_Quit or Sys_Error
 ================
 */
 void SV_Shutdown( const char *finalmsg ) {
-
 	if ( !com_sv_running || !com_sv_running->integer ) {
 		return;
 	}

@@ -36,8 +36,10 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 static void S_Update_( int msec );
 static void S_UpdateBackgroundTrack( void );
+#ifndef __WASM__
 static void S_Base_StopAllSounds( void );
 static void S_Base_StopBackgroundTrack( void );
+#endif
 static void S_memoryLoad( sfx_t *sfx );
 
 #ifdef __WASM__
@@ -49,6 +51,7 @@ extern void S_Base_StartLocalSound( sfxHandle_t sfxHandle, int channelNum );
 extern void S_Base_AddLoopingSound( int entityNum, const vec3_t origin, const vec3_t velocity, sfxHandle_t sfxHandle );
 extern void S_Base_AddRealLoopingSound( int entityNum, const vec3_t origin, const vec3_t velocity, sfxHandle_t sfxHandle );
 extern void S_Base_StopBackgroundTrack( void );
+extern void S_Base_StopAllSounds( void );
 extern void S_Base_StartBackgroundTrack( const char *intro, const char *loop );
 extern void S_Base_RawSamples( int samples, int rate, int width, int n_channels, const byte *data, float volume );
 extern void S_Base_Respatialize( int entityNum, const vec3_t head, vec3_t axis[3], int inwater );
@@ -417,8 +420,6 @@ static void S_Base_BeginRegistration( void ) {
 }
 
 
-#ifndef __WASM__
-
 
 static void S_memoryLoad( sfx_t *sfx ) {
 
@@ -430,6 +431,8 @@ static void S_memoryLoad( sfx_t *sfx ) {
 
 	sfx->inMemory = qtrue;
 }
+
+#ifndef __WASM__
 
 //=============================================================================
 

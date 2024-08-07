@@ -380,7 +380,7 @@ qboolean	CL_Download( const char *cmd, const char *pakname, qboolean autoDownloa
 #ifdef __WASM__
 void		Com_DL_Cleanup( void * );
 qboolean	CL_Download( const char *cmd, const char *pakname, qboolean autoDownload );
-void CL_BeginDownload( const char *localName, const char *remoteName );
+void CL_cURL_BeginDownload( const char *localName, const char *remoteName );
 #endif
 
 //=============================================================================

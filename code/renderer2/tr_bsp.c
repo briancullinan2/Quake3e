@@ -2760,7 +2760,7 @@ static void R_CalcVertexLightDirs( void )
 	}
 }
 
-#ifdef __WASM__
+#if 0 //def __WASM__
 extern void R_LoadImage( const char *name, byte **pic, int *width, int *height, GLenum *picFormat, int *numMips, qboolean *dynamicLoad );
 #else
 extern void R_LoadImage( const char *name, byte **pic, int *width, int *height, GLenum *picFormat, int *numMips );
@@ -2864,7 +2864,7 @@ if(r_autoTerrain->integer) {
 		// checkout shaders for terrain
 		GLenum picFormat;
 		int numMips;
-#ifdef __WASM__
+#if 0 //def __WASM__
 qboolean dynamicLoad = qfalse;
 
 if(s_worldData.terrain.terrainIndex[0]) {

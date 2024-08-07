@@ -561,10 +561,11 @@ void RE_EndFrame( int *frontEndMsec, int *backEndMsec ) {
 	if ( ri.Cvar_CheckGroup( CVG_RENDERER ) ) {
 
 
-		if(tr.world) {
+		//if(tr.world) {
 			R_UpdateAlternateImages();
-		}
+		//}
 
+		ri.Cvar_ResetGroup( CVG_RENDERER, qtrue );
 
 	}
 }

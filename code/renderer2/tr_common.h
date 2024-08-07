@@ -71,6 +71,7 @@ typedef struct image_s {
 	imgType_t	type;
 	imgFlags_t	flags;
 	int			lastTimeUsed;
+	char variables[MAX_QPATH];
 	struct image_s *palette;
 	struct image_s *alternate;
 } image_t;

@@ -450,11 +450,11 @@ void RE_EndFrame( int *frontEndMsec, int *backEndMsec ) {
 	// recompile GPU shaders if needed
 	if ( ri.Cvar_CheckGroup( CVG_RENDERER ) )
 	{
-		if(tr.world) {
+		//if(tr.world) {
 			//R_LoadLightmaps();
 
 			R_UpdateAlternateImages();
-		}
+		//}
 
 		ARB_UpdatePrograms();
 

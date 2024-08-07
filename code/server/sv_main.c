@@ -1355,10 +1355,6 @@ void SV_Frame( int msec ) {
 			Sys_Sleep( -1 );
 #endif
 		}
-//#ifdef __WASM__
-		SV_MasterHeartbeat(HEARTBEAT_FOR_MASTER);
-//#endif
-
 		return;
 	}
 

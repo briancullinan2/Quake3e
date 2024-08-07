@@ -54,11 +54,7 @@ Sys_StringToAdr
 CreateAndCall
 NET_OpenIP
 NET_Sleep
-R_LoadTGA
-R_LoadPNG
-R_LoadJPG
-R_LoadPNG_Remote
-R_LoadJPG_Remote
+R_LoadRemote
 Sys_SockaddrToString
 Sys_NET_MulticastLocal
 GL_GetProcAddress
@@ -100,7 +96,7 @@ S_PaintChannel
 
 Sys_FreeFileList
 Sys_Return
-CL_BeginDownload
+CL_cURL_BeginDownload
 CL_Download
 CL_MenuModified
 Com_MaxFPSChanged
