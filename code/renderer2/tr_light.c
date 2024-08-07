@@ -443,7 +443,11 @@ void R_SetupEntityLighting( const trRefdef_t *refdef, trRefEntity_t *ent ) {
 R_LightForPoint
 =================
 */
+#ifdef USE_MULTIVM_RENDERER
+int R_LightForPoint( vec3_t point, vec3_t ambientLight, vec3_t directedLight, vec3_t lightDir, int world )
+#else
 int R_LightForPoint( vec3_t point, vec3_t ambientLight, vec3_t directedLight, vec3_t lightDir )
+#endif
 {
 	trRefEntity_t ent;
 	

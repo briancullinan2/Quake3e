@@ -31,6 +31,17 @@ static cvar_t		*cl_graphheight;
 static cvar_t		*cl_graphscale;
 static cvar_t		*cl_graphshift;
 
+#if defined(USE_MULTIVM_RENDERER) || defined(USE_MULTIVM_CLIENT)
+float clientScreens[MAX_NUM_VMS][4] = {
+	{0,0,0,0},    {-1,-1,-1,-1},
+	{-1,-1,-1,-1},{-1,-1,-1,-1},
+	{-1,-1,-1,-1},{-1,-1,-1,-1},
+	{-1,-1,-1,-1},{-1,-1,-1,-1},
+	{-1,-1,-1,-1},{-1,-1,-1,-1}
+};
+
+#endif
+
 /*
 ================
 SCR_DrawNamedPic
@@ -620,7 +631,7 @@ This is called every frame, and can also be called explicitly to flush
 text to the screen.
 ==================
 */
-void SCR_UpdateScreen( void ) {
+void SCR_UpdateScreen( qboolean fromVM ) {
 	static int recursive;
 	static int framecount;
 	static int next_frametime;

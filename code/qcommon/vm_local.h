@@ -221,6 +221,29 @@ struct vm_s {
 	int			privateFlag;
 };
 
+#if 0 //def USE_MULTIVM_CLIENT
+extern	vm_t		 *uivmWorlds[MAX_NUM_VMS];	// interface to ui dll or vm
+extern  int       uivmi;
+#define uivm      uivmWorlds[uivmi]
+extern	vm_t		 *cgvmWorlds[MAX_NUM_VMS];	// interface to ui dll or vm
+extern  int       cgvmi;
+#define cgvm      cgvmWorlds[cgvmi]
+#else
+extern  vm_t     *uivm;
+extern  vm_t     *cgvm;
+#endif
+
+#ifdef USE_MULTIVM_SERVER
+extern	vm_t		 *gvmWorlds[MAX_NUM_VMS];	// interface to ui dll or vm
+extern  int       gvmi;
+#define gvm       gvmWorlds[gvmi]
+#else
+extern  vm_t     *gvm;
+#endif
+
+
+
+
 qboolean VM_Compile( vm_t *vm, vmHeader_t *header );
 int32_t VM_CallCompiled( vm_t *vm, int nargs, int32_t *args );
 

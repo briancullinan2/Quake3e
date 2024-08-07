@@ -542,6 +542,7 @@ static void RGBAtoNormal(const byte *in, byte *out, int width, int height, qbool
 	}
 }
 
+
 #define COPYSAMPLE(a,b) *(unsigned int *)(a) = *(unsigned int *)(b)
 
 // based on Fast Curve Based Interpolation
@@ -3293,6 +3294,13 @@ void R_InitFogTable( void ) {
 
 		tr.fogTable[i] = d;
 	}
+
+
+#ifdef USE_MULTIVM_RENDERER
+	for(i = 1; i < MAX_NUM_WORLDS; i++) {
+		memcpy(trWorlds[i].fogTable, tr.fogTable, sizeof(tr.fogTable));
+	}
+#endif
 }
 
 /*
@@ -3596,6 +3604,10 @@ R_InitImages
 ===============
 */
 void R_InitImages( void ) {
+#ifdef USE_MULTIVM_RENDERER
+	int i;
+#endif
+
 	Com_Memset(hashTable, 0, sizeof(hashTable));
 	
 	R_ClearPalettes();
@@ -3605,6 +3617,17 @@ void R_InitImages( void ) {
 
 	// create default texture and white texture
 	R_CreateBuiltinImages();
+
+#ifdef USE_MULTIVM_RENDERER
+	for(i = 1; i < MAX_NUM_WORLDS; i++) {
+		trWorlds[i].whiteImage = tr.whiteImage;
+		trWorlds[i].defaultImage = tr.defaultImage;
+		trWorlds[i].identityLightImage = tr.identityLightImage;
+		trWorlds[i].dlightImage = tr.dlightImage;
+		trWorlds[i].fogImage = tr.fogImage;
+		trWorlds[i].numImages = 5;
+	}
+#endif
 }
 
 
@@ -3922,6 +3945,14 @@ void	R_InitSkins( void ) {
 	skin->numSurfaces = 1;
 	skin->surfaces = ri.Hunk_Alloc( sizeof( skinSurface_t ), h_low );
 	skin->surfaces[0].shader = tr.defaultShader;
+
+#ifdef USE_MULTIVM_RENDERER
+	int i;
+	for(i = 1; i < MAX_NUM_WORLDS; i++) {
+		trWorlds[i].skins[0] = skin;
+		trWorlds[i].numSkins = 3;
+	}
+#endif
 }
 
 /*

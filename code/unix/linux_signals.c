@@ -60,12 +60,12 @@ static void signal_handler( int sig )
 //#endif
 
 	signalcaught = qtrue;
-	sprintf( msg, "Signal caught (%d): %s", sig );
+	sprintf( msg, "Signal caught (%d): %s", sig, "\0");
 	VM_Forced_Unload_Start();
 #ifndef DEDICATED
-	CL_Shutdown( msg, qtrue );
+	//CL_Shutdown( msg, qtrue );
 #endif
-	SV_Shutdown( msg );
+	//SV_Shutdown( msg );
 	VM_Forced_Unload_Done();
 	Sys_Exit( 0 ); // send a 0 to avoid DOUBLE SIGNAL FAULT
 }

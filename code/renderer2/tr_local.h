@@ -94,6 +94,9 @@ typedef struct {
 	int			ambientLightInt;	// 32 bit rgba packed
 	vec3_t		directedLight;
 	qboolean	intShaderTime;
+#ifdef USE_MULTIVM_RENDERER
+	int world;
+#endif
 } trRefEntity_t;
 
 
@@ -835,6 +838,9 @@ typedef struct {
 	vec3_t		pvsOrigin;			// may be different than or.origin for portals
 	portalView_t portalView;
   int       portalEntity;
+#ifdef USE_MULTIVM_RENDERER
+	int       newWorld;  // switch to a different world when rendering a camera view
+#endif
 	qboolean	isPortal;			// true if this view is through a portal
 	qboolean	isMirror;			// the portal is a mirror, invert the face culling
 	viewParmFlags_t flags;
@@ -1688,7 +1694,22 @@ typedef struct {
 } trGlobals_t;
 
 extern backEndState_t	backEnd;
+
+#ifdef USE_MULTIVM_RENDERER
+
+#define MAX_NUM_WORLDS MAX_NUM_VMS
+
+extern float dvrXScale;
+extern float dvrYScale;
+extern float dvrXOffset;
+extern float dvrYOffset;
+extern int     rwi;
+extern trGlobals_t	trWorlds[MAX_NUM_WORLDS];
+#define tr trWorlds[rwi]
+#else
 extern trGlobals_t	tr;
+#endif
+
 extern glstate_t	glState;		// outside of TR since it shouldn't be cleared during ref re-init
 extern glRefConfig_t glRefConfig;
 
@@ -1987,7 +2008,15 @@ void	RE_UploadCinematic( int w, int h, int cols, int rows, const byte *data, int
 
 void		RE_BeginFrame( stereoFrame_t stereoFrame );
 void		RE_BeginRegistration( glconfig_t *glconfig );
+
+#ifdef USE_MULTIVM_RENDERER
+int		RE_LoadWorldMap( const char *mapname );
+void    RE_SetDvrFrame( float x, float y, float width, float height );
+
+#else
 void		RE_LoadWorldMap( const char *mapname );
+#endif
+
 void		RE_SetWorldVisData( const byte *vis );
 qhandle_t	RE_RegisterModel( const char *name );
 qhandle_t	RE_RegisterSkin( const char *name );
@@ -2093,7 +2122,19 @@ typedef struct shaderCommands_s
 	shaderStage_t	**xstages;
 } shaderCommands_t;
 
+#ifdef USE_MULTIVM_RENDERER
+
+typedef struct {
+	int		commandId;
+	int 	world;
+	const void *next;
+} setWorldCommand_t;
+
+extern	shaderCommands_t	tessWorlds[MAX_NUM_WORLDS];
+#define tess tessWorlds[rwi]
+#else
 extern	shaderCommands_t	tess;
+#endif
 
 void RB_BeginSurface(shader_t *shader, int fogNum, int cubemapIndex );
 void RB_EndSurface(void);
@@ -2153,7 +2194,11 @@ LIGHTS
 void R_DlightBmodel( bmodel_t *bmodel );
 void R_SetupEntityLighting( const trRefdef_t *refdef, trRefEntity_t *ent );
 void R_TransformDlights( int count, dlight_t *dl, orientationr_t *or );
+#ifdef USE_MULTIVM_RENDERER
+int R_LightForPoint( vec3_t point, vec3_t ambientLight, vec3_t directedLight, vec3_t lightDir, int world );
+#else
 int R_LightForPoint( vec3_t point, vec3_t ambientLight, vec3_t directedLight, vec3_t lightDir );
+#endif
 int R_LightDirForPoint( vec3_t point, vec3_t lightDir, vec3_t normal, world_t *world );
 int R_CubemapForPoint( vec3_t point );
 
@@ -2281,6 +2326,20 @@ SCENE GENERATION
 void R_InitNextFrame( void );
 
 void RE_ClearScene( void );
+
+#ifdef USE_MULTIVM_RENDERER
+
+void RE_AddRefEntityToScene( const refEntity_t *ent, qboolean intShaderTime, int world );
+void RE_AddPolyToScene( qhandle_t hShader , int numVerts, const polyVert_t *verts, int num, int world );
+void RE_AddPolyBufferToScene( polyBuffer_t* pPolyBuffer, int world );
+void RE_AddLightToScene( const vec3_t org, float intensity, float r, float g, float b, int world );
+void RE_AddAdditiveLightToScene( const vec3_t org, float intensity, float r, float g, float b, int world );
+void RE_AddLinearLightToScene( const vec3_t start, const vec3_t end, float intensity, float r, float g, float b, int world );
+void RE_BeginScene( const refdef_t *fd, int world );
+void RE_RenderScene( const refdef_t *fd, int world );
+
+#else
+
 void RE_AddRefEntityToScene( const refEntity_t *ent, qboolean intShaderTime );
 void RE_AddPolyToScene( qhandle_t hShader , int numVerts, const polyVert_t *verts, int num );
 void RE_AddPolyBufferToScene( polyBuffer_t* pPolyBuffer );
@@ -2288,6 +2347,9 @@ void RE_AddLightToScene( const vec3_t org, float intensity, float r, float g, fl
 void RE_AddAdditiveLightToScene( const vec3_t org, float intensity, float r, float g, float b );
 void RE_BeginScene( const refdef_t *fd );
 void RE_RenderScene( const refdef_t *fd );
+
+#endif
+
 void RE_EndScene( void );
 
 /*
@@ -2469,6 +2531,11 @@ typedef struct {
 typedef enum {
 	RC_END_OF_LIST,
 	RC_SET_COLOR,
+
+#ifdef USE_MULTIVM_RENDERER
+	RC_SET_WORLD,
+#endif
+
 	RC_STRETCH_PIC,
 	RC_DRAW_SURFS,
 	RC_DRAW_BUFFER,
@@ -2486,9 +2553,15 @@ typedef enum {
 // these are sort of arbitrary limits.
 // the limits apply to the sum of all scenes in a frame --
 // the main view, all the 3D icons, etc
+#ifdef USE_MULTIVM_RENDERER
+#define	MAX_POLYS		3000
+#define	MAX_POLYVERTS	15000
+#define MAX_POLYBUFFERS	512
+#else
 #define	MAX_POLYS		600
 #define	MAX_POLYVERTS	3000
 #define MAX_POLYBUFFERS	256
+#endif
 
 // all of the information needed by the back end must be
 // contained in a backEndData_t

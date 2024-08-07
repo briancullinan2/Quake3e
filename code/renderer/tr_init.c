@@ -187,12 +187,25 @@ cvar_t	*r_marksOnTriangleMeshes;
 cvar_t	*r_aviMotionJpegQuality;
 cvar_t	*r_screenshotJpegQuality;
 
-static cvar_t *r_maxpolys;
-static cvar_t* r_maxpolyverts;
-static cvar_t	*r_maxpolybuffers;
+cvar_t	*r_fogDepth;
+cvar_t	*r_fogColor;
+
+cvar_t	*r_maxpolys;
+cvar_t	*r_maxpolyverts;
+cvar_t	*r_maxpolybuffers;
+
+cvar_t  *r_paletteMode;
+
 int		max_polys;
 int		max_polyverts;
 int		max_polybuffers;
+
+#ifdef USE_MULTIVM_RENDERER
+float dvrXScale = 1;
+float dvrYScale = 1;
+float dvrXOffset = 0;
+float dvrYOffset = 0;
+#endif
 
 
 cvar_t  *r_paletteMode;
@@ -1527,7 +1540,11 @@ static void R_Register( void )
 	r_texturebits = ri.Cvar_Get( "r_texturebits", "0", CVAR_ARCHIVE_ND | CVAR_LATCH );
 	ri.Cvar_SetDescription( r_texturebits, "Number of texture bits per texture." );
 
-	r_mergeLightmaps = ri.Cvar_Get( "r_mergeLightmaps", "0", CVAR_ARCHIVE_ND | CVAR_LATCH );
+#if defined(__WASM__) || defined(USE_MULTIVM_SERVER) || defined(USE_MULTIVM_RENDERER)
+	r_mergeLightmaps = ri.Cvar_Get( "r_mergeLightmaps", "0", 0 );
+#else
+	r_mergeLightmaps = ri.Cvar_Get( "r_mergeLightmaps", "1", CVAR_ARCHIVE_ND | CVAR_LATCH );
+#endif
 	ri.Cvar_SetDescription( r_mergeLightmaps, "Merge built-in small lightmaps into bigger lightmaps (atlases)." );
 
 #ifdef USE_VBO
@@ -1547,7 +1564,12 @@ static void R_Register( void )
 	ri.Cvar_SetDescription( r_maxpolys, "Maximum number of polygons to draw in a scene." );
 	r_maxpolyverts = ri.Cvar_Get( "r_maxpolyverts", XSTRING( MAX_POLYVERTS ), CVAR_LATCH );
 	ri.Cvar_SetDescription( r_maxpolyverts, "Maximum number of polygon vertices to draw in a scene." );
+	
+	
 	r_maxpolybuffers = ri.Cvar_Get( "r_maxpolybuffers", va("%i", MAX_POLYBUFFERS), CVAR_LATCH);
+	ri.Cvar_CheckRange( r_maxpolys, va("%i", MAX_POLYS ), NULL, CV_INTEGER );
+	ri.Cvar_CheckRange( r_maxpolyverts, va("%i", MAX_POLYVERTS), NULL, CV_INTEGER );
+	ri.Cvar_CheckRange( r_maxpolybuffers, va("%i", MAX_POLYBUFFERS), NULL, CV_INTEGER );
 
 	//
 	// archived variables that can change at any time
@@ -1672,6 +1694,8 @@ static void R_Register( void )
 	ri.Cvar_SetDescription( r_greyscale, "Desaturate rendered frame, requires \\r_fbo 1." );
 	ri.Cvar_SetGroup( r_greyscale, CVG_RENDERER );
 
+	r_paletteMode = ri.Cvar_Get("r_paletteMode", "0", CVAR_ARCHIVE | CVAR_LATCH);
+	
 	r_edgy = ri.Cvar_Get( "r_edgy", "0", CVAR_ARCHIVE_ND );
 	ri.Cvar_SetGroup( r_edgy, CVG_RENDERER );
 	r_invert = ri.Cvar_Get( "r_invert", "0", CVAR_ARCHIVE_ND );
@@ -1803,7 +1827,15 @@ static void R_Register( void )
 	ri.Cvar_SetDescription( r_flares, "Enables corona effects on light sources." );
 
 #ifdef USE_FBO
+
+#ifdef USE_MULTIVM_RENDERER
+	// TODO: fbo is needed for showing lots of portals
+	// http://www.opengl-tutorial.org/intermediate-tutorials/tutorial-14-render-to-texture/
+	r_fbo = ri.Cvar_Get( "r_fbo", "1", CVAR_ARCHIVE_ND | CVAR_LATCH );
+#else
 	r_fbo = ri.Cvar_Get( "r_fbo", "0", CVAR_ARCHIVE_ND | CVAR_LATCH );
+#endif
+
 	ri.Cvar_SetDescription( r_fbo, "Use framebuffer objects, enables gamma correction in windowed mode and allows arbitrary video size and screenshot/video capture.\n Required for bloom, HDR rendering, anti-aliasing and greyscale effects.\n OpenGL 3.0+ required." );
 
 	r_ext_supersample = ri.Cvar_Get( "r_ext_supersample", "0", CVAR_ARCHIVE_ND | CVAR_LATCH );
@@ -1839,14 +1871,22 @@ void R_Init( void ) {
 	int	err;
 	int i;
 	byte *ptr;
+	int backendSize;
 
 	ri.Printf( PRINT_ALL, "----- R_Init -----\n" );
 
 	// clear all our internal state
+#ifdef USE_MULTIVM_RENDERER
+	Com_Memset( &trWorlds, 0, sizeof( trWorlds ) );
+	Com_Memset( &backEnd, 0, sizeof( backEnd ) );
+	Com_Memset( &tess, 0, sizeof( tess ) );
+	Com_Memset( &glState, 0, sizeof( glState ) );
+#else
 	Com_Memset( &tr, 0, sizeof( tr ) );
 	Com_Memset( &backEnd, 0, sizeof( backEnd ) );
 	Com_Memset( &tess, 0, sizeof( tess ) );
 	Com_Memset( &glState, 0, sizeof( glState ) );
+#endif
 
 	if ( sizeof( glconfig_t ) != 11332 )
 		ri.Error( ERR_FATAL, "Mod ABI incompatible: sizeof(glconfig_t) == %u != 11332", (unsigned int) sizeof( glconfig_t ) );
@@ -1896,14 +1936,38 @@ void R_Init( void ) {
 	R_Register();
 
 	max_polys = r_maxpolys->integer;
-	max_polyverts = r_maxpolyverts->integer;
-	max_polybuffers = r_maxpolybuffers->integer;
+	if (max_polys < MAX_POLYS)
+		max_polys = MAX_POLYS;
 
-	ptr = ri.Hunk_Alloc( sizeof( *backEndData ) + sizeof(srfPoly_t) * max_polys + sizeof(polyVert_t) * max_polyverts + sizeof(srfPolyBuffer_t) * max_polybuffers, h_low);
+	max_polyverts = r_maxpolyverts->integer;
+	if (max_polyverts < MAX_POLYVERTS)
+		max_polyverts = MAX_POLYVERTS;
+
+	max_polybuffers = r_maxpolybuffers->integer;
+	if (max_polybuffers < MAX_POLYBUFFERS)
+		max_polybuffers = MAX_POLYBUFFERS;
+
+#define BACKEND \
+	BASSIGN( backEndData->indexes, int, r_maxpolyverts->integer) \
+	BASSIGN( backEndData->polys, srfPoly_t, r_maxpolys->integer) \
+	BASSIGN( backEndData->polyVerts, polyVert_t, r_maxpolyverts->integer) \
+	BASSIGN( backEndData->polybuffers, srfPolyBuffer_t, r_maxpolybuffers->integer)
+
+	backendSize = sizeof( *backEndData );
+#define BASSIGN(a, t, n) \
+	backendSize += sizeof(t) * n;
+	BACKEND
+	ptr = ri.Hunk_Alloc(backendSize, h_low);	
+#undef BASSIGN
 	backEndData = (backEndData_t *) ptr;
-	backEndData->polys = (srfPoly_t *) ((char *) ptr + sizeof( *backEndData ));
-	backEndData->polyVerts = (polyVert_t *) ((char *) ptr + sizeof( *backEndData ) + sizeof(srfPoly_t) * max_polys);
-	backEndData->polybuffers = (srfPolyBuffer_t *) ((char *) ptr + sizeof( *backEndData ) + sizeof(srfPoly_t) * max_polys + sizeof(polyVert_t) * max_polyverts);
+	ptr += sizeof( *backEndData );
+#define BASSIGN(a, t, n) \
+	a = (t *) ((char *) ptr); \
+	ptr += sizeof(t) * n;
+	BACKEND
+#undef BACKEND
+#undef BASSIGN
+
 
 	R_InitNextFrame();
 
@@ -1997,6 +2061,28 @@ static void RE_EndRegistration( void ) {
 }
 
 
+
+
+#ifdef USE_LAZY_MEMORY
+#ifdef USE_MULTIVM_RENDERER
+void RE_SetDvrFrame(float x, float y, float width, float height) {
+	dvrXScale = width;
+	dvrYScale = height;
+	dvrXOffset = x;
+	dvrYOffset = y;
+}
+#endif
+#endif
+
+
+static const cplane_t *RE_GetFrustum( void )
+{
+	return tr.viewParms.frustum;
+}
+
+
+
+
 /*
 @@@@@@@@@@@@@@@@@@@@@
 GetRefAPI
@@ -2071,6 +2157,15 @@ refexport_t *GetRefAPI ( int apiVersion, refimport_t *rimp ) {
 	re.SyncRender = RE_SyncRender;
 
 	re.AddPolyBufferToScene =   RE_AddPolyBufferToScene;
+  re.GetFrustum = RE_GetFrustum;
+
+#if defined(USE_MULTIVM_RENDERER) || defined(USE_MULTIVM_SERVER)
+	re.InitShaders = R_InitShaders;
+#endif
+
+#ifdef USE_MULTIVM_RENDERER
+	re.SetDvrFrame = RE_SetDvrFrame;
+#endif
 
 	return &re;
 }

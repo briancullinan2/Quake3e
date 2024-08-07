@@ -220,6 +220,34 @@ void	R_AddPostProcessCmd( void ) {
 	cmd->viewParms = tr.viewParms;
 }
 
+
+#ifdef USE_MULTIVM_RENDERER
+void R_SetWorld(viewParms_t *oldParms, viewParms_t *newParms) {
+	// first, add a world command to this world to switch command buffers
+	int previous = rwi;
+	setWorldCommand_t	*cmd1;
+	cmd1 = R_GetCommandBuffer( sizeof( *cmd1 ) );
+	cmd1->commandId = RC_SET_WORLD;
+	cmd1->world = newParms->newWorld;
+
+	// render commands on newWorld command buffer
+	R_RenderView( newParms );
+	// TODO: fix oldParms should come from newWorld?
+	tr.viewParms = *oldParms; // happens in new world, so reset in new world before `rwi` changes
+
+	// then add a command to switch back to original world
+	setWorldCommand_t	*cmd3;
+	cmd3 = R_GetCommandBuffer( sizeof( *cmd3 ) );
+	cmd3->commandId = RC_SET_WORLD;
+	cmd3->world = previous;
+	// update the skip command (cmd2) to skip the number of commands this render added
+	cmd1->next = (const void *)(cmd3 + 1);
+
+	rwi = 0;
+}
+#endif
+
+
 /*
 =============
 RE_SetColor
@@ -269,10 +297,19 @@ void RE_StretchPic ( float x, float y, float w, float h,
 	}
 	cmd->commandId = RC_STRETCH_PIC;
 	cmd->shader = R_GetShaderByHandle( hShader );
+
+#ifdef USE_MULTIVM_RENDERER
+	cmd->x = x * dvrXScale + (dvrXOffset * glConfig.vidWidth);
+	cmd->y = y * dvrYScale + (dvrYOffset * glConfig.vidHeight);
+	cmd->w = w * dvrXScale;
+	cmd->h = h * dvrYScale;
+#else
 	cmd->x = x;
 	cmd->y = y;
 	cmd->w = w;
 	cmd->h = h;
+#endif
+
 	cmd->s1 = s1;
 	cmd->t1 = t1;
 	cmd->s2 = s2;

@@ -284,6 +284,8 @@ static float R_ProcessLightmap( byte *image, const byte *buf_p, float maxIntensi
 }
 
 
+#if !defined(__WASM__) && !defined(USE_MULTIVM_SERVER) && !defined(USE_MULTIVM_CLIENT)
+
 static int SetLightmapParams( int numLightmaps, int maxTextureSize )
 {
 	lightmapWidth = log2pad( LIGHTMAP_LEN, 1 );
@@ -312,6 +314,7 @@ static int SetLightmapParams( int numLightmaps, int maxTextureSize )
 	return numLightmaps;
 }
 
+#endif
 
 int R_GetLightmapCoords( const int lightmapIndex, float *x, float *y )
 {
@@ -326,6 +329,7 @@ int R_GetLightmapCoords( const int lightmapIndex, float *x, float *y )
 	return lightmapNum;
 }
 
+#if !defined(__WASM__) && !defined(USE_MULTIVM_SERVER) && !defined(USE_MULTIVM_CLIENT)
 
 /*
 ===============
@@ -387,6 +391,7 @@ static void R_LoadMergedLightmaps( const lump_t *l, byte *image )
 	//}
 }
 
+#endif
 
 /*
 ===============
@@ -422,6 +427,7 @@ static void R_LoadLightmaps( const lump_t *l ) {
 
 	numLightmaps = l->filelen / (LIGHTMAP_SIZE * LIGHTMAP_SIZE * 3);
 
+#if !defined(__WASM__) && !defined(USE_MULTIVM_SERVER) && !defined(USE_MULTIVM_CLIENT)
 	if ( r_mergeLightmaps->integer && numLightmaps > 1 ) {
 		// check for low texture sizes
 		if ( glConfig.maxTextureSize >= LIGHTMAP_LEN * 2 ) {
@@ -430,6 +436,7 @@ static void R_LoadLightmaps( const lump_t *l ) {
 			return;
 		}
 	}
+#endif
 
 	buf = fileBase + l->fileofs;
 

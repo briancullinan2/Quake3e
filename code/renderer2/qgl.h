@@ -46,7 +46,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #elif defined( __linux__ ) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined( __sun )
 #include <GL/gl.h>
 #include <GL/glx.h>
-#elif defined(__APPLE__)
+#elif defined(__APPLE__) || defined(__APPLE_CC__)
 #define GL_NUM_EXTENSIONS                 0x821D
 #include <OpenGL/gl.h>
 #include <OpenGL/glext.h>
@@ -64,6 +64,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 #if !defined(__sun)
 
+#define GL_NUM_EXTENSIONS                   0x821D
 #define GL_ACTIVE_TEXTURE_ARB               0x84E0
 #define GL_CLIENT_ACTIVE_TEXTURE_ARB        0x84E1
 #define GL_MAX_ACTIVE_TEXTURES_ARB          0x84E2
@@ -216,19 +217,28 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 	GLE(void, CompressedTexImage2D, GLenum target, GLint level, GLenum internalformat, GLsizei width, GLsizei height, GLint border, GLsizei imageSize, const void *data) \
 	GLE(void, CompressedTexSubImage2D, GLenum target, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLsizei imageSize, const void *data) \
 
-// OpenGL 1.5, was GL_ARB_vertex_buffer_object and GL_ARB_occlusion_query
-#define QGL_1_5_PROCS \
+  // GL_ARB_occlusion_query, built-in to OpenGL 1.5 but not OpenGL ES 2.0
+#define QGL_ARB_occlusion_query_PROCS \
 	GLE(void, GenQueries, GLsizei n, GLuint *ids) \
 	GLE(void, DeleteQueries, GLsizei n, const GLuint *ids) \
 	GLE(void, BeginQuery, GLenum target, GLuint id) \
 	GLE(void, EndQuery, GLenum target) \
 	GLE(void, GetQueryObjectiv, GLuint id, GLenum pname, GLint *params) \
 	GLE(void, GetQueryObjectuiv, GLuint id, GLenum pname, GLuint *params) \
+
+// OpenGL 1.5, was GL_ARB_vertex_buffer_object and GL_ARB_occlusion_query
+#define QGL_1_5_PROCS \
 	GLE(void, BindBuffer, GLenum target, GLuint buffer) \
 	GLE(void, DeleteBuffers, GLsizei n, const GLuint *buffers) \
 	GLE(void, GenBuffers, GLsizei n, GLuint *buffers) \
 	GLE(void, BufferData, GLenum target, GLsizeiptr size, const void *data, GLenum usage) \
 	GLE(void, BufferSubData, GLenum target, GLintptr offset, GLsizeiptr size, const void *data) \
+  GLE(GLboolean, UnmapBuffer, GLenum target) \
+  GLE(void *, MapBufferRange, GLenum target, GLintptr offset, GLsizeiptr length, GLbitfield access) \
+  GLE(void, ReadBuffer, GLenum mode ) \
+  GLE(void, DrawBuffers, GLsizei n, const GLenum *bufs) \
+
+//  GLE(void *, MapBuffer, GLenum target, GLenum access) \
 
 // OpenGL 2.0, was GL_ARB_shading_language_100, GL_ARB_vertex_program, GL_ARB_shader_objects, and GL_ARB_vertex_shader
 #define QGL_2_0_PROCS \
@@ -312,7 +322,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 // OpenGL 3.0 specific
 #define QGL_3_0_PROCS \
-	GLE(const GLubyte *, GetStringi, GLenum name, GLuint index) \
+	GLE(const GLubyte *, GetStringi, GLenum name, GLuint index)
+	
 
 // GL_ARB_framebuffer_object, built-in to OpenGL 3.0
 #define QGL_ARB_framebuffer_object_PROCS \
@@ -399,6 +410,7 @@ QGL_1_3_PROCS;
 QGL_1_5_PROCS;
 QGL_2_0_PROCS;
 QGL_3_0_PROCS;
+QGL_ARB_occlusion_query_PROCS;
 QGL_ARB_framebuffer_object_PROCS;
 QGL_ARB_vertex_array_object_PROCS;
 QGL_EXT_direct_state_access_PROCS;
