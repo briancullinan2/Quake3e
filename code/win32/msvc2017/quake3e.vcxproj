@@ -333,6 +333,7 @@
     <ClCompile Include="..\..\server\sv_init.c" />
     <ClCompile Include="..\..\server\sv_main.c" />
     <ClCompile Include="..\..\server\sv_net_chan.c" />
+    <ClCompile Include="..\..\server\sv_teleport.c" />
     <ClCompile Include="..\..\server\sv_snapshot.c" />
     <ClCompile Include="..\..\server\sv_world.c" />
     <ClCompile Include="..\win_input.c" />
