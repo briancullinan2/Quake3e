@@ -838,7 +838,7 @@ typedef struct
 
 typedef struct objGroup_s
 {
-	surfaceType_t		surfaceType:SF_OBJ;		// any of surface*_t
+	surfaceType_t		surfaceType;		// any of surface*_t
 
   char name[MAX_QPATH];
   int firstVertex;

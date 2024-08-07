@@ -387,7 +387,7 @@ static float *data1f1, *data1f2, *data1f3;
 static byte *data4b;
 
 
-static void SV_InitData() {
+static void SV_InitData( void ) {
 	sv_bspMiniSize = Cvar_Get( "sv_bspMiniSize", "512", CVAR_TEMP );
 	sv_bspMiniGrid = Cvar_Get( "sv_bspMiniGrid", "16", CVAR_TEMP );
 
@@ -501,8 +501,8 @@ static void ScaleColorChannel(int channel, int pass, int clamped, float length) 
 //   1) an area trace on surfaces to find textures
 //   2) the length of vectors between wals
 //   3) types of surfaces
-void SV_MakeMinimap() {
-	vec3_t size, angle, opposite, forward, right, up;
+void SV_MakeMinimap( void ) {
+	vec3_t size, angle; //, opposite, forward, right, up;
 	vec3_t scale, newMins, newMaxs;
 	float length;
 	char command[MAX_STRING_CHARS];
@@ -542,7 +542,7 @@ void SV_MakeMinimap() {
 		angle[0] = 89.9f;
 		angle[1] = 0.01f;
 		angle[2] = 0.01f;
-		VectorScale(opposite, -3, opposite);
+		//VectorScale(opposite, -3, opposite);
 	}
 	//AngleVectors(angle, forward, right, up);
 	VectorCopy(cm.cmodels[0].mins, newMins);
