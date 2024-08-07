@@ -244,7 +244,7 @@ static qhandle_t R_RegisterOBJ(const char *name, model_t *mod)
 		return 0;
 	}
 	
-	loaded = R_LoadOBJ(mod, buf.u, filesize, name);
+	//loaded = R_LoadOBJ(mod, buf.u, filesize, name);
 
 	ri.FS_FreeFile (buf.v);
 	
