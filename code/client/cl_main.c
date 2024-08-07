@@ -54,7 +54,7 @@ cvar_t	*cl_activeAction;
 cvar_t	*cl_motdString;
 
 cvar_t	*cl_allowDownload;
-#ifdef USE_CURL
+#if defined(USE_CURL) || defined(__WASM__)
 cvar_t	*cl_mapAutoDownload;
 #endif
 cvar_t	*cl_conXOffset;
@@ -94,9 +94,29 @@ cvar_t *cl_stencilbits;
 cvar_t *cl_depthbits;
 cvar_t *cl_drawBuffer;
 
+cvar_t  *cl_nopredict;
+cvar_t  *cl_lagometer;
+cvar_t  *cl_drawFPS;
+cvar_t  *cl_snaps;
+
+cvar_t *cl_birdsEye;
+cvar_t *sv_birdsEye;
+
+
+#ifdef USE_MASTER_LAN
+cvar_t	*cl_master[MAX_MASTER_SERVERS];		// master server ip address
+#endif
+
+
+
 clientActive_t		cl;
 clientConnection_t	clc;
 clientStatic_t		cls;
+
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+cvar_t  *cl_mvHighlight;
+#endif
+
 vm_t				*cgvm = NULL;
 
 netadr_t			rcon_address;
@@ -107,6 +127,12 @@ static	qboolean	noGameRestart = qfalse;
 
 #ifdef USE_CURL
 download_t			download;
+#endif
+
+#ifdef __WASM__
+cvar_t  *cl_returnURL;
+
+void			*download;
 #endif
 
 // Structure containing functions exported from refresh DLL
@@ -135,7 +161,7 @@ static void CL_ServerStatus_f( void );
 static void CL_ServerStatusResponse( const netadr_t *from, msg_t *msg );
 static void CL_ServerInfoPacket( const netadr_t *from, msg_t *msg );
 
-#ifdef USE_CURL
+#if defined(USE_CURL) || defined(__WASM__) 
 static void CL_Download_f( void );
 #endif
 static void CL_LocalServers_f( void );
@@ -335,6 +361,9 @@ static void CL_WriteGamestate( qboolean initial )
 	int			len;
 	entityState_t	*ent;
 	entityState_t	nullstate;
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+	int igs = cgvmi_ref;
+#endif
 
 	// write out the gamestate message
 	MSG_Init( &msg, bufData, MAX_MSGLEN );
@@ -414,6 +443,9 @@ static void CL_EmitPacketEntities( clSnapshot_t *from, clSnapshot_t *to, msg_t *
 	int		oldindex, newindex;
 	int		oldnum, newnum;
 	int		from_num_entities;
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+	int igs = cgvmi_ref;
+#endif
 
 	// generate the delta update
 	if ( !from ) {
@@ -476,7 +508,13 @@ static void CL_EmitPacketEntities( clSnapshot_t *from, clSnapshot_t *to, msg_t *
 CL_WriteSnapshot
 ====================
 */
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+#undef snap
+#endif
 static void CL_WriteSnapshot( void ) {
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+	int igs = cgvmi_ref;
+#endif
 
 	static	clSnapshot_t saved_snap;
 	static entityState_t saved_ents[ MAX_SNAPSHOT_ENTITIES ];
@@ -485,8 +523,11 @@ static void CL_WriteSnapshot( void ) {
 	byte	bufData[ MAX_MSGLEN_BUF ];
 	msg_t	msg;
 	int		i, len;
-
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+	snap = &cl.snapshots[ cl.snapWorlds[cgvmi_ref].messageNum & PACKET_MASK ]; // current snapshot
+#else
 	snap = &cl.snapshots[ cl.snap.messageNum & PACKET_MASK ]; // current snapshot
+#endif
 	//if ( !snap->valid ) // should never happen?
 	//	return;
 
@@ -1003,6 +1044,9 @@ void CL_ShutdownAll( void ) {
 #ifdef USE_CURL
 	CL_cURL_Shutdown();
 #endif
+#ifdef __WASM__
+	Com_DL_Cleanup( &download );
+#endif
 
 	// clear and mute all sounds until next registration
 	S_DisableSounds();
@@ -1039,8 +1083,14 @@ void CL_ClearMemory( void ) {
 		// clear collision map data
 		CM_ClearMap();
 	} else {
+#ifdef USE_MULTIVM_SERVER
+		// clear to mark doesn't work in multivm mode because there are many marks
+		Hunk_Clear();
+    CM_ClearMap();
+#else
 		// clear all the client data on the hunk
 		Hunk_ClearToMark();
+#endif
 	}
 }
 
@@ -1074,6 +1124,9 @@ memory on the hunk from cgame, ui, and renderer
 =====================
 */
 void CL_MapLoading( void ) {
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+	int igs = cgvmi_ref;
+#endif
 	if ( com_dedicated->integer ) {
 		cls.state = CA_DISCONNECTED;
 		Key_SetCatcher( KEYCATCH_CONSOLE );
@@ -1095,7 +1148,7 @@ void CL_MapLoading( void ) {
 		Com_Memset( &cl.gameState, 0, sizeof( cl.gameState ) );
 		clc.lastPacketSentTime = cls.realtime - 9999;  // send packet immediately
 		cls.framecount++;
-		SCR_UpdateScreen();
+		SCR_UpdateScreen( qfalse );
 	} else {
 		// clear nextmap so the cinematic shutdown doesn't execute it
 		Cvar_Set( "nextmap", "" );
@@ -1104,7 +1157,7 @@ void CL_MapLoading( void ) {
 		cls.state = CA_CHALLENGING;		// so the connect screen is drawn
 		Key_SetCatcher( 0 );
 		cls.framecount++;
-		SCR_UpdateScreen();
+		SCR_UpdateScreen( qfalse );
 		clc.connectTime = -RETRANSMIT_TIMEOUT;
 		NET_StringToAdr( cls.servername, &clc.serverAddress, NA_UNSPEC );
 		// we don't need a challenge on the localhost
@@ -1234,7 +1287,7 @@ qboolean CL_Disconnect( qboolean showMainMenu ) {
 	if ( CL_VideoRecording() ) {
 		// Finish rendering current frame
 		cls.framecount++;
-		SCR_UpdateScreen();
+		SCR_UpdateScreen( qfalse );
 		CL_CloseAVI( qfalse );
 	}
 
@@ -1294,6 +1347,14 @@ qboolean CL_Disconnect( qboolean showMainMenu ) {
 		cl_restarted = CL_RestoreOldGame();
 
 	cl_disconnecting = qfalse;
+
+#if 0 //def __WASM__
+extern void Sys_Return( void );
+
+	if(showMainMenu) {
+		Sys_Return();
+	}
+#endif
 
 	return cl_restarted;
 }
@@ -1510,7 +1571,9 @@ void CL_Disconnect_f( void ) {
 			}
 			Cvar_Set( "com_errorMessage", "" );
 			if ( !CL_Disconnect( qfalse ) ) { // restart client if not done already
+//#ifndef __WASM__
 				CL_FlushMemory();
+//#endif
 			}
 			if ( uivm ) {
 				VM_Call( uivm, 1, UI_SET_ACTIVE_MENU, UIMENU_MAIN );
@@ -1900,6 +1963,9 @@ CL_Configstrings_f
 static void CL_Configstrings_f( void ) {
 	int		i;
 	int		ofs;
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+	int igs = cgvmi_ref;
+#endif
 
 	if ( cls.state != CA_ACTIVE ) {
 		Com_Printf( "Not connected to a server.\n");
@@ -1926,7 +1992,12 @@ static void CL_Clientinfo_f( void ) {
 	Com_Printf( "state: %i\n", cls.state );
 	Com_Printf( "Server: %s\n", cls.servername );
 	Com_Printf ("User info settings:\n");
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+// TODO: something here
+  Info_Print( Cvar_InfoString( CVAR_USERINFO, NULL ) );
+#else
 	Info_Print( Cvar_InfoString( CVAR_USERINFO, NULL ) );
+#endif
 	Com_Printf( "--------------------------------------\n" );
 }
 
@@ -1939,12 +2010,20 @@ CL_Serverinfo_f
 static void CL_Serverinfo_f( void ) {
 	int		ofs;
 
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+	ofs = cl.gameStates[cgvmi_ref].stringOffsets[ CS_SERVERINFO ];
+#else
 	ofs = cl.gameState.stringOffsets[ CS_SERVERINFO ];
+#endif
 	if ( !ofs )
 		return;
 
 	Com_Printf( "Server info settings:\n" );
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+	Info_Print( cl.gameStates[cgvmi_ref].stringData + ofs );
+#else
 	Info_Print( cl.gameState.stringData + ofs );
+#endif
 }
 
 
@@ -1956,12 +2035,20 @@ CL_Systeminfo_f
 static void CL_Systeminfo_f( void ) {
 	int ofs;
 
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+	ofs = cl.gameStates[cgvmi_ref].stringOffsets[ CS_SYSTEMINFO ];
+#else
 	ofs = cl.gameState.stringOffsets[ CS_SYSTEMINFO ];
+#endif
 	if ( !ofs )
 		return;
 
 	Com_Printf( "System info settings:\n" );
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+	Info_Print( cl.gameStates[cgvmi_ref].stringData + ofs );
+#else
 	Info_Print( cl.gameState.stringData + ofs );
+#endif
 }
 
 
@@ -2036,11 +2123,22 @@ static void CL_DownloadsComplete( void ) {
 	// this will also (re)load the UI
 	// if this is a local client then only the client part of the hunk
 	// will be cleared, note that this is done after the hunk mark has been set
-	//if ( !com_sv_running->integer )
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
+	// TODO: cl_norenderRestart
+	
+	re.InitShaders();
+	S_Shutdown();
+	CL_ShutdownVMs();
+	CL_StartHunkUsers();
+#else
 	CL_FlushMemory();
+#endif
+
+
 
 	// initialize the CGame
 	cls.cgameStarted = qtrue;
+
 	CL_InitCGame();
 
 	if ( clc.demofile == FS_INVALID_HANDLE ) {
@@ -2134,7 +2232,7 @@ void CL_NextDownload( void )
 		else
 			s = localName + strlen(localName); // point at the null byte
 
-#ifdef USE_CURL
+#if defined(USE_CURL) || defined(__WASM__)
 		if(!(cl_allowDownload->integer & DLF_NO_REDIRECT)) {
 			if(clc.sv_allowDownload & DLF_NO_REDIRECT) {
 				Com_Printf("WARNING: server does not "
@@ -2147,13 +2245,19 @@ void CL_NextDownload( void )
 					"download redirection, but does not "
 					"have sv_dlURL set\n");
 			}
+#ifndef __WASM__
 			else if(!CL_cURL_Init()) {
 				Com_Printf("WARNING: could not load "
 					"cURL library\n");
 			}
+#endif
 			else {
+#ifdef __WASM__
+				CL_cURL_BeginDownload( localName, remoteName );
+#else
 				CL_cURL_BeginDownload(localName, va("%s/%s",
 					clc.sv_dlURL, remoteName));
+#endif
 				useCURL = qtrue;
 			}
 		}
@@ -2198,6 +2302,12 @@ and determine if we need to download them
 =================
 */
 void CL_InitDownloads( void ) {
+#ifdef USE_MULTIVM_RENDERER
+#ifdef USE_CURL
+	int igs = cgvmi_ref;
+#endif
+#endif
+
 
 	if ( !(cl_allowDownload->integer & DLF_ENABLE) )
 	{
@@ -2215,8 +2325,6 @@ void CL_InitDownloads( void ) {
 		}
 	}
 	else if ( FS_ComparePaks( clc.downloadList, sizeof( clc.downloadList ) , qtrue ) ) {
-
-		Com_Printf( "Need paks: %s\n", clc.downloadList );
 
 		if ( *clc.downloadList ) {
 			// if autodownloading is not enabled on the server
@@ -2303,7 +2411,11 @@ static void CL_CheckForResend( void ) {
 		port = Cvar_VariableIntegerValue( "net_qport" );
 
 		infoTruncated = qfalse;
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+    Q_strncpyz( info, Cvar_InfoString( CVAR_USERINFO, &infoTruncated ), sizeof( info ) );
+#else
 		Q_strncpyz( info, Cvar_InfoString( CVAR_USERINFO, &infoTruncated ), sizeof( info ) );
+#endif
 
 		// remove some non-important keys that may cause overflow during connection
 		if ( strlen( info ) > MAX_USERINFO_LENGTH - 64 ) {
@@ -2493,12 +2605,43 @@ static void CL_ServersResponsePacket( const netadr_t* from, msg_t *msg, qboolean
 	byte*			buffptr;
 	byte*			buffend;
 	serverInfo_t	*server;
+	serverInfo_t *servers = &cls.globalServers[0];
+	int	*max = &cls.numglobalservers;
+
+#ifdef USE_MASTER_LAN
+	qboolean websocket = qfalse;
+
+	// check if server response is from a specific list
+	netadr_t addr;
+	if(cls.pingUpdateSource == AS_LOCAL) {
+		for (i = 0; i < MAX_MASTER_SERVERS; i++) {
+			memset(&addr, 0, sizeof(addr));
+			if(!cl_master[i]->string[0]) {
+				continue;
+			}
+
+			if(!NET_StringToAdr(cl_master[i]->string, &addr, NA_UNSPEC)) {
+				continue;
+			}
+
+			if (NET_CompareAdr(from, &addr)) {
+				servers = &cls.localServers[0];
+				max = &cls.numlocalservers;
+				if(!Q_stricmpn(addr.protocol, "ws", 2)
+				 	|| !Q_stricmpn(addr.protocol, "wss", 3)) {
+					websocket = qtrue;
+				}
+				break;
+			}
+		}
+	}
+#endif
 
 	//Com_Printf("CL_ServersResponsePacket\n"); // moved down
 
-	if (cls.numglobalservers == -1) {
+	if (*max == -1) {
 		// state to detect lack of servers or lack of response
-		cls.numglobalservers = 0;
+		*max = 0;
 		cls.numGlobalServerAddresses = 0;
 		hash_reset();
 	}
@@ -2566,7 +2709,7 @@ static void CL_ServersResponsePacket( const netadr_t* from, msg_t *msg, qboolean
 			break;
 	}
 
-	count = cls.numglobalservers;
+	count = *max;
 
 	for (i = 0; i < numservers && count < MAX_GLOBAL_SERVERS; i++) {
 
@@ -2579,7 +2722,7 @@ static void CL_ServersResponsePacket( const netadr_t* from, msg_t *msg, qboolean
 		hash_insert( &addresses[i] );
 
 		// build net address
-		server = &cls.globalServers[count];
+		server = &servers[count];
 
 		CL_InitServerInfo( server, &addresses[i] );
 		// advance to next slot
@@ -2597,7 +2740,7 @@ static void CL_ServersResponsePacket( const netadr_t* from, msg_t *msg, qboolean
 		}
 	}
 
-	cls.numglobalservers = count;
+	*max = count;
 	total = count + cls.numGlobalServerAddresses;
 
 	Com_Printf( "getserversResponse:%3d servers parsed (total %d)\n", numservers, total);
@@ -2964,7 +3107,11 @@ static void CL_CheckUserinfo( void ) {
 
 		cvar_modifiedFlags &= ~CVAR_USERINFO;
 
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
 		info = Cvar_InfoString( CVAR_USERINFO, &infoTruncated );
+#else
+		info = Cvar_InfoString( CVAR_USERINFO, &infoTruncated );
+#endif
 		if ( strlen( info ) > MAX_USERINFO_LENGTH || infoTruncated ) {
 			Com_Printf( S_COLOR_YELLOW "WARNING: oversize userinfo, you might be not able to play on remote server!\n" );
 		}
@@ -3004,7 +3151,7 @@ void CL_Frame( int msec, int realMsec ) {
 			cls.frametime = msec;
 			cls.realtime += msec;
 			cls.framecount++;
-			SCR_UpdateScreen();
+			SCR_UpdateScreen( qfalse );
 			S_Update( realMsec );
 			Con_RunConsole();
 			return;
@@ -3110,7 +3257,7 @@ void CL_Frame( int msec, int realMsec ) {
 
 	// update the screen
 	cls.framecount++;
-	SCR_UpdateScreen();
+	SCR_UpdateScreen( qfalse );
 
 	// update audio
 	S_Update( realMsec );
@@ -3194,6 +3341,18 @@ CL_InitRenderer
 */
 static void CL_InitRenderer( void ) {
 
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+	if(cls.state > CA_CONNECTING) {
+		cgvmi_ref = clc.selectedWorld;
+	} else {
+		cgvmi_ref = 0;
+	}
+  clientScreens[0][0] = 
+	clientScreens[0][1] = 0;
+	clientScreens[0][2] = 
+	clientScreens[0][3] = 1;
+#endif
+
 	// fixup renderer -EC-
 	if ( !re.BeginRegistration ) {
 		CL_InitRef();
@@ -3228,6 +3387,9 @@ static void CL_InitRenderer( void ) {
 	SCR_Init();
 }
 
+#ifdef __WASM__
+extern	qboolean	first_click;
+#endif
 
 /*
 ============================
@@ -3238,6 +3400,9 @@ This is the only place that any of these functions are called from
 ============================
 */
 void CL_StartHunkUsers( void ) {
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+	int igs = cgvmi_ref;
+#endif
 
 	if ( !com_cl_running || !com_cl_running->integer ) {
 		return;
@@ -3269,6 +3434,9 @@ void CL_StartHunkUsers( void ) {
 		CL_InitRenderer();
 	}
 
+#ifdef __WASM__
+	if(!first_click)
+#endif
 	if ( !cls.soundStarted ) {
 		cls.soundStarted = qtrue;
 		S_Init();
@@ -3282,6 +3450,10 @@ void CL_StartHunkUsers( void ) {
 	if ( !cls.uiStarted ) {
 		cls.uiStarted = qtrue;
 		CL_InitUI();
+	}
+
+	if(!cls.uiStarted) {
+		Key_SetCatcher( Key_GetCatcher( ) | KEYCATCH_CONSOLE );
 	}
 }
 
@@ -3346,6 +3518,16 @@ static void CL_SetScaling( float factor, int captureWidth, int captureHeight ) {
 	cls.captureWidth = captureWidth;
 	cls.captureHeight = captureHeight;
 }
+
+#ifdef __WASM__
+
+void CL_R_FinishImage3( void *img, byte *pic, int picFormat, int numMips ) {
+	if(re.FinishImage3) {
+		re.FinishImage3(img, pic, picFormat, numMips);
+	}
+}
+
+#endif
 
 
 /*
@@ -3449,9 +3631,11 @@ static void CL_InitRef( void ) {
 	rimp.CIN_RunCinematic = CIN_RunCinematic;
 
 	rimp.CL_WriteAVIVideoFrame = CL_WriteAVIVideoFrame;
+#ifndef __WASM__
 	rimp.CL_SaveJPGToBuffer = CL_SaveJPGToBuffer;
 	rimp.CL_SaveJPG = CL_SaveJPG;
 	rimp.CL_LoadJPG = CL_LoadJPG;
+#endif
 
 	rimp.CL_IsMinimized = CL_IsMininized;
 	rimp.CL_SetScaling = CL_SetScaling;
@@ -3825,6 +4009,11 @@ static void CL_InitGLimp_Cvars( void )
 
 	cl_drawBuffer = Cvar_Get( "r_drawBuffer", "GL_BACK", CVAR_CHEAT );
 	Cvar_SetDescription( cl_drawBuffer, "Specifies buffer to draw from: GL_FRONT or GL_BACK." );
+
+	cl_birdsEye = Cvar_Get( "cg_birdsEye", "0", 0 );
+	sv_birdsEye = Cvar_Get( "g_birdsEye", "0", 0 );
+
+
 #ifdef USE_RENDERER_DLOPEN
 #ifdef RENDERER_DEFAULT
 	cl_renderer = Cvar_Get( "cl_renderer", XSTRING( RENDERER_DEFAULT ), CVAR_ARCHIVE | CVAR_LATCH );
@@ -3838,6 +4027,265 @@ static void CL_InitGLimp_Cvars( void )
 	}
 #endif
 }
+
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+
+extern int worldMaps[MAX_NUM_VMS];
+
+void CL_LoadVM_f( void ) {
+	const char *name;
+	
+	if ( Cmd_Argc() < 2 ) {
+		Com_Printf( "Usage: %s <game|cgame|ui|demo> [mapname]\n", Cmd_Argv( 0 ) );
+		return;
+	}
+
+	name = Cmd_Argv( 1 );
+
+	if ( !Q_stricmp( name, "game" ) ) {
+		CL_AddReliableCommand( va("load %s", Cmd_ArgsFrom(1)), qfalse );
+		//CL_ForwardCommandToServer("load game");
+		return;
+
+
+	} else 
+#if 0 //def USE_MULTIVM_CLIENT
+	if ( !Q_stricmp( name, "cgame" )
+    || !Q_stricmp( name, "demo" )) {
+		if(Cmd_Argc() > 3) {
+			Com_Printf( "Usage: %s <game|cgame|ui|demo> [numclient]\n", Cmd_Argv( 0 ) );
+			return;
+		}
+
+		int i;
+		for(i = 0; i < MAX_NUM_VMS; i++) {
+			if(cgvmWorlds[i]);
+			else {
+				cgvmi = i;
+				break;
+			}
+		}
+    if(!Q_stricmp( name, "demo" )) {
+      CL_PlayDemo_f();
+    } else {
+		  CL_InitCGame(cgvmi); // createNew if cgvmWorlds[cgvmi] is already taken
+		}
+		return;
+	} else if ( !Q_stricmp( name, "ui" ) ) {
+		int i;
+		for(i = 0; i < MAX_NUM_VMS; i++) {
+			if(uivmWorlds[i]);
+			else {
+				uivmi = i; // this looks like it isn't used until compiler templates run
+                   //   and everything past this point uses it like uivms[uivmi]
+				break;
+			}
+		}
+		CL_InitUI(qtrue);
+		uivmi = 0;
+		return;
+  } else 
+#endif
+	if (FS_SV_FOpenFileRead(va("maps/%s.bsp", name), NULL)) {
+    int i;
+    for(i = 0; i < MAX_NUM_VMS; i++) {
+			if(worldMaps[i] > -1);
+      else {
+        worldMaps[i] = re.LoadWorld( va("maps/%s.bsp", name) );
+        Com_Printf("World loaded on %i\n", i);
+        break;
+      }
+    }
+    return;
+  } else {
+		Com_Printf( " unknown VM name '%s'\n", name );
+		return;
+	}
+	//Cbuf_AddText("vid_restart fast\n");
+}
+
+void CL_Tele_f ( void ) {
+	if ( Cmd_Argc() > 4 || Cmd_Argc() == 2 ) {
+		Com_Printf ("Usage: tele [xcoord zcoord ycoord]\n");
+		return;
+	}
+
+	CL_AddReliableCommand( va("tele %s", Cmd_ArgsFrom(1)), qfalse );
+}
+
+#endif
+
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+void CL_Game_f ( void ) {
+	// must spy on game command so we can switch cgvmi_ref to the right view when it starts receiving packets
+	if ( Cmd_Argc() > 3 || cls.state < CA_PRIMED) {
+		if(cls.state < CA_PRIMED) {
+			Com_Printf("Not connected to server.\n");
+		}
+		Com_Printf ("Usage: game [0/1/2 moveorigin] [num] (<client>)\n");
+		return;
+	}
+	const char *i = Cmd_Argv(2);
+	if(i[0] != '\0') {
+		clc.selectedWorld = atoi(i);
+	} else {
+		clc.selectedWorld++;
+	}
+	if(clc.selectedWorld < 0 || clc.selectedWorld >= MAX_NUM_VMS) {
+		clc.selectedWorld = 0;
+	}
+	cls.state = CA_PRIMED;
+	if(Cmd_Argc() < 2) {
+		CL_AddReliableCommand( va("game 0 %i %i", clc.selectedWorld, clc.clientNum), qfalse );
+	} else {
+		CL_AddReliableCommand( va("game %i %i %i", atoi(Cmd_Argv(1)), clc.selectedWorld, clc.clientNum), qfalse );
+	}
+}
+
+
+void CL_Tile_f( void ) {
+	int clientNum, i, x, y, xMaxVMs, yMaxVMs, count = 0;
+	if(Cmd_Argc() == 1 || Cmd_Argc() > 4 || clc.sv_mvWorld) {
+		if(Cmd_Argc() == 1) {
+			for(int i = 0; i < MAX_NUM_VMS; i++) {
+				if(clientScreens[i][0] > -1) {
+					Com_Printf( "[VM:%i] Game: %fx%f (%fx%f)\n", 
+						i, 
+						clientScreens[i][0], clientScreens[i][1],
+					 	clientScreens[i][2], clientScreens[i][3]);
+				}
+			}
+		} else if (clc.sv_mvWorld) {
+			Com_Printf("In server world mode, no tiling.\n");
+			return; // silently disable on this server, world messages are sent
+		}
+		Com_Printf ("Usage: tile [x y] [clientnum]\n");
+		return;
+	}
+	for(i = 0; i < MAX_NUM_VMS; i++) {
+		if(!cl.serverTimes[i]) continue;
+		if(clientScreens[i][0] > -1) count++;
+	}
+	if(Cmd_Argc() == 3 || Cmd_Argc() == 4) {
+		if(Cmd_Argc() == 4) {
+			char world[16];
+			strcpy(world, Cmd_Argv(3));
+			if(world[1] == ':') {
+				world[1] = '\0';
+				clientNum = atoi(world);
+			} else {
+				clientNum = atoi(world);
+			}
+		} else
+			clientNum = clc.selectedClient;
+		x = atoi(Cmd_Argv(1));
+		y = atoi(Cmd_Argv(2));
+		// if it was disabled, now it won't be
+		if (clientNum >= 0 && clientScreens[clientNum][0] == -1
+			&& x > -1 && y > -1) count++;
+			else if (x < 0 || y < 0) count--;
+	} else {
+		clientNum = atoi(Cmd_Argv(1));
+		// if it was disabled, now it won't be
+		if (clientNum >= 0 && clientScreens[clientNum][0] == -1) count++;
+	}
+
+	if(clientNum > MAX_NUM_VMS || clientNum < -1) {
+		Com_Printf("Must be between 0 and %i, given: %i\n", MAX_NUM_VMS, clientNum);
+		return;
+	} else if(clientNum >= 0 && !cl.serverTimes[clientNum]) {
+		Com_Printf("CGame not active on %i\n", clientNum);
+		return;
+	} else if(clientNum == -1) {
+		// display all in a grid
+		if(Cmd_Argc() == 2) {
+			count = 0;
+			for(i = 0; i < MAX_NUM_VMS; i++) {
+				if(!cl.serverTimes[i]) continue;
+				count++;
+			}
+		} else {
+			// hide all screens
+			count = 0;
+		}
+	}
+
+	xMaxVMs = ceil(sqrt(count));
+	yMaxVMs = round(sqrt(count));
+	if(Cmd_Argc() < 4) {
+		x = xMaxVMs - 1;
+		y = yMaxVMs - 1;
+	}
+	if(x > xMaxVMs) x = xMaxVMs - 1;
+	if(y > yMaxVMs) y = yMaxVMs - 1;
+	int s = clientNum == -1 ? 0 : clientNum;
+	int e = clientNum == -1 ? MAX_NUM_VMS : clientNum + 1;
+	for(; s < (e > MAX_NUM_VMS ? MAX_NUM_VMS : e); s++) {
+		if(clientNum == -1 && Cmd_Argc() == 2) {
+			x = s % xMaxVMs;
+			y = s / xMaxVMs;
+		}
+		if(x < 0 || y < 0 || (clientNum == -1 && !cl.serverTimes[s])) {
+	    Com_DPrintf("Tiling subtracting: %i x %i "
+        "(client: %i, total: %i)\n", x, y, s, count);
+			clientScreens[s][0] = 
+			clientScreens[s][1] = 
+			clientScreens[s][2] = 
+			clientScreens[s][3] = -1;
+		} else {
+	    Com_DPrintf("Tiling adding: %i x %i "
+        "(client: %i, total: %i)\n", x, y, s, count);
+			clientScreens[s][0] = (1.0f * (x % xMaxVMs)) / xMaxVMs;
+			clientScreens[s][1] = (1.0f * (y % yMaxVMs)) / yMaxVMs;
+			clientScreens[s][2] = 1.0f / xMaxVMs;
+			clientScreens[s][3] = 1.0f / yMaxVMs;
+		}
+	}
+}
+
+void CL_Dvr_f(void) {
+	const char *xIn, *yIn, *wIn, *hIn;
+	int clientNum, argc = 0;
+	if(Cmd_Argc() < 5 || Cmd_Argc() > 6 || (clc.sv_mvWorld)) {
+		if(Cmd_Argc() == 1) {
+			for(int i = 0; i < MAX_NUM_VMS; i++) {
+				if(clientScreens[i][0] > -1) {
+					Com_Printf( "[%i]: %fx%f (%fx%f)\n", 
+						i,
+						clientScreens[i][0], clientScreens[i][1],
+					 	clientScreens[i][2], clientScreens[i][3]);
+				}
+			}
+		} else if (clc.sv_mvWorld) {
+			Com_Printf("In server world mode, no tiling.\n");
+			return; // silently disable on this server, world messages are sent
+		}
+		Com_Printf ("Usage: dvr [clientnum] [x y w h]\n");
+		return;
+	}
+	if(Cmd_Argc() == 5) {
+		clientNum = clc.selectedClient;
+	} else {
+		char world[16];
+		strcpy(world, Cmd_Argv(++argc));
+		if(world[1] == ':') {
+			world[1] = '\0';
+			clientNum = atoi(world);
+		} else {
+			clientNum = atoi(world);
+		}
+	}
+	xIn = Cmd_Argv(++argc);
+	yIn = Cmd_Argv(++argc);
+	wIn = Cmd_Argv(++argc);
+	hIn = Cmd_Argv(++argc);
+	clientScreens[clientNum][0] = Q_atof(xIn);
+	clientScreens[clientNum][1] = Q_atof(yIn);
+	clientScreens[clientNum][2] = Q_atof(wIn);
+	clientScreens[clientNum][3] = Q_atof(hIn);
+}
+
+#endif
 
 
 /*
@@ -3912,6 +4360,18 @@ void CL_Init( void ) {
 	rconAddress = Cvar_Get ("rconAddress", "", 0);
 	Cvar_SetDescription( rconAddress, "The IP address of the remote console you wish to connect to." );
 
+#ifdef USE_MASTER_LAN
+	for ( int index = 0; index < MAX_MASTER_SERVERS; index++ ) {
+    cl_master[index] = Cvar_Get(va("cl_master%d", index + 1), "", CVAR_ARCHIVE);
+  }
+#endif
+
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+	Cvar_Get( "mvproto", va( "%i", MV_MULTIWORLD_VERSION ), CVAR_USERINFO | CVAR_ROM );
+  cl_mvHighlight = Cvar_Get("cl_mvHighlight", "1", CVAR_ARCHIVE);
+  Cvar_CheckRange( cl_mvHighlight, "0", "1", CV_INTEGER );
+#endif
+
 	cl_allowDownload = Cvar_Get( "cl_allowDownload", "1", CVAR_ARCHIVE_ND );
 	Cvar_SetDescription( cl_allowDownload, "Enables downloading of content needed in server. Valid bitmask flags:\n 1: Downloading enabled\n 2: Do not use HTTP/FTP downloads\n 4: Do not use UDP downloads" );
 #ifdef USE_CURL
@@ -3956,7 +4416,14 @@ void CL_Init( void ) {
 	cl_guidServerUniq = Cvar_Get( "cl_guidServerUniq", "1", CVAR_ARCHIVE_ND );
 	Cvar_SetDescription( cl_guidServerUniq, "Makes cl_guid unique for each server." );
 
+#ifdef __WASM__
+	//extern void CL_MenuModified(char *oldValue, char *newValue, cvar_t *cv);
+	//Cvar_SetModifiedFunc(Cvar_Get("ui_breadCrumb", "", CVAR_TEMP), CL_MenuModified);
+	cl_returnURL = Cvar_Get("cl_returnURL", "", CVAR_TEMP);
+	cl_dlURL = Cvar_Get( "cl_dlURL", "/maps/repacked/%1", CVAR_ARCHIVE_ND );
+#else
 	cl_dlURL = Cvar_Get( "cl_dlURL", "http://ws.q3df.org/maps/download/%1", CVAR_ARCHIVE_ND );
+#endif
 	Cvar_SetDescription( cl_dlURL, "Cvar must point to download location." );
 
 	cl_dlDirectory = Cvar_Get( "cl_dlDirectory", "0", CVAR_ARCHIVE_ND );
@@ -3967,11 +4434,18 @@ void CL_Init( void ) {
 	Cvar_SetDescription( cl_dlDirectory, s );
 
 	cl_reconnectArgs = Cvar_Get( "cl_reconnectArgs", "", CVAR_ARCHIVE_ND | CVAR_NOTABCOMPLETE );
+  cl_drawFPS = Cvar_Get ("cl_drawFPS", "1", CVAR_ARCHIVE );
+  cl_lagometer = Cvar_Get ("cl_lagometer", "1", CVAR_ARCHIVE );
+  cl_nopredict = Cvar_Get ("cl_nopredict", "0", 0 );
 
 	// userinfo
 	Cvar_Get ("name", "UnnamedPlayer", CVAR_USERINFO | CVAR_ARCHIVE_ND );
 	Cvar_Get ("rate", "25000", CVAR_USERINFO | CVAR_ARCHIVE );
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+	Cvar_Get ("snaps", "100", CVAR_USERINFO | CVAR_ARCHIVE );
+#else
 	Cvar_Get ("snaps", "40", CVAR_USERINFO | CVAR_ARCHIVE );
+#endif
 	Cvar_Get ("model", "sarge", CVAR_USERINFO | CVAR_ARCHIVE_ND );
 	Cvar_Get ("headmodel", "sarge", CVAR_USERINFO | CVAR_ARCHIVE_ND );
  	Cvar_Get ("team_model", "sarge", CVAR_USERINFO | CVAR_ARCHIVE_ND );
@@ -4017,7 +4491,9 @@ void CL_Init( void ) {
 	Cmd_SetCommandCompletionFunc( "rcon", CL_CompleteRcon );
 	Cmd_AddCommand ("ping", CL_Ping_f );
 	Cmd_AddCommand ("serverstatus", CL_ServerStatus_f );
+#ifndef __WASM__
 	Cmd_AddCommand ("showip", CL_ShowIP_f );
+#endif
 	Cmd_AddCommand ("fs_openedList", CL_OpenedPK3List_f );
 	Cmd_AddCommand ("fs_referencedList", CL_ReferencedPK3List_f );
 	Cmd_AddCommand ("model", CL_SetModel_f );
@@ -4028,11 +4504,27 @@ void CL_Init( void ) {
 	Cmd_AddCommand ("serverinfo", CL_Serverinfo_f );
 	Cmd_AddCommand ("systeminfo", CL_Systeminfo_f );
 
-#ifdef USE_CURL
+#if defined(USE_CURL) || defined(__WASM__)
 	Cmd_AddCommand( "download", CL_Download_f );
 	Cmd_AddCommand( "dlmap", CL_Download_f );
 #endif
 	Cmd_AddCommand( "modelist", CL_ModeList_f );
+
+
+
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+	Cmd_AddCommand( "load", CL_LoadVM_f );
+	//Cmd_SetDescription("load", "Load extra VMs for showing multiple players or maps\nUsage: load [ui|cgame|game]");
+	Cmd_AddCommand ("tele", CL_Tele_f);
+	//Cmd_SetDescription( "tele", "Teleport into the game as if you just connected\nUsage: teleport <client> [xcoord zcoord ycoord]" );
+	Cmd_AddCommand ("game", CL_Game_f);
+	//Cmd_SetDescription( "game", "Switch games in multiVM mode to another match\nUsage: game [0/1/2 moveorigin] [num]" );
+	Cmd_AddCommand ("tile", CL_Tile_f);
+	//Cmd_SetDescription( "tile", "Display multiview renderings in a grid\nUsage: tile [+/-] [x y] [clientnum]" );
+	Cmd_AddCommand ("dvr", CL_Dvr_f);
+	//Cmd_SetDescription( "dvr", "Change where the screen output is drawn using percentages\nUsage: dvr [clientnum] x y w h" );
+#endif
+
 
 	Cvar_Set( "cl_running", "1" );
 #ifdef USE_MD5
@@ -4107,12 +4599,18 @@ void CL_Shutdown( const char *finalmsg, qboolean quit ) {
 	Cmd_RemoveCommand ("systeminfo");
 	Cmd_RemoveCommand ("modelist");
 
-#ifdef USE_CURL
+#if defined(USE_CURL) || defined(__WASM__)
 	Com_DL_Cleanup( &download );
 
 	Cmd_RemoveCommand( "download" );
 	Cmd_RemoveCommand( "dlmap" );
 #endif
+
+
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+	Cmd_RemoveCommand( "load" );
+#endif
+
 
 	CL_ClearInput();
 
@@ -4487,6 +4985,42 @@ static void CL_LocalServers_f( void ) {
 	}
 	Com_Memset( &to, 0, sizeof( to ) );
 
+
+#ifdef USE_MASTER_LAN
+	// emulate localhost
+	NET_StringToAdr( va("127.0.0.1:%i", BigShort(PORT_SERVER)), &to, NA_UNSPEC );
+	to.type = NA_IP;
+	//cls.numlocalservers = -1;
+	for ( i = 0; i < MAX_MASTER_SERVERS; i++ ) {
+		if(cls.numGlobalServerAddresses >= MAX_GLOBAL_SERVERS) {
+			break;
+		}
+		netadr_t *addr = &cls.globalServerAddresses[cls.numGlobalServerAddresses];
+		if(!cl_master[i]->string[0]) {
+			continue;
+		}
+		if(!NET_StringToAdr( cl_master[i]->string, addr, NA_UNSPEC )) {
+			continue;
+		}
+
+		// only add localhost if its in the list of cl_master
+		if (NET_CompareAdr(&to, addr)) {
+			//for(j = 0; j < cls.numlocalservers; j++) {
+			//	if ( NET_CompareAdr( addr, &cls.localServers[j].adr ) ) {
+			//		break;
+			//	}
+			//}
+		} else 
+
+		if (addr->port != BigShort((short)PORT_SERVER)) {
+			Com_Printf( "Requesting servers from %s (%s)...\n", cl_master[i]->string, NET_AdrToStringwPort(addr) );
+			NET_OutOfBandPrint( NS_CLIENT, addr, "getservers 68 " );
+			NET_OutOfBandPrint( NS_CLIENT, addr, "getservers 72 " );
+		}
+	}
+#endif
+
+#ifndef __WASM__
 	// The 'xxx' in the message is a challenge that will be echoed back
 	// by the server.  We don't care about that here, but master servers
 	// can use that to prevent spoofed server responses from invalid ip
@@ -4501,6 +5035,9 @@ static void CL_LocalServers_f( void ) {
 		for ( j = 0 ; j < NUM_SERVER_PORTS ; j++ ) {
 			to.port = BigShort( (short)(PORT_SERVER + j) );
 
+#ifdef USE_MULTIVM_SERVER
+			to.netWorld = 0;
+#endif
 			to.type = NA_BROADCAST;
 			NET_SendPacket( NS_CLIENT, n, message, &to );
 #ifdef USE_IPV6
@@ -4509,6 +5046,7 @@ static void CL_LocalServers_f( void ) {
 #endif
 		}
 	}
+#endif
 }
 
 
@@ -4999,6 +5537,7 @@ static void CL_ServerStatus_f( void ) {
 }
 
 
+#ifndef __WASM__
 /*
 ==================
 CL_ShowIP_f
@@ -5007,8 +5546,10 @@ CL_ShowIP_f
 static void CL_ShowIP_f( void ) {
 	Sys_ShowIP();
 }
+#endif
 
 
+// TODO: something else for server and dedicated, perhaps download from 
 #ifdef USE_CURL
 
 qboolean CL_Download( const char *cmd, const char *pakname, qboolean autoDownload )
@@ -5054,8 +5595,10 @@ qboolean CL_Download( const char *cmd, const char *pakname, qboolean autoDownloa
 
 	return Com_DL_Begin( &download, pakname, cl_dlURL->string, autoDownload );
 }
+#endif // USE_CURL
 
 
+#if defined(USE_CURL) || defined(__WASM__)
 /*
 ==================
 CL_Download_f

@@ -145,13 +145,19 @@ NET
 #define NET_DISABLEMCAST        0x08
 
 
-#define	PACKET_BACKUP	32	// number of old messages that must be kept on client and
+#define	PACKET_BACKUP	64	// number of old messages that must be kept on client and
 							// server for delta compression and ping estimation
 #define	PACKET_MASK		(PACKET_BACKUP-1)
 
 #define	MAX_PACKET_USERCMDS		32		// max number of usercmd_t in a packet
 
+
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_HORDES)
+#define	MAX_SNAPSHOT_ENTITIES	MAX_GENTITIES
+#else
 #define	MAX_SNAPSHOT_ENTITIES	256
+#endif
+
 
 #define	PORT_ANY			-1
 
@@ -179,6 +185,9 @@ typedef enum {
 
 #define NET_ADDRSTRMAXLEN 48	// maximum length of an IPv6 address string including trailing '\0'
 
+#ifdef __WASM__
+QALIGN(sizeof(int32_t))
+#endif
 typedef struct {
 	netadrtype_t	type;
 	union {
@@ -190,6 +199,13 @@ typedef struct {
 	uint16_t	port;
 #ifdef USE_IPV6
 	uint32_t	scope_id;	// Needed for IPv6 link-local addresses
+#endif
+	char name[256];
+	char protocol[10];
+#ifdef USE_MULTIVM_SERVER
+  // the socket the connection came in on, 
+  //   so we know which world to join based on port number
+  int  netWorld; 
 #endif
 } netadr_t;
 
@@ -207,6 +223,8 @@ qboolean	NET_CompareBaseAdr( const netadr_t *a, const netadr_t *b );
 qboolean	NET_IsLocalAddress( const netadr_t *adr );
 const char	*NET_AdrToString( const netadr_t *a );
 const char	*NET_AdrToStringwPort( const netadr_t *a );
+const char	*NET_AdrToStringwPortandProtocol( const netadr_t *a );
+char        *NET_ParseProtocol(const char *s, char *protocol);
 int         NET_StringToAdr( const char *s, netadr_t *a, netadrtype_t family );
 #ifndef DEDICATED
 qboolean	NET_GetLoopPacket( netsrc_t sock, netadr_t *net_from, msg_t *net_message );
@@ -216,6 +234,7 @@ void		NET_JoinMulticast6( void );
 void		NET_LeaveMulticast6( void );
 #endif
 qboolean	NET_Sleep( int timeout );
+
 
 #define	MAX_PACKETLEN	1400	// max size of a network packet
 
@@ -336,6 +355,10 @@ enum svc_ops_e {
 	// new commands, supported only by ioquake3 protocol but not legacy
 	svc_voipSpeex,     // not wrapped in USE_VOIP, so this value is reserved.
 	svc_voipOpus,      //
+	
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
+	svc_mvWorld = 18, // 1.32e multiview extension
+#endif
 };
 
 
@@ -349,6 +372,11 @@ enum clc_ops_e {
 	clc_moveNoDelta,		// [[usercmd_t]
 	clc_clientCommand,		// [string] message
 	clc_EOF,
+
+#if defined(USE_MULTIVM_SERVER) || defined(USE_MULTIVM_CLIENT)
+	clc_mvMove,
+	clc_mvMoveNoDelta,
+#endif
 
 	// new commands, supported only by ioquake3 protocol but not legacy
 	clc_voipSpeex,   // not wrapped in USE_VOIP, so this value is reserved.
@@ -1090,8 +1118,10 @@ temp file loading
 
 */
 
+#ifndef __WASM__
 #if defined(_DEBUG) && !defined(BSPC)
 	#define ZONE_DEBUG
+#endif
 #endif
 
 #ifdef ZONE_DEBUG
@@ -1144,12 +1174,12 @@ void CL_ResetOldGame( void );
 void CL_Shutdown( const char *finalmsg, qboolean quit );
 void CL_Frame( int msec, int realMsec );
 qboolean CL_GameCommand( void );
-void CL_KeyEvent (int key, qboolean down, unsigned time);
+void CL_KeyEvent (int key, qboolean down, unsigned time, int finger);
 
 void CL_CharEvent( int key );
 // char events are for field typing, not game control
 
-void CL_MouseEvent( int dx, int dy /*, int time*/ );
+void CL_MouseEvent( int dx, int dy /*, int time*/, qboolean absolute );
 
 void CL_JoystickEvent( int axis, int value, int time );
 
@@ -1195,7 +1225,11 @@ void Key_WriteBindings( fileHandle_t f );
 void S_ClearSoundBuffer( void );
 // call before filesystem access
 
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+void CL_SystemInfoChanged( qboolean onlyGame, int igs );
+#else
 void CL_SystemInfoChanged( qboolean onlyGame );
+#endif
 qboolean CL_GameSwitch( void );
 
 // AVI files have the start of pixel lines 4 byte-aligned
@@ -1249,6 +1283,17 @@ typedef enum {
 	SE_MOUSE,	// evValue and evValue2 are relative signed x / y moves
 	SE_JOYSTICK_AXIS,	// evValue is an axis number and evValue2 is the current state (-127 to 127)
 	SE_CONSOLE,	// evPtr is a char*
+	SE_MOUSE_ABS,
+#ifdef __WASM__ //USE_ABS_MOUSE
+	SE_FINGER_DOWN,
+	SE_FINGER_UP,
+#endif
+#ifdef USE_DRAGDROP
+  SE_DROPBEGIN,
+  SE_DROPCOMPLETE,
+  SE_DROPFILE,
+  SE_DROPTEXT,
+#endif
 	SE_MAX,
 } sysEventType_t;
 
@@ -1333,6 +1378,10 @@ void *Sys_LoadLibrary( const char *name );
 void *Sys_LoadFunction( void *handle, const char *name );
 int   Sys_LoadFunctionErrors( void );
 void  Sys_UnloadLibrary( void *handle );
+#ifdef  __WASM__
+extern void DebugBreak( void );
+extern void DebugTrace( void );
+#endif
 
 // adaptive huffman functions
 void Huff_Compress( msg_t *buf, int offset );

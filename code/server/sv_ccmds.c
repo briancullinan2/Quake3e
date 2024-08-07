@@ -156,6 +156,9 @@ static void SV_Map_f( void ) {
 	const char		*map;
 	qboolean	killBots, cheat;
 	char		expanded[MAX_QPATH];
+#ifdef __WASM__
+	char		expanded2[MAX_QPATH];
+#endif
 	char		mapname[MAX_QPATH];
 	int			len;
 
@@ -167,11 +170,24 @@ static void SV_Map_f( void ) {
 	// make sure the level exists before trying to change, so that
 	// a typo at the server console won't end the game
 	Com_sprintf( expanded, sizeof( expanded ), "maps/%s.bsp", map );
+#ifdef __WASM__
+	Com_sprintf( expanded2, sizeof( expanded2 ), "maps/%s.aas", map );
+#endif
 	// bypass pure check so we can open downloaded map
 	FS_BypassPure();
 	len = FS_FOpenFileRead( expanded, NULL, qfalse );
+#ifdef __WASM__
+	len = len == -1 ? -1 : FS_FOpenFileRead( expanded2, NULL, qfalse );
+#endif
 	FS_RestorePure();
 	if ( len == -1 ) {
+#ifdef __WASM__
+		qboolean	CL_Download( const char *cmd, const char *pakname, qboolean autoDownload );
+		static char alreadyTried[MAX_OSPATH];
+		if(Q_stricmp(alreadyTried, map) != 0 && CL_Download( Cmd_Argv(0), map, qtrue )) {
+			Q_strncpyz(alreadyTried, map, sizeof(alreadyTried));
+		} else
+#endif
 		Com_Printf( "Can't find map %s\n", expanded );
 		return;
 	}
@@ -273,7 +289,8 @@ static void SV_MapRestart_f( void ) {
 
 	// check for changes in variables that can't just be restarted
 	// check for maxclients change
-	if ( sv_maxclients->modified || sv_gametype->modified || sv_pure->modified ) {
+	if ( sv_maxclients->modified || sv_gametype->modified || sv_pure->modified )
+	{
 		char	mapname[MAX_QPATH];
 
 		Com_Printf( "variable change -- restarting.\n" );
@@ -331,6 +348,14 @@ static void SV_MapRestart_f( void ) {
 		}
 
 		if ( client->netchan.remoteAddress.type == NA_BOT ) {
+#if defined(USE_LOCAL_DED) || defined(__WASM__)
+			// drop bots on map restart because they will be re-added by arena config
+			// TODO: only drop bots on single-player mode?
+			if (Cvar_VariableIntegerValue( "g_gametype" ) == GT_SINGLE_PLAYER) {
+				SV_DropClient( client, NULL );
+				continue;
+			}
+#endif
 			isBot = qtrue;
 		} else {
 			isBot = qfalse;
@@ -1396,6 +1421,7 @@ Also called by SV_DropClient, SV_DirectConnect, and SV_SpawnServer
 */
 void SV_Heartbeat_f( void ) {
 	svs.nextHeartbeatTime = svs.time;
+	svs.forceHeartbeat = qtrue;
 }
 
 
@@ -1526,6 +1552,62 @@ static void SV_CompleteMapName( const char *args, int argNum ) {
 }
 
 
+
+
+#ifdef USE_MULTIVM_SERVER
+void SV_GameCL_f( client_t *client );
+
+void SV_Game_f ( void ) {
+	client_t *client;
+	int i;
+	if ( Cmd_Argc() > 4 ) {
+		Com_Printf ("Usage: game (<mode>) [num] <client>\n");
+		return;
+	}
+
+	if(Cmd_Argc() < 4) {
+		//if(sv_gametype->integer == GT_SINGLE_PLAYER) {
+			// teleport entire team to new world with me
+			for ( i=0, client=svs.clients ; i < sv_maxclients->integer ; i++,client++ ) {
+				if ( !client->state ) {
+					continue;
+				}
+				if( client->netchan.remoteAddress.type == NA_LOOPBACK ) {
+					Cmd_TokenizeString( va("game %s %s", Cmd_Argv(1), Cmd_Argv(2)) );
+					SV_GameCL_f( client );
+				}
+			}
+		//} else {
+		//	Com_Printf( "No player specified. %s\n", Cmd_ArgsFrom(0) );
+		//	return;
+		//}
+	} else {
+		client = SV_GetPlayerByHandle();
+		Cmd_TokenizeString( va("game %s %s", Cmd_Argv(1), Cmd_Argv(2)) );
+		SV_GameCL_f( client );
+	}
+	Cmd_Clear();
+}
+
+void SV_Teleport_f (void) {
+	if ( Cmd_Argc() > 4 || Cmd_Argc() == 2 ) {
+		Com_Printf ("Usage: teleport <clientnum> [xcoord zcoord ycoord]\n");
+		return;
+	}
+	//cl = SV_GetPlayerByNum();
+	//ps = SV_GameClientNum( i );
+	//client = SV_GetPlayerByHandle();
+}
+
+void SV_LoadVM_f(void) {
+	SV_LoadVM(NULL);
+}
+#endif
+
+//#ifdef __WASM__
+void SV_MakeMinimap(void);
+//#endif
+
 /*
 ==================
 SV_AddOperatorCommands
@@ -1580,6 +1662,15 @@ void SV_AddOperatorCommands( void ) {
 #endif
 	Cmd_AddCommand( "filter", SV_AddFilter_f );
 	Cmd_AddCommand( "filtercmd", SV_AddFilterCmd_f );
+
+
+#ifdef USE_MULTIVM_SERVER
+	Cmd_AddCommand ("game", SV_Game_f);
+	//Cmd_SetDescription( "game", "Switch games in multiVM mode to another match\nUsage: game <client> [num]" );
+	Cmd_AddCommand ("teleport", SV_Teleport_f);
+	//Cmd_SetDescription( "teleport", "Teleport into the game as if you just connected\nUsage: teleport <client> [xcoord zcoord ycoord]" );
+#endif
+
 }
 
 
@@ -1614,6 +1705,12 @@ void SV_AddDedicatedCommands( void )
 	Cmd_AddCommand( "tell", SV_ConTell_f );
 	Cmd_AddCommand( "say", SV_ConSay_f );
 	Cmd_AddCommand( "locations", SV_Locations_f );
+
+#ifdef USE_MULTIVM_SERVER
+	Cmd_AddCommand( "load", SV_LoadVM_f );
+	//Cmd_SetDescription("load", "Load extra VMs for showing multiple players or maps\nUsage: load");
+#endif
+
 }
 
 
@@ -1624,4 +1721,8 @@ void SV_RemoveDedicatedCommands( void )
 	Cmd_RemoveCommand( "tell" );
 	Cmd_RemoveCommand( "say" );
 	Cmd_RemoveCommand( "locations" );
+
+#ifdef USE_MULTIVM_SERVER
+	Cmd_RemoveCommand( "load" );
+#endif
 }

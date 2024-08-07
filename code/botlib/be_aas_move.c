@@ -43,7 +43,11 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 extern botlib_import_t botimport;
 
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
+aas_settings_t aassettingsWorlds[MAX_NUM_VMS];
+#else
 aas_settings_t aassettings;
+#endif
 
 //#define AAS_MOVE_DEBUG
 

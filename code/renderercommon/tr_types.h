@@ -32,6 +32,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define	RF_THIRD_PERSON		0x0002		// don't draw through eyes, only mirrors (player bodies, chat sprites)
 #define	RF_FIRST_PERSON		0x0004		// only draw through eyes (view weapon, damage blood blob)
 #define	RF_DEPTHHACK		0x0008		// for view weapon Z crunching
+#define RF_STENCIL      0x0010
+#define RF_DEPTHEXTRAHACKY 0x0020
 
 #define RF_CROSSHAIR		0x0010		// This item is a cross hair and will draw over everything similar to
 										// DEPTHHACK in stereo rendering mode, with the difference that the
@@ -221,5 +223,87 @@ typedef struct {
 #else
 #define OPENGL_DRIVER_NAME	"libGL.so.1"
 #endif
+
+// =========================================
+// Gordon, these MUST NOT exceed the values for SHADER_MAX_VERTEXES/SHADER_MAX_INDEXES
+#define MAX_PB_VERTS    1024
+#define MAX_PB_INDICIES ( MAX_PB_VERTS * 6 )
+
+typedef struct polyBuffer_s {
+	vec4_t xyz[MAX_PB_VERTS];
+	vec2_t st[MAX_PB_VERTS];
+	byte color[MAX_PB_VERTS][4];
+	int numVerts;
+
+	int indicies[MAX_PB_INDICIES];
+	int numIndicies;
+
+	qhandle_t shader;
+} polyBuffer_t;
+// =========================================
+
+
+#ifdef USE_AUTO_TERRAIN
+
+
+typedef struct terrain_s {
+
+	char terrainMaster[MAX_QPATH];
+	char terrainIndex[MAX_QPATH];
+	byte *terrainImage;
+	int terrainLayers:3;
+	int terrainHeight;
+	int terrainWidth;
+	qboolean terrainFlip;
+
+} terrain_t;
+
+const char *GetIndexedShader( terrain_t *s_worldData, int numPoints, byte *shaderIndexes );
+byte GetShaderIndexForPoint( terrain_t *s_worldData, const vec3_t eMinmax[2], const vec3_t point, const float s, const float t );
+
+#endif
+
+void R_ConvertTextureFormat( const byte *in, int width, int height, int format, int type, byte *out );
+void R_AddPalette(const char *name, int a, int r, int g, int b);
+Q_EXPORT byte *R_FindPalette(const char *name);
+byte *R_RaddtoRGBA(byte *pic, byte *pic2, int width, int height);
+byte *R_RtoRGBA(byte *pic, byte *pic2, int width, int height);
+byte *R_RGBAtoR(byte *pic, int width, int height);
+byte *R_Rainbow2(byte *pic, int width, int height);
+byte *R_Rainbow(byte *pic, int width, int height);
+byte *R_Berserk(byte *pic, int width, int height);
+byte *R_HueShift(float hueShift, byte *pic, int width, int height);
+byte *R_SatShift(float hueShift, byte *pic, int width, int height);
+byte *R_LumShift(float hueShift, byte *pic, int width, int height);
+
+
+typedef struct rgb {
+  float r, g, b;
+} RGB;
+
+typedef struct hsl {
+  float h, s, l;
+} HSL;
+HSL rgb2hsl(float r, float g, float b);
+float hue2rgb(float p, float q, float t) ;
+RGB hsl2rgb(float h, float s, float l) ;
+byte *R_InvertColors4(byte *pic, int width, int height) ;
+byte *R_InvertColors3(byte *pic, int width, int height);
+byte *R_InvertColors2(byte *pic, int width, int height) ;
+byte *R_InvertColors(byte *pic, int width, int height) ;
+byte *R_GreyScale(float greyscale, byte *pic, int width, int height);
+
+
+typedef short int pixel_t;
+
+pixel_t *canny_edge_detection(const pixel_t *in,
+															const int nx,
+															const int ny,
+                              pixel_t *out,
+                              const int tmin, const int tmax,
+                              const float sigma);
+
+
+
 
 #endif	// __TR_TYPES_H

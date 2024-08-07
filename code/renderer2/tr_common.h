@@ -48,6 +48,8 @@ typedef enum
 	IMGFLAG_LIGHTMAP       = 0x0100,
 	IMGFLAG_NOSCALE        = 0x0200,
 	IMGFLAG_CLAMPTOBORDER  = 0x0400,
+	IMGFLAG_PALETTE        = 0x0800,
+  IMGFLAG_FORCELAZY      = 0x1000,
 } imgFlags_t;
 
 typedef struct image_s {
@@ -68,7 +70,12 @@ typedef struct image_s {
 
 	imgType_t	type;
 	imgFlags_t	flags;
+	int			lastTimeUsed;
+	char variables[MAX_QPATH];
+	struct image_s *palette;
+	struct image_s *alternate;
 } image_t;
+
 
 // any change in the LIGHTMAP_* defines here MUST be reflected in
 // R_FindShader() in tr_bsp.c

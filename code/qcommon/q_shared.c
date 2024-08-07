@@ -937,7 +937,7 @@ __reswitch:
 COM_MatchToken
 ==================
 */
-static void COM_MatchToken( const char **buf_p, const char *match ) {
+void COM_MatchToken( const char **buf_p, const char *match ) {
 	const char *token;
 
 	token = COM_Parse( buf_p );
@@ -1770,10 +1770,11 @@ const char *QDECL va( const char *format, ... )
 	char	*buf;
 	va_list		argptr;
 	static int	index = 0;
-	static char	string[2][32000];	// in case va is called by nested functions
+	static char	string[3][32000];	// in case va is called by nested functions
 
 	buf = string[ index ];
-	index ^= 1;
+	index++;
+	index%=3;
 
 	va_start( argptr, format );
 	vsprintf( buf, format, argptr );

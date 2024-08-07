@@ -34,6 +34,9 @@ GetClientState
 ====================
 */
 static void GetClientState( uiClientState_t *state ) {
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+	int igs = cgvmi_ref;
+#endif
 	state->connectPacketCount = clc.connectPacketCount;
 	state->connState = cls.state;
 	Q_strncpyz( state->servername, cls.servername, sizeof( state->servername ) );
@@ -257,20 +260,21 @@ static void LAN_GetServerAddressString( int source, int n, char *buf, int buflen
 	switch (source) {
 		case AS_LOCAL :
 			if (n >= 0 && n < MAX_OTHER_SERVERS) {
-				Q_strncpyz(buf, NET_AdrToStringwPort( &cls.localServers[n].adr) , buflen );
+				Q_strncpyz(buf, NET_AdrToStringwPortandProtocol( &cls.localServers[n].adr) , buflen );
+
 				return;
 			}
 			break;
 		case AS_MPLAYER:
 		case AS_GLOBAL :
 			if (n >= 0 && n < MAX_GLOBAL_SERVERS) {
-				Q_strncpyz(buf, NET_AdrToStringwPort( &cls.globalServers[n].adr) , buflen );
+				Q_strncpyz(buf, NET_AdrToStringwPortandProtocol( &cls.globalServers[n].adr) , buflen );
 				return;
 			}
 			break;
 		case AS_FAVORITES :
 			if (n >= 0 && n < MAX_OTHER_SERVERS) {
-				Q_strncpyz(buf, NET_AdrToStringwPort( &cls.favoriteServers[n].adr) , buflen );
+				Q_strncpyz(buf, NET_AdrToStringwPortandProtocol( &cls.favoriteServers[n].adr) , buflen );
 				return;
 			}
 			break;
@@ -617,7 +621,11 @@ CL_GetClipboardData
 static void CL_GetClipboardData( char *buf, int buflen ) {
 	char	*cbd;
 
+#ifdef __WASM__
+	cbd = NULL;
+#else
 	cbd = Sys_GetClipboardData();
+#endif
 
 	if ( !cbd ) {
 		*buf = '\0';
@@ -711,6 +719,9 @@ GetConfigString
 static int GetConfigString(int index, char *buf, int size)
 {
 	int		offset;
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+	int igs = cgvmi_ref;
+#endif
 
 	if (index < 0 || index >= MAX_CONFIGSTRINGS)
 		return qfalse;
@@ -770,9 +781,21 @@ static qboolean UI_GetValue( char* value, int valueSize, const char* key ) {
 		return qtrue;
 	}
 
+#ifdef __WASM__
+	if ( !Q_stricmp( key, "trap_GetAsyncFiles" ) ) {
+		Com_sprintf( value, valueSize, "%i", UI_GETASYNCFILES );
+		return qtrue;
+	}
+#endif
+
 	return qfalse;
 }
 
+
+#ifdef __WASM__
+int FS_GetAsyncFiles(const char **files, int max);
+extern qboolean fs_uiSawAsync; 
+#endif
 
 /*
 ====================
@@ -828,7 +851,11 @@ static intptr_t CL_UISystemCalls( intptr_t *args ) {
 
 	case UI_CVAR_INFOSTRINGBUFFER:
 		VM_CHECKBOUNDS( uivm, args[2], args[3] );
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+    Cvar_InfoStringBuffer( args[1], VMA(2), args[3] );
+#else
 		Cvar_InfoStringBuffer( args[1], VMA(2), args[3] );
+#endif
 		return 0;
 
 	case UI_ARGC:
@@ -849,7 +876,11 @@ static intptr_t CL_UISystemCalls( intptr_t *args ) {
 			Com_Printf (S_COLOR_YELLOW "turning EXEC_NOW '%.11s' into EXEC_INSERT\n", (const char*)VMA(2));
 			args[1] = EXEC_INSERT;
 		}
+#if 0 //def USE_MULTIVM_CLIENT
+    Cbuf_ExecuteTagged( args[1], VMA(2), uivmi );
+#else
 		Cbuf_ExecuteText( args[1], VMA(2) );
+#endif
 		return 0;
 
 	case UI_FS_FOPENFILE:
@@ -890,19 +921,35 @@ static intptr_t CL_UISystemCalls( intptr_t *args ) {
 		return 0;
 
 	case UI_R_ADDREFENTITYTOSCENE:
+#ifdef USE_MULTIVM_RENDERER
+		re.AddRefEntityToScene( VMA(1), qfalse, 0 );
+#else
 		re.AddRefEntityToScene( VMA(1), qfalse );
+#endif
 		return 0;
 
 	case UI_R_ADDPOLYTOSCENE:
+#ifdef USE_MULTIVM_RENDERER
+		re.AddPolyToScene( args[1], args[2], VMA(3), 1, 0 );
+#else
 		re.AddPolyToScene( args[1], args[2], VMA(3), 1 );
+#endif
 		return 0;
 
 	case UI_R_ADDLIGHTTOSCENE:
+#ifdef USE_MULTIVM_RENDERER
+		re.AddLightToScene( VMA(1), VMF(2), VMF(3), VMF(4), VMF(5), 0 );
+#else
 		re.AddLightToScene( VMA(1), VMF(2), VMF(3), VMF(4), VMF(5) );
+#endif
 		return 0;
 
 	case UI_R_RENDERSCENE:
+#ifdef USE_MULTIVM_RENDERER
+		re.RenderScene( VMA(1), 0 );
+#else
 		re.RenderScene( VMA(1) );
+#endif
 		return 0;
 
 	case UI_R_SETCOLOR:
@@ -918,7 +965,7 @@ static intptr_t CL_UISystemCalls( intptr_t *args ) {
 		return 0;
 
 	case UI_UPDATESCREEN:
-		SCR_UpdateScreen();
+		SCR_UpdateScreen( qtrue );
 		return 0;
 
 	case UI_CM_LERPTAG:
@@ -1160,17 +1207,33 @@ static intptr_t CL_UISystemCalls( intptr_t *args ) {
 
 	// engine extensions
 	case UI_R_ADDREFENTITYTOSCENE2:
+#ifdef USE_MULTIVM_RENDERER
+		re.AddRefEntityToScene( VMA(1), qtrue, 0 );
+#else
 		re.AddRefEntityToScene( VMA(1), qtrue );
+#endif
 		return 0;
 
 	// engine extensions
 	case UI_R_ADDLINEARLIGHTTOSCENE:
+#ifdef USE_MULTIVM_RENDERER
+		re.AddLinearLightToScene( VMA(1), VMA(2), VMF(3), VMF(4), VMF(5), VMF(6), 0 );
+#else
 		re.AddLinearLightToScene( VMA(1), VMA(2), VMF(3), VMF(4), VMF(5), VMF(6) );
+#endif
 		return 0;
 
 	case UI_TRAP_GETVALUE:
 		VM_CHECKBOUNDS( uivm, args[1], args[2] );
 		return UI_GetValue( VMA(1), args[2], VMA(3) );
+
+#ifdef __WASM__
+	case UI_GETASYNCFILES:
+		fs_uiSawAsync = qtrue;
+		return FS_GetAsyncFiles(VMA(1), args[2]);
+		// clear list after menu and cgame sees it, otherwise both won't update
+		break;
+#endif
 
 	default:
 		Com_Error( ERR_DROP, "Bad UI system trap: %ld", (long int) args[0] );
@@ -1230,7 +1293,8 @@ CL_InitUI
 */
 #define UI_OLD_API_VERSION	4
 
-void CL_InitUI( void ) {
+void CL_InitUI( void ) 
+{
 	int		v;
 	vmInterpret_t		interpret;
 

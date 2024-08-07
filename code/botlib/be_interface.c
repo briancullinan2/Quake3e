@@ -68,16 +68,19 @@ int botlibsetup = qfalse;
 //
 //===========================================================================
 
+#ifndef __WASM__
 //===========================================================================
 //
 // Parameter:				-
 // Returns:					-
 // Changes Globals:		-
 //===========================================================================
+// TODO botimport.MilliSeconds NO clock()!
 int Sys_MilliSeconds(void)
 {
 	return clock() * 1000 / CLOCKS_PER_SEC;
 } //end of the function Sys_MilliSeconds
+#endif
 //===========================================================================
 //
 // Parameter:				-
@@ -869,3 +872,10 @@ botlib_export_t *GetBotLibAPI(int apiVersion, botlib_import_t *import) {
 
 	return &be_botlib_export;
 }
+
+
+#ifdef USE_MULTIVM_SERVER
+void SetAASgvm(int gvm) {
+	aasgvm = gvm;
+}
+#endif

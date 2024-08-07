@@ -69,6 +69,7 @@ static void SV_EmitPacketEntities( const clientSnapshot_t *from, const clientSna
 	oldent = NULL;
 	newindex = 0;
 	oldindex = 0;
+	//Com_Printf("world ents: %i -> %i\n", gvmi, to->num_entities);
 	while ( newindex < to->num_entities || oldindex < from_num_entities ) {
 		if ( newindex >= to->num_entities ) {
 			newnum = MAX_GENTITIES+1;
@@ -126,7 +127,11 @@ static void SV_WriteSnapshotToClient( const client_t *client, msg_t *msg ) {
 	int					snapFlags;
 
 	// this is the snapshot we are creating
-	frame = &client->frames[ client->netchan.outgoingSequence & PACKET_MASK ];
+#ifdef USE_MULTIVM_SERVER
+  frame = &client->frames[gvmi][ client->netchan.outgoingSequence & PACKET_MASK ];
+#else
+  frame = &client->frames[ client->netchan.outgoingSequence & PACKET_MASK ];
+#endif
 
 	// try to use a previous frame as the source for delta compressing the snapshot
 	if ( /* client->deltaMessage <= 0 || */ client->state != CS_ACTIVE ) {
@@ -137,14 +142,20 @@ static void SV_WriteSnapshotToClient( const client_t *client, msg_t *msg ) {
 		// client hasn't gotten a good message through in a long time
 		if ( com_developer->integer ) {
 			if ( client->deltaMessage != client->netchan.outgoingSequence - ( PACKET_BACKUP + 1 ) ) {
+#ifndef __WASM__
 				Com_Printf( "%s: Delta request from out of date packet.\n", client->name );
+#endif
 			}
 		}
 		oldframe = NULL;
 		lastframe = 0;
 	} else {
 		// we have a valid snapshot to delta from
-		oldframe = &client->frames[ client->deltaMessage & PACKET_MASK ];
+#ifdef USE_MULTIVM_SERVER
+		oldframe = &client->frames[gvmi][ client->deltaMessage & PACKET_MASK ];
+#else
+    oldframe = &client->frames[ client->deltaMessage & PACKET_MASK ];
+#endif
 		lastframe = client->netchan.outgoingSequence - client->deltaMessage;
 		// we may refer on outdated frame
 		if ( oldframe->frameNum - svs.lastValidFrame < 0 ) {
@@ -338,7 +349,15 @@ static void SV_AddEntitiesVisibleFromPoint( const vec3_t origin, clientSnapshot_
 	// calculate the visible areas
 	frame->areabytes = CM_WriteAreaBits( frame->areabits, clientarea );
 
+#ifdef USE_MULTIVM_SERVER
+	clientpvs = CM_ClusterPVS (clientcluster, gameWorlds[gvmi]);
+#else
+#if defined(USE_MULTIVM_RENDERER) || defined(USE_MULTIVM_CLIENT)
+	clientpvs = CM_ClusterPVS (clientcluster, 0);
+#else
 	clientpvs = CM_ClusterPVS (clientcluster);
+#endif
+#endif
 
 	for ( e = 0 ; e < svs.currFrame->count; e++ ) {
 		es = svs.currFrame->ents[ e ];
@@ -377,6 +396,7 @@ static void SV_AddEntitiesVisibleFromPoint( const vec3_t origin, clientSnapshot_
 			continue;
 		}
 
+#if defined(USE_MULTIVM_RENDERER) || defined(USE_MULTIVM_CLIENT)
 		// ignore if not touching a PV leaf
 		// check area
 		if ( !CM_AreasConnected( clientarea, svEnt->areanum ) ) {
@@ -386,6 +406,7 @@ static void SV_AddEntitiesVisibleFromPoint( const vec3_t origin, clientSnapshot_
 				continue;		// blocked by a door
 			}
 		}
+#endif
 
 		bitvector = clientpvs;
 
@@ -443,6 +464,135 @@ static void SV_AddEntitiesVisibleFromPoint( const vec3_t origin, clientSnapshot_
 	}
 }
 
+#ifdef USE_MULTIVM_SERVER
+
+extern multiworld_t multiworldEntities[MAX_NUM_VMS * MAX_GENTITIES];
+extern int numMultiworldEntities;
+extern qboolean multiworldInView[MAX_NUM_VMS * MAX_GENTITIES];
+extern qboolean hasMultiworldInView[MAX_NUM_VMS];
+
+
+/*
+===============
+SV_MarkClientPortalPVS
+===============
+*/
+static void SV_MarkClientPortalPVS( const vec3_t origin, int clientNum, int portal ) {
+	int		i, num;
+	sharedEntity_t *ent;
+	svEntity_t	*svEnt;
+	int		l;
+	int		clientarea, clientcluster;
+	int		leafnum;
+	byte	*clientpvs;
+	byte	*bitvector;
+
+	leafnum = CM_PointLeafnum (origin);
+	clientarea = CM_LeafArea (leafnum);
+	clientcluster = CM_LeafCluster (leafnum);
+	clientpvs = CM_ClusterPVS (clientcluster, gameWorlds[gvmi]);
+
+	if ( svs.currFrame == NULL ) {
+		// this will always success and setup current frame
+		//SV_BuildCommonSnapshot();
+	}
+
+	for ( num = 0 ; num < sv.num_entitiesWorlds[gvmi] ; num++ ) {
+		ent = SV_GentityNum( num );
+		svEnt = &sv.svEntities[ num ];
+		if ( !ent->r.linked ) {
+			continue;
+		}
+		if ( !(ent->r.svFlags & SVF_PORTAL) ) {
+			continue;
+		}
+		if( ent->r.svFlags & SVF_NOCLIENT ) {
+			continue;
+		}
+		if ( (ent->r.svFlags & SVF_SINGLECLIENT) && ent->r.singleClient != clientNum ) {
+			continue;
+		}
+		if ( (ent->r.svFlags & SVF_NOTSINGLECLIENT) && ent->r.singleClient == clientNum ) {
+			continue;
+		}
+		if ( ent->r.svFlags & SVF_CLIENTMASK ) {
+			if ( ~ent->r.singleClient & (1 << clientNum) )
+			continue;
+		}
+		if ( !CM_AreasConnected( clientarea, svEnt->areanum ) ) {
+			if ( !CM_AreasConnected( clientarea, svEnt->areanum2 ) ) {
+				continue;		// blocked by a door
+			}
+		}
+
+		bitvector = clientpvs;
+
+		// check individual leafs
+		if ( !svEnt->numClusters ) {
+			continue;
+		}
+		l = 0;
+		for ( i=0 ; i < svEnt->numClusters ; i++ ) {
+			l = svEnt->clusternums[i];
+			if ( bitvector[l >> 3] & (1 << (l&7) ) ) {
+				break;
+			}
+		}
+		if ( i == svEnt->numClusters ) {
+			if ( svEnt->lastCluster ) {
+				for ( ; l <= svEnt->lastCluster ; l++ ) {
+					if ( bitvector[l >> 3] & (1 << (l&7) ) ) {
+						break;
+					}
+				}
+				if ( l == svEnt->lastCluster ) {
+					continue;	// not visible
+				}
+			} else {
+				continue;
+			}
+		}
+
+		if ( ent->s.generic1 ) {
+			vec3_t dir;
+			VectorSubtract(ent->s.origin, origin, dir);
+			if ( VectorLengthSquared(dir) > (float) ent->s.generic1 * ent->s.generic1 ) {
+				continue;
+			}
+		}
+
+		// mark the portal as being in view so the other world snapshot can always send entities from this point
+		//   when the portals have the same name in both maps, and the same location, entities will be sent
+		for(int j = 0; j < numMultiworldEntities; j++) {
+			vec3_t dist;
+			if(multiworldEntities[j].worldFrom != gvmi) continue; // skip portals not from this world
+			if(multiworldEntities[j].world == gvmi) continue; // skip portals that lead to this world
+			// only portals from this world leading to other worlds
+			VectorSubtract(ent->s.origin2, multiworldEntities[j].origin, dist);
+			if(VectorLength(dist) < 8.0f) {
+				int prevGvm = gvmi;
+				gvmi = multiworldEntities[j].world;
+				multiworldInView[j] = qtrue;
+				hasMultiworldInView[gvmi] = qtrue;
+				// powerups hack, add world parameter to powerups for non-multigame QVMs like baseq3a, 
+				//   so a prebuilt QVM can still use portals as long as cgame transfers powerups flags to the renderer
+				// TODO: make this optional
+				// TODO: something special for personal portals as opposed to map portals, need to add and remove them?
+				if ( ent->s.eType == ET_PORTAL ) {
+					ent->s.powerups |= (multiworldEntities[j].world << 8);
+				}
+				CM_SwitchMap(gameWorlds[gvmi]);
+				if(portal < 10)
+					SV_MarkClientPortalPVS( ent->s.origin2, clientNum, portal + 1 );
+				gvmi = prevGvm;
+				CM_SwitchMap(gameWorlds[gvmi]);
+				break;
+			}
+		}
+	}
+}
+
+#endif
 
 /*
 ===============
@@ -452,7 +602,13 @@ SV_InitSnapshotStorage
 void SV_InitSnapshotStorage( void ) 
 {
 	// initialize snapshot storage
+#ifdef USE_MULTIVM_SERVER
+	Com_Memset( svs.snapFrameWorlds, 0, sizeof( svs.snapFrameWorlds ) );
+	memset( multiworldEntities, 0, sizeof( multiworldEntities ) );
+	numMultiworldEntities = 0;
+#else
 	Com_Memset( svs.snapFrames, 0, sizeof( svs.snapFrames ) );
+#endif
 	svs.freeStorageEntities = svs.numSnapshotEntities;
 	svs.currentStoragePosition = 0;
 
@@ -460,7 +616,11 @@ void SV_InitSnapshotStorage( void )
 	svs.currentSnapshotFrame = 0;
 	svs.lastValidFrame = 0;
 
+#ifdef USE_MULTIVM_SERVER
+	memset( svs.currFrameWorlds, 0, sizeof( svs.currFrameWorlds ) );
+#else
 	svs.currFrame = NULL;
+#endif
 }
 
 
@@ -473,7 +633,11 @@ This should be called before any new client snaphot built
 */
 void SV_IssueNewSnapshot( void ) 
 {
+#ifdef USE_MULTIVM_SERVER
+	memset( svs.currFrameWorlds, 0, sizeof( svs.currFrameWorlds ) );
+#else
 	svs.currFrame = NULL;
+#endif
 	
 	// value that clients can use even for their empty frames
 	// as it will not increment on new snapshot built
@@ -503,9 +667,14 @@ static void SV_BuildCommonSnapshot( void )
 
 	count = 0;
 
+
 	// gather all linked entities
 	if ( sv.state != SS_DEAD ) {
-		for ( num = 0 ; num < sv.num_entities ; num++ ) {
+#ifdef USE_MULTIVM_SERVER
+		for ( num = 0 ; num < sv.num_entitiesWorlds[gvmi] ; num++ ) {
+#else
+    for ( num = 0 ; num < sv.num_entities ; num++ ) {
+#endif
 			ent = SV_GentityNum( num );
 
 			// never send entities that aren't linked in
@@ -530,8 +699,12 @@ static void SV_BuildCommonSnapshot( void )
 
 	sv.snapshotCounter = -1;
 
+#ifdef USE_MULTIVM_SERVER
+	sf = &svs.snapFrameWorlds[gvmi][ svs.snapshotFrame % NUM_SNAPSHOT_FRAMES ];
+#else
 	sf = &svs.snapFrames[ svs.snapshotFrame % NUM_SNAPSHOT_FRAMES ];
-	
+#endif
+
 	// track last valid frame
 	if ( svs.snapshotFrame - svs.lastValidFrame > (NUM_SNAPSHOT_FRAMES-1) ) {
 		svs.lastValidFrame = svs.snapshotFrame - (NUM_SNAPSHOT_FRAMES-1);
@@ -542,7 +715,11 @@ static void SV_BuildCommonSnapshot( void )
 
 	// release more frames if needed
 	while ( svs.freeStorageEntities < count && svs.lastValidFrame != svs.snapshotFrame ) {
+#ifdef USE_MULTIVM_SERVER
+		tmp = &svs.snapFrameWorlds[gvmi][ svs.lastValidFrame % NUM_SNAPSHOT_FRAMES ];
+#else
 		tmp = &svs.snapFrames[ svs.lastValidFrame % NUM_SNAPSHOT_FRAMES ];
+#endif
 		svs.lastValidFrame++;
 		// release storage
 		svs.freeStorageEntities += tmp->count;
@@ -599,7 +776,11 @@ static void SV_BuildClientSnapshot( client_t *client ) {
 	playerState_t				*ps;
 
 	// this is the frame we are creating
-	frame = &client->frames[ client->netchan.outgoingSequence & PACKET_MASK ];
+#ifdef USE_MULTIVM_SERVER
+	frame = &client->frames[gvmi][ client->netchan.outgoingSequence & PACKET_MASK ];
+#else
+  frame = &client->frames[ client->netchan.outgoingSequence & PACKET_MASK ];
+#endif
 	cl = client - svs.clients;
 
 	// clear everything in this snapshot
@@ -609,7 +790,7 @@ static void SV_BuildClientSnapshot( client_t *client ) {
 	// https://zerowing.idsoftware.com/bugzilla/show_bug.cgi?id=62
 	frame->num_entities = 0;
 	frame->frameNum = svs.currentSnapshotFrame;
-	
+
 	if ( client->state == CS_ZOMBIE )
 		return;
 
@@ -625,10 +806,14 @@ static void SV_BuildClientSnapshot( client_t *client ) {
 	// we set client->gentity only after sending gamestate
 	// so don't send any packetentities changes until CS_PRIMED
 	// because new gamestate will invalidate them anyway
+#ifndef USE_MULTIVM_SERVER
 	if ( !client->gentity ) {
 		return;
 	}
 
+#endif
+
+	//	Com_Printf("common ents: %i -> %i\n", gvmi, svs.currFrame);
 	if ( svs.currFrame == NULL ) {
 		// this will always success and setup current frame
 		SV_BuildCommonSnapshot();
@@ -654,7 +839,24 @@ static void SV_BuildClientSnapshot( client_t *client ) {
 	// add all the entities directly visible to the eye, which
 	// may include portal entities that merge other viewpoints
 	entityNumbers.unordered = qfalse;
+#ifndef USE_MULTIVM_SERVER
 	SV_AddEntitiesVisibleFromPoint( org, frame, &entityNumbers, qfalse );
+#else
+	// only add point of view if player is present
+	if(SV_PlayerPresent(ps->clientNum)) {
+		SV_AddEntitiesVisibleFromPoint( org, frame, &entityNumbers, qfalse );
+	}
+	for(int j = 0; j < numMultiworldEntities; j++) {
+		vec3_t dist;
+		VectorSubtract(org, multiworldEntities[j].origin, dist);
+		if(VectorLength(dist) < 256.0f
+			&& multiworldEntities[j].world == gvmi) {
+			// TODO: add another visibility point from this view point
+			SV_AddEntitiesVisibleFromPoint( multiworldEntities[j].origin, frame, &entityNumbers, qfalse );
+			entityNumbers.unordered = qtrue;
+		}
+	}
+#endif
 
 	// if there were portals visible, there may be out of order entities
 	// in the list which will need to be resorted for the delta compression
@@ -672,6 +874,7 @@ static void SV_BuildClientSnapshot( client_t *client ) {
 	}
 
 	frame->num_entities = entityNumbers.numSnapshotEntities;
+	//Com_Printf("frame: %i -> %i\n", gvmi, frame->num_entities);
 	// get pointers from common snapshot
 	for ( i = 0 ; i < entityNumbers.numSnapshotEntities ; i++ )	{
 		frame->ents[ i ] = svs.currFrame->ents[ entityNumbers.snapshotEntities[ i ] ];
@@ -689,14 +892,21 @@ Called by SV_SendClientSnapshot and SV_SendClientGameState
 void SV_SendMessageToClient( msg_t *msg, client_t *client )
 {
 	// record information about the message
-	client->frames[client->netchan.outgoingSequence & PACKET_MASK].messageSize = msg->cursize;
-	client->frames[client->netchan.outgoingSequence & PACKET_MASK].messageSent = svs.msgTime;
-	client->frames[client->netchan.outgoingSequence & PACKET_MASK].messageAcked = 0;
+#ifdef USE_MULTIVM_SERVER
+	client->frames[gvmi][client->netchan.outgoingSequence & PACKET_MASK].messageSize = msg->cursize;
+	client->frames[gvmi][client->netchan.outgoingSequence & PACKET_MASK].messageSent = svs.msgTime;
+	client->frames[gvmi][client->netchan.outgoingSequence & PACKET_MASK].messageAcked = 0;
+#else
+  client->frames[client->netchan.outgoingSequence & PACKET_MASK].messageSize = msg->cursize;
+  client->frames[client->netchan.outgoingSequence & PACKET_MASK].messageSent = svs.msgTime;
+  client->frames[client->netchan.outgoingSequence & PACKET_MASK].messageAcked = 0;
+#endif
 
 	// send the datagram
 	SV_Netchan_Transmit( client, msg );
 }
 
+void SV_CreateBaseline( void );
 
 /*
 =======================
@@ -710,28 +920,151 @@ void SV_SendClientSnapshot( client_t *client ) {
 	byte		msg_buf[ MAX_MSGLEN_BUF ];
 	msg_t		msg;
 
+#if 0 //def USE_MULTIVM_SERVER
+		gvmi = client->newWorld;
+		CM_SwitchMap(gameWorlds[gvmi]);
+		SV_SetAASgvm(gvmi);
+#endif
+
+#ifdef USE_MULTIVM_SERVER
+	qboolean first = qtrue;
+	int igvm;
+
+	//entityState_t nullstate;
+	//const svEntity_t *svEnt;
+	// mark portal PVS ahead of time, sucks to do extra math, but then all worlds can refer to each other easily
+	memset(hasMultiworldInView, qfalse, sizeof(hasMultiworldInView));
+	memset(multiworldInView, qfalse, sizeof(multiworldInView));
+
+	// TODO: fix this for portals and only include those in shared?
+	for(igvm = 0; igvm < MAX_NUM_VMS; igvm++) {
+		if(!gvmWorlds[igvm]) continue;
+		gvmi = igvm;
+		// they must at least be a spectator even to "peer" into this world from another
+		if(sv_mvWorld->integer != 0 && !SV_PlayerPresent(client - svs.clients)
+			&& gvmi != client->gameWorld && gvmi != client->newWorld) continue;
+		//Com_Printf("Marking PVS: %i -> %i\n", gvmi, SV_PlayerPresent(client - svs.clients));
+		if(!client->gentity) {
+			client->gentity = SV_GEntityForSvEntity(&sv.svEntities[ client - svs.clients ]);
+		}
+		CM_SwitchMap(gameWorlds[gvmi]);
+		SV_MarkClientPortalPVS( SV_GameClientNum(client - svs.clients)->origin, client - svs.clients, 0 );
+	}
+
+	for(igvm = client->newWorld; igvm < MAX_NUM_VMS; igvm++) {
+
+		if(!gvmWorlds[igvm]) continue;
+
+		gvmi = igvm;
+		CM_SwitchMap(gameWorlds[igvm]);
+		SV_SetAASgvm(igvm);
+
+		// for omnipresent with matching worlds, copy origin and view angle to subordinate worlds
+		if(sv_mvSyncXYZ->integer != 0
+			&& sv_mvOmnipresent->integer != 0
+			&& igvm != client->newWorld && igvm != client->gameWorld) {
+			int clientNum = (int)(client - svs.clients);
+			playerState_t *ps = (playerState_t *)((byte *)sv.gameClientWorlds[client->gameWorld] + sv.gameClientSizes[client->gameWorld]*clientNum);
+			VectorCopy(ps->origin, SV_GameClientNum( clientNum )->origin);
+			SV_SetClientViewAngle(clientNum, vec3_origin);
+		}
+
+		// skip worlds client hasn't entered yet
+		if( // sv_mvWorld->integer != 0 &&
+			(!SV_PlayerPresent(client - svs.clients) /* || !hasMultiworldInView[igvm] */)
+			&& igvm != client->gameWorld && igvm != client->newWorld) continue;
+
+		// skip the first one we already added
+		if(igvm == client->newWorld && !first) continue;
+
+
+		//Com_Printf("Sending snapshot %i -> %i, %i, %i\n", (int)(client - svs.clients), igvm, SV_PlayerPresent(client - svs.clients), SV_GentityNum(client - svs.clients)->s.eType);
+
+		// must acknowledge new gamestate in response to their game request
+		//if(client->lastSnapshotTime - svs.time == -9999 && igvm != client->newWorld) continue;
+
+#endif
+
+
 	// build the snapshot
 	SV_BuildClientSnapshot( client );
 
 	// bots need to have their snapshots build, but
 	// the query them directly without needing to be sent
 	if ( client->netchan.remoteAddress.type == NA_BOT ) {
+#ifdef USE_MULTIVM_SERVER
+		continue;
+#else
 		return;
+#endif
 	}
 
+#ifdef USE_MULTIVM_SERVER
+	if(first) {
+		MSG_Init( &msg, msg_buf, MAX_MSGLEN );
+		msg.allowoverflow = qtrue;
+		//headerBytes = msg.cursize;
+		MSG_WriteLong( &msg, client->lastClientCommand );
+	}
+	// switch game data slots (`igs`) on client before processing snapshot
+	if(client->multiview.protocol == MV_MULTIWORLD_VERSION) {
+		MSG_WriteByte( &msg, svc_mvWorld );
+		MSG_WriteByte( &msg, igvm );
+	}
+#else
 	MSG_Init( &msg, msg_buf, MAX_MSGLEN );
 	msg.allowoverflow = qtrue;
 
 	// NOTE, MRE: all server->client messages now acknowledge
 	// let the client know which reliable clientCommands we have received
 	MSG_WriteLong( &msg, client->lastClientCommand );
+#endif
 
 	// (re)send any reliable server commands
 	SV_UpdateServerCommandsToClient( client, &msg );
 
+#if 0 //def USE_MULTIVM_SERVER
+	// need to send baselines to the client to set up entities for deltas
+	//   need to do this even if client isn't occupying world or portals will crash
+	if(sv.time - client->lastBaseline[igvm] > 1000) {
+		int			start, count = 0;
+		entityState_t nullstate;
+		const svEntity_t *svEnt;
+		
+		SV_CreateBaseline();
+		client->lastBaseline[igvm] = sv.time;
+		
+		// write the baselines
+		Com_Memset( &nullstate, 0, sizeof( nullstate ) );
+		for ( start = 0 ; start < MAX_GENTITIES; start++ ) {
+			if ( !sv.baselineUsed[ start ] ) {
+				continue;
+			}
+			svEnt = &sv.svEntities[ start ];
+			MSG_WriteByte( &msg, svc_baseline );
+			MSG_WriteDeltaEntity( &msg, &nullstate, &svEnt->baseline, qtrue );
+			count++;
+		}
+	}
+#endif
+
 	// send over all the relevant entityState_t
 	// and the playerState_t
 	SV_WriteSnapshotToClient( client, &msg );
+
+#ifdef USE_MULTIVM_SERVER
+		if(first) {
+			first = qfalse;
+			igvm = -1;
+		}
+		if(client->multiview.protocol == 0 || sv_mvOmnipresent->integer == 0) {
+			break;
+		}
+	}
+	gvmi = 0;
+	CM_SwitchMap(gameWorlds[gvmi]);
+	SV_SetAASgvm(gvmi);
+#endif
 
 	// check for overflow
 	if ( msg.overflowed ) {

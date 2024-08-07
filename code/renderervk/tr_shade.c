@@ -50,8 +50,12 @@ SURFACE SHADERS
 
 =============================================================
 */
-
+#if 0 //def USE_MULTIVM_RENDERER
+shaderCommands_t	tessWorlds[MAX_NUM_WORLDS];
+#else
 shaderCommands_t	tess;
+#endif
+
 #ifndef USE_VULKAN
 static qboolean	setArraysOnce;
 #endif

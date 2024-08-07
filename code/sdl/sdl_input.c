@@ -69,6 +69,9 @@ static qboolean mouse_focus;
 
 #define CTRL(a) ((a)-'a'+1)
 
+extern cvar_t *r_headless;
+
+
 /*
 ===============
 IN_PrintKey
@@ -407,6 +410,10 @@ static void IN_ActivateMouse( void )
 	if ( !mouseAvailable )
 		return;
 
+	if(r_headless->integer) {
+		return;
+	}
+
 	if ( !mouseActive )
 	{
 		IN_GobbleMouseEvents();
@@ -454,6 +461,10 @@ static void IN_DeactivateMouse( void )
 {
 	if ( !mouseAvailable )
 		return;
+
+	if(r_headless->integer) {
+		return;
+	}
 
 	if ( mouseActive )
 	{
@@ -1206,10 +1217,25 @@ void HandleEvents( void )
 				break;
 
 			case SDL_MOUSEMOTION:
+				if(in_nograb->integer < 0) {
+					if (Key_GetCatcher() != 0) {
+						SDL_SetRelativeMouseMode( SDL_FALSE );
+						SDL_SetWindowGrab( SDL_window, SDL_FALSE );
+						SDL_ShowCursor( SDL_TRUE );
+					} else {
+						SDL_SetRelativeMouseMode( SDL_TRUE );
+						SDL_SetWindowGrab( SDL_window, SDL_TRUE );
+						SDL_ShowCursor( SDL_FALSE );
+					}
+				}
+
 				if( mouseActive )
 				{
 					if( !e.motion.xrel && !e.motion.yrel )
 						break;
+					if (in_nograb->integer < 0 && Key_GetCatcher() != 0)
+					Com_QueueEvent( in_eventTime, SE_MOUSE_ABS, e.motion.x, e.motion.y, 0, NULL );
+					else
 					Com_QueueEvent( in_eventTime, SE_MOUSE, e.motion.xrel, e.motion.yrel, 0, NULL );
 				}
 				break;
@@ -1267,6 +1293,27 @@ void HandleEvents( void )
 						if ( gw_active && !gw_minimized && !glw_state.isFullscreen ) {
 							Cvar_SetIntegerValue( "vid_xpos", e.window.data1 );
 							Cvar_SetIntegerValue( "vid_ypos", e.window.data2 );
+						}
+						break;
+					case SDL_WINDOWEVENT_RESIZED:
+						if ( !gw_minimized && !glw_state.isFullscreen ) {
+							glconfig_t *glConfig = (glconfig_t *)re.GetConfig();
+							cvar_t *aspect = Cvar_Get("r_customAspect", "", 0);
+							glw_state.config->vidHeight = e.window.data2;
+							glw_state.config->vidWidth = e.window.data1;
+							glw_state.config->windowAspect = (float)glw_state.config->vidWidth / (float)glw_state.config->vidHeight;
+							glConfig->vidWidth = glw_state.config->vidWidth;
+							glConfig->vidHeight = glw_state.config->vidHeight;
+							glConfig->windowAspect = glw_state.config->windowAspect;
+						
+							cls.glconfig = *glConfig;
+
+							Cvar_SetIntegerValue("r_customWidth", glw_state.config->vidWidth);
+							Cvar_SetIntegerValue("r_customHeight", glw_state.config->vidHeight);
+							Cvar_SetValueSafe("r_customAspect", glw_state.config->windowAspect);
+							cvar_modifiedFlags |= CVAR_MODIFIED;
+							aspect->modified = qtrue;
+							aspect->modificationCount++;
 						}
 						break;
 					// window states:
@@ -1327,7 +1374,7 @@ void IN_Frame( void )
 		}
 	}
 
-	if ( !gw_active || !mouse_focus || in_nograb->integer ) {
+	if ( !gw_active || !mouse_focus || in_nograb->integer > 0 ) {
 		IN_DeactivateMouse();
 		return;
 	}
@@ -1424,7 +1471,7 @@ void IN_Init( void )
 	cl_consoleKeys = Cvar_Get( "cl_consoleKeys", "~ ` 0x7e 0x60", CVAR_ARCHIVE );
 	Cvar_SetDescription( cl_consoleKeys, "Space delimited list of key names or characters that toggle the console." );
 
-	mouseAvailable = ( in_mouse->value != 0 ) ? qtrue : qfalse;
+	mouseAvailable = ( in_mouse->value != 0 && !r_headless->integer ) ? qtrue : qfalse;
 
 	SDL_StartTextInput();
 

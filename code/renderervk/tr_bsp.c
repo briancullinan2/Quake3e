@@ -36,7 +36,16 @@ void RE_LoadWorldMap( const char *name );
 
 */
 
+#ifdef USE_MULTIVM_RENDERER
+static 		world_t		s_worldDatas[MAX_NUM_WORLDS];
+int       rwi = 0; // render world, should match number of loaded clip maps, 
+                   //   since they are reusable
+int 			rwi_ref = 0;
+#define s_worldData s_worldDatas[rwi]
+#else
 static	world_t		s_worldData;
+#endif
+
 static	byte		*fileBase;
 
 static int	c_gridVerts;
@@ -284,6 +293,8 @@ static float R_ProcessLightmap( byte *image, const byte *buf_p, float maxIntensi
 }
 
 
+#if !defined(__WASM__) && !defined(USE_MULTIVM_SERVER) && !defined(USE_MULTIVM_CLIENT)
+
 static int SetLightmapParams( int numLightmaps, int maxTextureSize )
 {
 	lightmapWidth = log2pad( LIGHTMAP_LEN, 1 );
@@ -312,6 +323,7 @@ static int SetLightmapParams( int numLightmaps, int maxTextureSize )
 	return numLightmaps;
 }
 
+#endif
 
 int R_GetLightmapCoords( const int lightmapIndex, float *x, float *y )
 {
@@ -326,6 +338,7 @@ int R_GetLightmapCoords( const int lightmapIndex, float *x, float *y )
 	return lightmapNum;
 }
 
+#if !defined(__WASM__) && !defined(USE_MULTIVM_SERVER) && !defined(USE_MULTIVM_CLIENT)
 
 /*
 ===============
@@ -387,6 +400,7 @@ static void R_LoadMergedLightmaps( const lump_t *l, byte *image )
 	//}
 }
 
+#endif
 
 /*
 ===============
@@ -422,6 +436,7 @@ static void R_LoadLightmaps( const lump_t *l ) {
 
 	numLightmaps = l->filelen / (LIGHTMAP_SIZE * LIGHTMAP_SIZE * 3);
 
+#if !defined(__WASM__) && !defined(USE_MULTIVM_SERVER) && !defined(USE_MULTIVM_CLIENT)
 	if ( r_mergeLightmaps->integer && numLightmaps > 1 ) {
 		// check for low texture sizes
 		if ( glConfig.maxTextureSize >= LIGHTMAP_LEN * 2 ) {
@@ -430,6 +445,7 @@ static void R_LoadLightmaps( const lump_t *l ) {
 			return;
 		}
 	}
+#endif
 
 	buf = fileBase + l->fileofs;
 
@@ -2242,7 +2258,12 @@ RE_LoadWorldMap
 Called directly from cgame
 =================
 */
-void RE_LoadWorldMap( const char *name ) {
+#ifdef USE_MULTIVM_RENDERER
+int RE_LoadWorldMap( const char *name ) 
+#else
+void RE_LoadWorldMap( const char *name ) 
+#endif
+{
 	int			i;
 	int32_t		size;
 	dheader_t	*header;
@@ -2252,9 +2273,35 @@ void RE_LoadWorldMap( const char *name ) {
 	} buffer;
 	byte		*startMarker;
 
-	if ( tr.worldMapLoaded ) {
-		ri.Error( ERR_DROP, "ERROR: attempted to redundantly load world map" );
+	RE_ClearScene();
+
+#ifdef USE_MULTIVM_RENDERER
+	int j, empty = -1;
+	for(j = 0; j < MAX_NUM_WORLDS; j++) {
+		if ( !Q_stricmp( s_worldDatas[j].name, name ) ) {
+			// TODO: PRINT_DEVELOPER
+			rwi = 0;
+			ri.Printf( PRINT_ALL, "RE_LoadWorldMap (%i): Already loaded %s\n", j, name );
+			return j;
+		} else if (s_worldDatas[j].name[0] == '\0' && empty == -1) {
+			// load additional world in to next slot
+			empty = j;
+		}
 	}
+	rwi = empty;
+	// TODO: if (empty == -1) FreeOldestClipmap
+
+#else
+
+	if ( tr.worldMapLoaded ) {
+#if defined(USE_MULTIVM_RENDERER) || defined(USE_LAZY_MEMORY)
+  	ri.Printf( PRINT_WARNING, "ERROR: attempted to redundantly load world map\n" );
+#else
+		ri.Error( ERR_DROP, "ERROR: attempted to redundantly load world map" );
+#endif
+	}
+
+#endif
 
 	// set default sun direction to be used if it isn't
 	// overridden by a shader

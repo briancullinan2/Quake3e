@@ -23,6 +23,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "client.h"
 //#include "../qcommon/q_shared.h"
 #include <setjmp.h>
+#ifndef __WASM__
 
 /*
  * Include file for users of JPEG library.
@@ -51,7 +52,10 @@ typedef struct q_jpeg_error_mgr_s
 q_jpeg_error_mgr_t;
 
 
-static void CL_JPGErrorExit(j_common_ptr cinfo)
+#ifndef __WASM__
+static 
+#endif
+void CL_JPGErrorExit(j_common_ptr cinfo)
 {
 	char buffer[JMSG_LENGTH_MAX];
   
@@ -61,7 +65,7 @@ static void CL_JPGErrorExit(j_common_ptr cinfo)
 	(*cinfo->err->format_message)( cinfo, buffer );
   
 	Com_Printf( "Error: %s", buffer );
-  
+
 	/* Return control to the setjmp point */
 	Q_longjmp( jerr->setjmp_buffer, 1 );
 }
@@ -77,6 +81,10 @@ static void CL_JPGOutputMessage(j_common_ptr cinfo)
   /* Send it to stderr, adding a newline */
   Com_Printf( "%s\n", buffer );
 }
+
+#ifdef __WASM__
+extern void CL_Try_Fail_LoadJPG(void * fbuffer, const char *filename, unsigned char **pic, int *width, int *height, struct jpeg_decompress_struct cinfo);
+#endif
 
 
 void CL_LoadJPG( const char *filename, unsigned char **pic, int *width, int *height )
@@ -98,18 +106,22 @@ void CL_LoadJPG( const char *filename, unsigned char **pic, int *width, int *hei
 	* struct, to avoid dangling-pointer problems.
 	*/
 	q_jpeg_error_mgr_t jerr;
+#ifndef __WASM__
 	/* More stuff */
 	JSAMPARRAY buffer;		/* Output row buffer */
 	unsigned int row_stride;	/* physical row width in output buffer */
 	unsigned int pixelcount, memcount;
 	unsigned int sindex, dindex;
 	byte *out;
+#endif
 	int len;
 	union {
 		byte *b;
 		void *v;
 	} fbuffer;
+#ifndef __WASM__
 	byte  *buf;
+#endif
 
 	/* In this example we want to open the input file before doing anything else,
 	 * so that the setjmp() error recovery below can assume the file is open.
@@ -133,9 +145,27 @@ void CL_LoadJPG( const char *filename, unsigned char **pic, int *width, int *hei
 	cinfo.err->error_exit = CL_JPGErrorExit;
 	cinfo.err->output_message = CL_JPGOutputMessage;
 
+#ifndef __WASM__
+
 	/* Establish the setjmp return context for R_JPGErrorExit to use. */
 	if ( Q_setjmp( jerr.setjmp_buffer ) )
 	{
+
+#else
+
+  CL_Try_Fail_LoadJPG(fbuffer.v, filename, pic, width, height, cinfo);
+
+}
+
+void CL_Fail_LoadJPG( const char *filename, void *buffer, struct jpeg_decompress_struct cinfo )
+{
+	union {
+		byte *b;
+		void *v;
+	} fbuffer;
+  fbuffer.v = buffer;
+#endif
+
 		/* If we get here, the JPEG code has signaled an error.
 		* We need to clean up the JPEG object, close the input file, and return.
 		*/
@@ -146,6 +176,25 @@ void CL_LoadJPG( const char *filename, unsigned char **pic, int *width, int *hei
 		Com_Printf( ", loading file %s\n", filename );
 		return;
 	}
+
+#ifdef __WASM__
+void CL_Try_LoadJPG( const char *filename, struct jpeg_decompress_struct cinfo, void *v, unsigned char **pic, int *width, int *height )
+{
+  /* More stuff */
+  JSAMPARRAY buffer;		/* Output row buffer */
+  unsigned int row_stride;	/* physical row width in output buffer */
+  unsigned int pixelcount, memcount;
+  unsigned int sindex, dindex;
+  byte *out;
+  int len;
+  byte  *buf;
+  union {
+		byte *b;
+		void *v;
+	} fbuffer;
+  fbuffer.v = v;
+
+#endif
 
   /* Now we can initialize the JPEG decompression object. */
   jpeg_create_decompress(&cinfo);
@@ -475,3 +524,4 @@ void CL_SaveJPG( const char *filename, int quality, int image_width, int image_h
 
 	Hunk_FreeTempMemory(out);
 }
+#endif

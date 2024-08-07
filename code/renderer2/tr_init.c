@@ -210,9 +210,28 @@ cvar_t	*r_screenshotJpegQuality;
 
 static cvar_t *r_maxpolys;
 static cvar_t* r_maxpolyverts;
+static cvar_t	*r_maxpolybuffers;
 int		max_polys;
 int		max_polyverts;
+int		max_polybuffers;
 
+#ifdef USE_MULTIVM_RENDERER
+float dvrXScale = 1;
+float dvrYScale = 1;
+float dvrXOffset = 0;
+float dvrYOffset = 0;
+#endif
+
+cvar_t  *r_paletteMode;
+cvar_t	*r_edgy;
+cvar_t	*r_invert;
+cvar_t	*r_rainbow;
+cvar_t	*r_berserk;
+cvar_t	*r_showverts;
+
+#ifdef USE_AUTO_TERRAIN
+cvar_t	*r_autoTerrain;
+#endif
 
 // for modular renderer
 #ifdef USE_RENDERER_DLOPEN
@@ -1154,9 +1173,10 @@ static void R_Register( void )
 	ri.Cvar_SetDescription( r_vertexLight, "Set to 1 to use vertex light instead of lightmaps, collapse all multi-stage shaders into single-stage ones, might cause rendering artifacts." );
 	r_subdivisions = ri.Cvar_Get ("r_subdivisions", "4", CVAR_ARCHIVE | CVAR_LATCH);
 	ri.Cvar_SetDescription(r_subdivisions, "Distance to subdivide bezier curved surfaces. Higher values mean less subdivision and less geometric complexity.");
-	r_greyscale = ri.Cvar_Get("r_greyscale", "0", CVAR_ARCHIVE | CVAR_LATCH);
+	r_greyscale = ri.Cvar_Get("r_greyscale", "0", CVAR_ARCHIVE);
 	ri.Cvar_CheckRange( r_greyscale, "0", "1", CV_FLOAT );
 	ri.Cvar_SetDescription( r_greyscale, "Desaturates rendered frame." );
+	ri.Cvar_SetGroup( r_greyscale, CVG_RENDERER );
 
 	r_externalGLSL = ri.Cvar_Get( "r_externalGLSL", "0", CVAR_LATCH );
 
@@ -1212,7 +1232,11 @@ static void R_Register( void )
 	r_dlightMode = ri.Cvar_Get( "r_dlightMode", "0", CVAR_ARCHIVE | CVAR_LATCH );
 	ri.Cvar_SetDescription( r_dlightMode, "Dynamic light mode:\n 0: VQ3 'fake' dynamic lights\n 1: High-quality per-pixel dynamic lights, slightly faster than VQ3's on modern hardware\n 2: Same as 1 but applies to all MD3 models too" );
 	r_pshadowDist = ri.Cvar_Get( "r_pshadowDist", "128", CVAR_ARCHIVE );
+#if defined(__WASM__) || defined(USE_MULTIVM_SERVER) || defined(USE_MULTIVM_RENDERER)
+	r_mergeLightmaps = ri.Cvar_Get( "r_mergeLightmaps", "0", CVAR_ROM );
+#else
 	r_mergeLightmaps = ri.Cvar_Get( "r_mergeLightmaps", "1", CVAR_ARCHIVE | CVAR_LATCH );
+#endif
 	ri.Cvar_SetDescription( r_mergeLightmaps, "Merge small lightmaps into 2 or fewer giant lightmaps." );
 	r_imageUpsample = ri.Cvar_Get( "r_imageUpsample", "0", CVAR_ARCHIVE | CVAR_LATCH );
 	r_imageUpsampleMaxSize = ri.Cvar_Get( "r_imageUpsampleMaxSize", "1024", CVAR_ARCHIVE | CVAR_LATCH );
@@ -1387,6 +1411,27 @@ static void R_Register( void )
 	ri.Cvar_SetDescription( r_maxpolys, "Maximum number of polygons to draw in a scene." );
 	r_maxpolyverts = ri.Cvar_Get( "r_maxpolyverts", va("%d", MAX_POLYVERTS), 0);
 	ri.Cvar_SetDescription( r_maxpolyverts, "Maximum number of polygon vertices to draw in a scene." );
+	r_maxpolybuffers = ri.Cvar_Get( "r_maxpolybuffers", va("%i", MAX_POLYBUFFERS), CVAR_LATCH);
+
+  r_paletteMode = ri.Cvar_Get("r_paletteMode", "0", CVAR_ARCHIVE);
+	ri.Cvar_SetGroup( r_paletteMode, CVG_RENDERER );
+	r_edgy = ri.Cvar_Get( "r_edgy", "0", CVAR_ARCHIVE_ND );
+	ri.Cvar_SetGroup( r_edgy, CVG_RENDERER );
+	r_invert = ri.Cvar_Get( "r_invert", "0", CVAR_ARCHIVE_ND );
+	ri.Cvar_SetGroup( r_invert, CVG_RENDERER );
+	r_rainbow = ri.Cvar_Get( "r_rainbow", "0", CVAR_ARCHIVE_ND );
+	ri.Cvar_SetGroup( r_rainbow, CVG_RENDERER );
+	r_berserk = ri.Cvar_Get( "r_berserk", "0", CVAR_ARCHIVE_ND );
+	ri.Cvar_SetGroup( r_berserk, CVG_RENDERER );
+
+	r_showverts = ri.Cvar_Get ("r_showverts", "0", CVAR_ARCHIVE_ND);
+	ri.Cvar_SetDescription(r_showverts, "Debugging tool: Vertex rendering of polygon triangles in the world.");
+
+#ifdef USE_AUTO_TERRAIN
+	r_autoTerrain = ri.Cvar_Get( "r_autoTerrain", "90", CVAR_ARCHIVE_ND );
+	ri.Cvar_SetDescription( r_autoTerrain, "Allow mappers to request the renderer automatically re-apply alpha maps (aka the old way) to world geometry as it loads. For example, chaning seasons during gameplay." );
+#endif
+
 
 	// make sure all the commands added here are also
 	// removed in R_Shutdown
@@ -1439,9 +1484,16 @@ void R_Init( void ) {
 	ri.Printf( PRINT_ALL, "----- R_Init -----\n" );
 
 	// clear all our internal state
+#ifdef USE_MULTIVM_RENDERER
+	Com_Memset( &trWorlds, 0, sizeof( trWorlds ) );
+	Com_Memset( &backEnd, 0, sizeof( backEnd ) );
+	Com_Memset( &tess, 0, sizeof( tess ) );
+	Com_Memset( &glState, 0, sizeof( glState ) );
+#else
 	Com_Memset( &tr, 0, sizeof( tr ) );
 	Com_Memset( &backEnd, 0, sizeof( backEnd ) );
 	Com_Memset( &tess, 0, sizeof( tess ) );
+#endif
 
 	if(sizeof(glconfig_t) != 11332)
 		ri.Error( ERR_FATAL, "Mod ABI incompatible: sizeof(glconfig_t) == %u != 11332", (unsigned int) sizeof(glconfig_t));
@@ -1492,10 +1544,17 @@ void R_Init( void ) {
 	if (max_polyverts < MAX_POLYVERTS)
 		max_polyverts = MAX_POLYVERTS;
 
-	ptr = ri.Hunk_Alloc( sizeof( *backEndData ) + sizeof(srfPoly_t) * max_polys + sizeof(polyVert_t) * max_polyverts, h_low);
+	max_polybuffers = r_maxpolybuffers->integer;
+	if (max_polybuffers < MAX_POLYBUFFERS)
+		max_polybuffers = MAX_POLYBUFFERS;
+
+	ptr = ri.Hunk_Alloc( sizeof( *backEndData ) + sizeof(srfPoly_t) * max_polys + sizeof(polyVert_t) * max_polyverts + sizeof(srfPolyBuffer_t) * max_polybuffers, h_low);
 	backEndData = (backEndData_t *) ptr;
 	backEndData->polys = (srfPoly_t *) ((char *) ptr + sizeof( *backEndData ));
 	backEndData->polyVerts = (polyVert_t *) ((char *) ptr + sizeof( *backEndData ) + sizeof(srfPoly_t) * max_polys);
+	backEndData->polybuffers = (srfPolyBuffer_t *) ((char *) ptr + sizeof( *backEndData ) + sizeof(srfPoly_t) * max_polys + sizeof(polyVert_t) * max_polyverts);
+
+	
 	R_InitNextFrame();
 
 	InitOpenGL();
@@ -1509,6 +1568,9 @@ void R_Init( void ) {
 
 	R_InitVaos();
 
+#ifdef __WASM__
+	tr.numShaders = 0;
+#endif
 	R_InitShaders();
 
 	R_InitSkins();
@@ -1525,7 +1587,7 @@ void R_Init( void ) {
 		ri.Printf (PRINT_ALL, "glGetError() = 0x%x\n", err);
 
 	// print info
-	GfxInfo_f();
+	//GfxInfo_f();
 	ri.Printf( PRINT_ALL, "----- finished R_Init -----\n" );
 }
 
@@ -1565,6 +1627,7 @@ static void RE_Shutdown( refShutdownCode_t code ) {
 	R_DoneFreeType();
 
 	// shut down platform specific OpenGL stuff
+#ifndef __WASM__
 	if ( code != REF_KEEP_CONTEXT ) {
 		ri.GLimp_Shutdown( code == REF_UNLOAD_DLL ? qtrue: qfalse );
 
@@ -1576,6 +1639,7 @@ static void RE_Shutdown( refShutdownCode_t code ) {
 
 		Com_Memset( &glState, 0, sizeof( glState ) );
 	}
+#endif
 
 	ri.FreeAll();
 
@@ -1595,6 +1659,30 @@ static void RE_EndRegistration( void ) {
 	if ( !ri.Sys_LowPhysicalMemory() ) {
 		RB_ShowImages();
 	}
+}
+
+#ifdef __WASM__
+void R_FinishImage3( image_t *, byte *pic, GLenum picFormat, int numMips );
+void RE_FinishImage3(void *img, byte *pic, int picFormat, int numMips) {
+	R_FinishImage3((image_t *)img, pic, picFormat, numMips);
+}
+#endif
+
+#ifdef USE_LAZY_MEMORY
+#ifdef USE_MULTIVM_RENDERER
+void RE_SetDvrFrame(float x, float y, float width, float height) {
+	dvrXScale = width;
+	dvrYScale = height;
+	dvrXOffset = x;
+	dvrYOffset = y;
+}
+#endif
+#endif
+
+
+static const cplane_t *RE_GetFrustum( void )
+{
+	return tr.viewParms.frustum;
 }
 
 
@@ -1668,6 +1756,19 @@ refexport_t *GetRefAPI ( int apiVersion, refimport_t *rimp ) {
 	re.GetConfig = RE_GetConfig;
 	re.VertexLighting = RE_VertexLighting;
 	re.SyncRender = RE_SyncRender;
+
+	re.AddPolyBufferToScene =   RE_AddPolyBufferToScene;
+
+#if defined(USE_MULTIVM_RENDERER) || defined(USE_MULTIVM_SERVER)
+	re.InitShaders = R_InitShaders;
+#endif
+#if defined(__WASM__)
+	re.FinishImage3 = RE_FinishImage3;
+#endif
+
+#ifdef USE_MULTIVM_RENDERER
+	re.SetDvrFrame = RE_SetDvrFrame;
+#endif
 
 	return &re;
 }

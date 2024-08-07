@@ -114,7 +114,12 @@ RE_AddPolyToScene
 
 =====================
 */
-void RE_AddPolyToScene( qhandle_t hShader, int numVerts, const polyVert_t *verts, int numPolys ) {
+#ifdef USE_MULTIVM_RENDERER
+void RE_AddPolyToScene( qhandle_t hShader, int numVerts, const polyVert_t *verts, int numPolys, int world ) 
+#else
+void RE_AddPolyToScene( qhandle_t hShader, int numVerts, const polyVert_t *verts, int numPolys ) 
+#endif
+{
 	srfPoly_t	*poly;
 	int			i, j;
 	int			fogIndex;
@@ -210,7 +215,12 @@ static int isnan_fp( const float *f )
 RE_AddRefEntityToScene
 =====================
 */
-void RE_AddRefEntityToScene( const refEntity_t *ent, qboolean intShaderTime ) {
+#ifdef USE_MULTIVM_RENDERER
+void RE_AddRefEntityToScene( const refEntity_t *ent, qboolean intShaderTime, int world )
+#else
+void RE_AddRefEntityToScene( const refEntity_t *ent, qboolean intShaderTime ) 
+#endif
+{
 	if ( !tr.registered ) {
 		return;
 	}
@@ -233,6 +243,9 @@ void RE_AddRefEntityToScene( const refEntity_t *ent, qboolean intShaderTime ) {
 	backEndData->entities[r_numentities].e = *ent;
 	backEndData->entities[r_numentities].lightingCalculated = qfalse;
 	backEndData->entities[r_numentities].intShaderTime = intShaderTime;
+#ifdef USE_MULTIVM_RENDERER
+	backEndData->entities[r_numentities].world = world;
+#endif
 
 	r_numentities++;
 }
@@ -297,7 +310,12 @@ static void RE_AddDynamicLightToScene( const vec3_t org, float intensity, float 
 RE_AddLinearLightToScene
 =====================
 */
-void RE_AddLinearLightToScene( const vec3_t start, const vec3_t end, float intensity, float r, float g, float b  ) {
+#ifdef USE_MULTIVM_RENDERER
+void RE_AddLinearLightToScene( const vec3_t start, const vec3_t end, float intensity, float r, float g, float b, int world )
+#else
+void RE_AddLinearLightToScene( const vec3_t start, const vec3_t end, float intensity, float r, float g, float b  ) 
+#endif
+{
 	dlight_t	*dl;
 	if ( VectorCompare( start, end ) ) {
 		RE_AddDynamicLightToScene( start, intensity, r, g, b, 0 );
@@ -351,7 +369,12 @@ RE_AddLightToScene
 
 =====================
 */
-void RE_AddLightToScene( const vec3_t org, float intensity, float r, float g, float b ) {
+#ifdef USE_MULTIVM_RENDERER
+void RE_AddLightToScene( const vec3_t org, float intensity, float r, float g, float b, int world ) 
+#else
+void RE_AddLightToScene( const vec3_t org, float intensity, float r, float g, float b ) 
+#endif
+{
 	RE_AddDynamicLightToScene( org, intensity, r, g, b, qfalse );
 }
 
@@ -362,7 +385,12 @@ RE_AddAdditiveLightToScene
 
 =====================
 */
-void RE_AddAdditiveLightToScene( const vec3_t org, float intensity, float r, float g, float b ) {
+#ifdef USE_MULTIVM_RENDERER
+void RE_AddAdditiveLightToScene( const vec3_t org, float intensity, float r, float g, float b, int world ) 
+#else
+void RE_AddAdditiveLightToScene( const vec3_t org, float intensity, float r, float g, float b ) 
+#endif
+{
 	RE_AddDynamicLightToScene( org, intensity, r, g, b, qtrue );
 }
 
@@ -380,7 +408,12 @@ Rendering a scene may require multiple views to be rendered
 to handle mirrors,
 @@@@@@@@@@@@@@@@@@@@@
 */
-void RE_RenderScene( const refdef_t *fd ) {
+#ifdef USE_MULTIVM_RENDERER
+void RE_RenderScene( const refdef_t *fd, int world ) 
+#else
+void RE_RenderScene( const refdef_t *fd ) 
+#endif
+{
 #ifdef USE_VULKAN
 	renderCommand_t	lastRenderCommand;
 #endif
@@ -481,10 +514,20 @@ void RE_RenderScene( const refdef_t *fd ) {
 	// convert to GL's 0-at-the-bottom space
 	//
 	Com_Memset( &parms, 0, sizeof( parms ) );
+
+#ifdef USE_MULTIVM_RENDERER
+	parms.newWorld = world;
+
+	parms.viewportX = tr.refdef.x * dvrXScale + (dvrXOffset * glConfig.vidWidth);
+	parms.viewportY = glConfig.vidHeight - ( (tr.refdef.y * dvrYScale + (dvrYOffset * glConfig.vidHeight)) + (tr.refdef.height * dvrYScale) );
+	parms.viewportWidth = tr.refdef.width * dvrXScale;
+	parms.viewportHeight = tr.refdef.height * dvrYScale;
+#else
 	parms.viewportX = tr.refdef.x;
 	parms.viewportY = glConfig.vidHeight - ( tr.refdef.y + tr.refdef.height );
 	parms.viewportWidth = tr.refdef.width;
 	parms.viewportHeight = tr.refdef.height;
+#endif
 
 	parms.scissorX = parms.viewportX;
 	parms.scissorY = parms.viewportY;

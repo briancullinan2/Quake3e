@@ -28,7 +28,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
 // surface geometry should not exceed these limits
-#define	SHADER_MAX_VERTEXES	1000
+#define	SHADER_MAX_VERTEXES	8000
 #define	SHADER_MAX_INDEXES	(6*SHADER_MAX_VERTEXES)
 
 
@@ -330,7 +330,7 @@ typedef struct {
 #define	MAX_MAP_LIGHTGRID	0x800000
 #define	MAX_MAP_VISIBILITY	0x200000
 
-#define	MAX_MAP_DRAW_SURFS	0x20000
+#define	MAX_MAP_DRAW_SURFS	0x40000
 #define	MAX_MAP_DRAW_VERTS	0x80000
 #define	MAX_MAP_DRAW_INDEXES	0x80000
 

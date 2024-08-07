@@ -23,6 +23,10 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #ifndef __Q_SHARED_H
 #define __Q_SHARED_H
 
+
+#define USE_AUTO_TERRAIN 1
+
+
 // q_shared.h -- included first by ALL program modules.
 // A user mod should never modify this file
 
@@ -43,12 +47,64 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define STEAMPATH_APPID			"2200"
 
 #define MAX_TEAMNAME            32
-#define MAX_MASTER_SERVERS      5	// number of supported master servers
+#define MAX_MASTER_SERVERS      24	// number of supported master servers
 
 #define GAMENAME_FOR_MASTER		"Quake3Arena"
 #define HEARTBEAT_FOR_MASTER	"QuakeArena-1"
 
 #define DEMOEXT	"dm_"			// standard demo extension
+
+
+//===========================================================================
+
+#define USE_MULTIVM_CLIENT 1
+#ifndef __WASM__
+#define USE_MULTIVM_SERVER 1
+#endif
+#define USE_MULTIVM_RENDERER 1
+
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
+// Cyrax's Multiview is what makes multiworld possible.
+//#define USE_UNLOCKED_CVARS 0
+#define USE_ENGINE_TELE 1
+#define USE_LAZY_MEMORY 1
+//#define USE_LAZY_LOAD 1
+#endif
+
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
+#undef Q3_VERSION
+//#undef MV_PROTOCOL_VERSION
+#define Q3_VERSION            "Q3 1.32e MV"
+#define MV_MULTIWORLD_VERSION 2
+//#define MV_PROTOCOL_VERSION MV_MULTIWORLD_VERSION
+#endif
+
+
+
+#ifdef USE_LOCAL_DED
+// allows server to run any client command from remote to client, opposite of /rcon
+#define USE_CMD_CONNECTOR 1
+//
+#else
+//
+#undef USE_CMD_CONNECTOR
+//
+#endif
+
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
+#define MAX_NUM_VMS 10
+#else
+#define MAX_NUM_VMS 1
+#endif
+
+#define GET_ABIT( byteArray, bitIndex ) ((byteArray)[ (bitIndex) / 8 ] & ( 1 << ( (bitIndex) & 7 ) ))
+#define SET_ABIT( byteArray, bitIndex ) (byteArray)[ (bitIndex) / 8 ] |= ( 1 << ( (bitIndex) & 7 ) )
+
+#define DEMOEXT	"dm_"			// standard demo extension
+#define SVDEMOEXT	"svdm_"		// server-side demo extension
+
+//=========================================================================
+
 
 #ifdef _MSC_VER
 
@@ -191,6 +247,10 @@ float FloatSwap( const float *f );
 	#endif
 #endif
 
+#ifdef __WASM__
+#include "../wasm/sys_overrides.h"
+#else
+
 #if defined (_WIN32)
 #if !defined(_MSC_VER)
 // use GCC/Clang functions
@@ -209,6 +269,8 @@ int Q_longjmp_c(void *, int);
 #else // !_WIN32
 #define Q_setjmp setjmp
 #define Q_longjmp longjmp
+#endif
+
 #endif
 
 typedef unsigned char byte;
@@ -782,6 +844,7 @@ typedef struct pc_token_s
 } pc_token_t;
 
 // data is an in/out parm, returns a parsed out token
+void COM_MatchToken( const char**buf_p, const char *match );
 
 qboolean SkipBracedSection( const char **program, int depth );
 void SkipRestOfLine( const char **data );
@@ -946,6 +1009,13 @@ default values.
 #define CVAR_DEVELOPER		0x10000 // can be set only in developer mode
 #define CVAR_NOTABCOMPLETE	0x20000 // no tab completion in console
 
+
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
+#define CVAR_TAGGED_SPECIFIC   0x40000
+#define CVAR_TAGGED_ORIGINAL   0x80000
+#endif
+
+
 #define CVAR_ARCHIVE_ND		(CVAR_ARCHIVE | CVAR_NODEFAULT)
 
 // These flags are only returned by the Cvar_Flags() function
@@ -991,6 +1061,9 @@ struct cvar_s {
 	cvar_t		*hashPrev;
 	int			hashIndex;
 	cvarGroup_t	group;				// to track changes
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
+  int        tag;
+#endif
 };
 
 #define	MAX_CVAR_VALUE_STRING	256
@@ -1113,6 +1186,7 @@ typedef enum {
 #define	SNAPFLAG_RATE_DELAYED	1
 #define	SNAPFLAG_NOT_ACTIVE		2	// snapshot used during connection and for zombies
 #define SNAPFLAG_SERVERCOUNT	4	// toggled every map_restart so transitions can be detected
+
 
 //
 // per-level limits

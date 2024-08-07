@@ -22,6 +22,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #ifndef __TR_PUBLIC_H
 #define __TR_PUBLIC_H
 
+
 #include "tr_types.h"
 #include "vulkan/vulkan.h"
 
@@ -57,7 +58,11 @@ typedef struct {
 	qhandle_t (*RegisterSkin)( const char *name );
 	qhandle_t (*RegisterShader)( const char *name );
 	qhandle_t (*RegisterShaderNoMip)( const char *name );
+#ifdef USE_MULTIVM_RENDERER
+	int	(*LoadWorld)( const char *name );
+#else
 	void	(*LoadWorld)( const char *name );
+#endif
 
 	// the vis data is a large enough block of data that we go to the trouble
 	// of sharing it with the clipmodel subsystem
@@ -70,6 +75,17 @@ typedef struct {
 	// a scene is built up by calls to R_ClearScene and the various R_Add functions.
 	// Nothing is drawn until R_RenderScene is called.
 	void	(*ClearScene)( void );
+
+
+#ifdef USE_MULTIVM_RENDERER
+	void	(*AddRefEntityToScene)( const refEntity_t *re, qboolean intShaderTime, int world );
+	void	(*AddPolyToScene)( qhandle_t hShader , int numVerts, const polyVert_t *verts, int num, int world );
+	int		(*LightForPoint)( vec3_t point, vec3_t ambientLight, vec3_t directedLight, vec3_t lightDir, int world );
+	void	(*AddLightToScene)( const vec3_t org, float intensity, float r, float g, float b, int world );
+	void	(*AddAdditiveLightToScene)( const vec3_t org, float intensity, float r, float g, float b, int world );
+	void	(*AddLinearLightToScene)( const vec3_t start, const vec3_t end, float intensity, float r, float g, float b, int world );
+	void	(*RenderScene)( const refdef_t *fd, int world );
+#else
 	void	(*AddRefEntityToScene)( const refEntity_t *re, qboolean intShaderTime );
 	void	(*AddPolyToScene)( qhandle_t hShader , int numVerts, const polyVert_t *verts, int num );
 	int		(*LightForPoint)( vec3_t point, vec3_t ambientLight, vec3_t directedLight, vec3_t lightDir );
@@ -77,14 +93,15 @@ typedef struct {
 	void	(*AddAdditiveLightToScene)( const vec3_t org, float intensity, float r, float g, float b );
 	void	(*AddLinearLightToScene)( const vec3_t start, const vec3_t end, float intensity, float r, float g, float b );
 	void	(*RenderScene)( const refdef_t *fd );
+#endif
 
 	void	(*SetColor)( const float *rgba );	// NULL = 1,1,1,1
 	void	(*DrawStretchPic) ( float x, float y, float w, float h,
 		float s1, float t1, float s2, float t2, qhandle_t hShader );	// 0 = white
 
 	// Draw images for cinematic rendering, pass as 32 bit rgba
-	void	(*DrawStretchRaw)( int x, int y, int w, int h, int cols, int rows, byte *data, int client, qboolean dirty );
-	void	(*UploadCinematic)( int w, int h, int cols, int rows, byte *data, int client, qboolean dirty );
+	void	(*DrawStretchRaw)( int x, int y, int w, int h, int cols, int rows, const byte *data, int client, qboolean dirty );
+	void	(*UploadCinematic)( int w, int h, int cols, int rows, const byte *data, int client, qboolean dirty );
 
 	void	(*BeginFrame)( stereoFrame_t stereoFrame );
 
@@ -121,6 +138,22 @@ typedef struct {
 	void	(*VertexLighting)( qboolean allowed );
 	void	(*SyncRender)( void );
 
+
+#ifdef USE_MULTIVM_RENDERER
+	void ( *AddPolyBufferToScene )( polyBuffer_t* pPolyBuffer, int world );
+#else
+	void ( *AddPolyBufferToScene )( polyBuffer_t* pPolyBuffer );
+#endif
+
+  const cplane_t *(*GetFrustum)( void );
+
+#if defined(USE_MULTIVM_RENDERER) || defined(__WASM__)
+	void	(*InitShaders)( void );
+	void	(*FinishImage3)(void *, byte *pic, int picFormat, int numMips);
+#endif
+#ifdef USE_MULTIVM_RENDERER
+	void  (*SetDvrFrame)( float x, float y, float height, float width );
+#endif
 
 } refexport_t;
 
@@ -177,7 +210,11 @@ typedef struct {
 
 	void	(*Cmd_ExecuteText)( cbufExec_t exec_when, const char *text );
 
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
+	byte	*(*CM_ClusterPVS)(int cluster, int cmi);
+#else
 	byte	*(*CM_ClusterPVS)(int cluster);
+#endif
 
 	// visualization for debugging collision detection
 	void	(*CM_DrawDebugSurface)( void (*drawPoly)(int color, int numPoints, float *points) );

@@ -665,6 +665,9 @@ static void Con_DrawNotify( void )
 	int		skip;
 	int		currentColorIndex;
 	int		colorIndex;
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+  int igs = cgvmi_ref;
+#endif
 
 	currentColorIndex = ColorIndex( COLOR_WHITE );
 	re.SetColor( g_color_table[ currentColorIndex ] );
@@ -984,9 +987,14 @@ void Con_Bottom( void )
 
 void Con_Close( void )
 {
-	if ( !com_cl_running->integer )
+	if ( !com_cl_running || !com_cl_running->integer )
 		return;
 
+	if(!uivm && !cgvm && cls.state == CA_DISCONNECTED) {
+		con.finalFrac = 1.0;
+		Key_SetCatcher( Key_GetCatcher( ) | KEYCATCH_CONSOLE );
+		return; // don't try to hide console because we don't have a VM to display
+	}
 	Field_Clear( &g_consoleField );
 	Con_ClearNotify();
 	Key_SetCatcher( Key_GetCatcher( ) & ~KEYCATCH_CONSOLE );

@@ -409,6 +409,7 @@ cscript.exe /nologo glsl_stringify.vbs ..\..\renderer2\glsl\tonemap_vp.glsl .\bu
     <ClCompile Include="..\..\renderer2\tr_image_dds.c" />
     <ClCompile Include="..\..\renderer2\tr_init.c" />
     <ClCompile Include="..\..\renderer2\tr_light.c" />
+    <ClCompile Include="..\..\renderercommon\tr_manipulation.c" />
     <ClCompile Include="..\..\renderer2\tr_main.c" />
     <ClCompile Include="..\..\renderer2\tr_marks.c" />
     <ClCompile Include="..\..\renderer2\tr_mesh.c" />

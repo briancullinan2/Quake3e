@@ -638,7 +638,15 @@ qboolean R_inPVS( const vec3_t p1, const vec3_t p2 ) {
 	const byte	*vis;
 
 	leaf = R_PointInLeaf( p1 );
+#ifdef USE_MULTIVM_RENDERER
+	vis = ri.CM_ClusterPVS( leaf->cluster, tr.viewParms.newWorld );
+#else
+#ifdef USE_MULTIVM_SERVER
+	vis = ri.CM_ClusterPVS( leaf->cluster, 0 );
+#else
 	vis = ri.CM_ClusterPVS( leaf->cluster ); // why not R_ClusterPVS ??
+#endif
+#endif
 	leaf = R_PointInLeaf( p2 );
 
 	if ( !(vis[leaf->cluster>>3] & (1<<(leaf->cluster&7))) ) {

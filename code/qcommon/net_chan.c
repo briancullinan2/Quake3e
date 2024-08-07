@@ -95,6 +95,9 @@ void Netchan_Setup( netsrc_t sock, netchan_t *chan, const netadr_t *adr, int por
 	chan->challenge = challenge;
 	chan->compat = compat;
 	chan->isLANAddress = Sys_IsLANAddress( adr );
+#ifdef USE_MULTIVM_SERVER
+	chan->remoteAddress.netWorld = 0;
+#endif
 }
 
 
@@ -768,6 +771,26 @@ void NET_OutOfBandCompress( netsrc_t sock, const netadr_t *adr, const byte *data
 	NET_SendPacket( sock, mbuf.cursize, mbuf.data, adr );
 }
 
+char *NET_ParseProtocol(const char *s, char *protocol)
+{
+	if ( !Q_stricmpn( s, "ws://", 5 ) ) {
+    if(protocol != 0) Com_Memcpy(protocol, "ws", 3);
+		return (char *)&s[5];
+  } else if ( !Q_stricmpn( s, "wss://", 6 ) ) {
+		if(protocol != 0) Com_Memcpy(protocol, "wss", 4);
+		return (char *)&s[6];
+  } else if ( !Q_stricmpn( s, "http://", 7 ) ) {
+		if(protocol != 0) Com_Memcpy(protocol, "http", 5);
+		return (char *)&s[7];
+  } else if ( !Q_stricmpn( s, "https://", 8 ) ) {
+		if(protocol != 0) Com_Memcpy(protocol, "https", 6);
+		return (char *)&s[8];
+  } else {
+		if(protocol != 0) protocol[0] = 0;
+		return (char *)&s[0];
+  }
+}
+
 
 /*
 =============
@@ -789,8 +812,14 @@ int NET_StringToAdr( const char *s, netadr_t *a, netadrtype_t family )
 		return 1;
 	}
 
-	Q_strncpyz( base, s, sizeof( base ) );
-	
+#ifdef USE_MULTIVM_SERVER
+	a->netWorld = 0;
+#endif
+
+	a->protocol[0] = 0;
+	search = NET_ParseProtocol(s, a->protocol);
+	Q_strncpyz( base, search, sizeof( base ) );
+
 	if(*base == '[' || Q_CountChar(base, ':') > 1)
 	{
 		// This is an ipv6 address, handle it specially.
@@ -822,6 +851,7 @@ int NET_StringToAdr( const char *s, netadr_t *a, netadrtype_t family )
 		search = base;
 	}
 
+	Q_strncpyz( a->name, search, sizeof(a->name) );
 	if(!Sys_StringToAdr(search, a, family))
 	{
 		a->type = NA_BAD;

@@ -370,6 +370,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\..\renderercommon\tr_manipulation.c"
+				>
+			</File>
+			<File
 				RelativePath="..\..\renderer2\tr_main.c"
 				>
 			</File>

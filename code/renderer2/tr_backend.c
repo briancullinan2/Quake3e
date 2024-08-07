@@ -27,6 +27,9 @@ backEndData_t	*backEndData;
 backEndState_t	backEnd;
 
 
+qboolean shouldUseAlternate = qfalse;
+
+
 static float	s_flipMatrix[16] = {
 	// convert from our coordinate system (looking down X)
 	// to OpenGL's coordinate system (looking down -Z)
@@ -52,6 +55,26 @@ void GL_BindToTMU( image_t *image, int tmu )
 
 		image->frameUsed = tr.frameCount;
 		texture = image->texnum;
+#ifdef __WASM__
+		// this is because if a texture on the web does not load, it will make
+		//   the entire rendering slow as it tries to fill every pixel with a
+		//   null image.
+		//if(image->paletteImage) {
+		//	texture = image->paletteImage;
+		//} else
+		//if(!texture || image->width <= 1 || image->height <= 1) {
+		//	texture = tr.defaultImage->texnum;
+		//}
+#endif
+		if(image && (r_paletteMode->integer || !image->texnum) && image->palette) {
+			texture = image->palette->texnum;
+		}
+
+		if(image && shouldUseAlternate && image->alternate) {
+			texture = image->alternate->texnum;
+		}
+
+
 	}
 	else
 	{
@@ -1732,6 +1755,32 @@ static const void *RB_ExportCubemaps(const void *data)
 }
 
 
+#ifdef USE_MULTIVM_RENDERER
+/*
+=============
+RB_SetWorld
+=============
+*/
+static const void *RB_SetWorld( const void *data ) {
+	const setWorldCommand_t	*cmd;
+	cmd = (const setWorldCommand_t *)data;
+
+//Com_Printf("switching world: %i -> %i", rwi, cmd->world);
+	//rwi = cmd->world;
+	// TODO: skip world options
+	if(cmd->next) {
+		if(qtrue && ((const setWorldCommand_t *)data)) {
+
+		}
+
+		//return cmd->next;
+	}
+
+	return (const void *)(cmd + 1);
+}
+#endif
+
+
 /*
 ====================
 RB_ExecuteRenderCommands
@@ -1746,6 +1795,13 @@ void RB_ExecuteRenderCommands( const void *data ) {
 		data = PADP(data, sizeof(void *));
 
 		switch ( *(const int *)data ) {
+
+#ifdef USE_MULTIVM_RENDERER
+		case RC_SET_WORLD:
+			data = RB_SetWorld( data );
+			break;
+#endif
+
 		case RC_SET_COLOR:
 			data = RB_SetColor( data );
 			break;

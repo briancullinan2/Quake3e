@@ -32,7 +32,13 @@ botlib_export_t	*botlib_export;
 int	SV_NumForGentity( sharedEntity_t *ent ) {
 	int		num;
 
+
+#ifdef USE_MULTIVM_SERVER
+  num = ( (byte *)ent - (byte *)sv.gentitiesWorlds[gvmi] ) / sv.gentitySizes[gvmi];
+#else
 	num = ( (byte *)ent - (byte *)sv.gentities ) / sv.gentitySize;
+#endif
+
 
 	return num;
 }
@@ -41,7 +47,13 @@ int	SV_NumForGentity( sharedEntity_t *ent ) {
 sharedEntity_t *SV_GentityNum( int num ) {
 	sharedEntity_t *ent;
 
-	ent = (sharedEntity_t *)((byte *)sv.gentities + sv.gentitySize*(num));
+
+#ifdef USE_MULTIVM_SERVER
+	ent = (sharedEntity_t *)((byte *)sv.gentitiesWorlds[gvmi] + sv.gentitySizes[gvmi]*(num));
+#else
+  ent = (sharedEntity_t *)((byte *)sv.gentities + sv.gentitySize*(num));
+#endif
+
 
 	return ent;
 }
@@ -59,6 +71,7 @@ playerState_t *SV_GameClientNum( int num ) {
 svEntity_t	*SV_SvEntityForGentity( sharedEntity_t *gEnt ) {
 	if ( !gEnt || gEnt->s.number < 0 || gEnt->s.number >= MAX_GENTITIES ) {
 		Com_Error( ERR_DROP, "SV_SvEntityForGentity: bad gEnt" );
+		return NULL;
 	}
 	return &sv.svEntities[ gEnt->s.number ];
 }
@@ -119,6 +132,7 @@ static void SV_SetBrushModel( sharedEntity_t *ent, const char *name ) {
 
 	if ( !name ) {
 		Com_Error( ERR_DROP, "SV_SetBrushModel: NULL" );
+		return;
 	}
 
 	if ( name[0] != '*' ) {
@@ -127,7 +141,17 @@ static void SV_SetBrushModel( sharedEntity_t *ent, const char *name ) {
 
 	ent->s.modelindex = atoi( name + 1 );
 
-	h = CM_InlineModel( ent->s.modelindex );
+
+#ifdef USE_MULTIVM_SERVER
+	h = CM_InlineModel( ent->s.modelindex, 4, gvmi );
+#else
+#if defined(USE_MULTIVM_RENDERER) || defined(USE_MULTIVM_CLIENT)
+  h = CM_InlineModel( ent->s.modelindex, 4, 0 );
+#else
+  h = CM_InlineModel( ent->s.modelindex );
+#endif
+#endif
+
 	CM_ModelBounds( h, mins, maxs );
 	VectorCopy (mins, ent->r.mins);
 	VectorCopy (maxs, ent->r.maxs);
@@ -156,7 +180,17 @@ qboolean SV_inPVS( const vec3_t p1, const vec3_t p2 )
 	leafnum = CM_PointLeafnum (p1);
 	cluster = CM_LeafCluster (leafnum);
 	area1 = CM_LeafArea (leafnum);
+
+#ifdef USE_MULTIVM_SERVER
+	mask = CM_ClusterPVS (cluster, gameWorlds[gvmi]);
+#else
+#if defined(USE_MULTIVM_RENDERER) || defined(USE_MULTIVM_CLIENT)
+	mask = CM_ClusterPVS (cluster, 0);
+#else
 	mask = CM_ClusterPVS (cluster);
+#endif
+#endif
+
 
 	leafnum = CM_PointLeafnum (p2);
 	cluster = CM_LeafCluster (leafnum);
@@ -184,7 +218,15 @@ static qboolean SV_inPVSIgnorePortals( const vec3_t p1, const vec3_t p2 )
 
 	leafnum = CM_PointLeafnum (p1);
 	cluster = CM_LeafCluster (leafnum);
+#ifdef USE_MULTIVM_SERVER
+	mask = CM_ClusterPVS (cluster, gameWorlds[gvmi]);
+#else
+#if defined(USE_MULTIVM_RENDERER) || defined(USE_MULTIVM_CLIENT)
+	mask = CM_ClusterPVS (cluster, 0);
+#else
 	mask = CM_ClusterPVS (cluster);
+#endif
+#endif
 
 	leafnum = CM_PointLeafnum (p2);
 	cluster = CM_LeafCluster (leafnum);
@@ -244,11 +286,30 @@ static void SV_GetServerinfo( char *buffer, int bufferSize ) {
 		Com_Error( ERR_DROP, "SV_GetServerinfo: bufferSize == %i", bufferSize );
 	}
 	if ( sv.state != SS_GAME || !sv.configstrings[ CS_SERVERINFO ] ) {
+
+#ifdef USE_MULTIVM_SERVER
 		Q_strncpyz( buffer, Cvar_InfoString( CVAR_SERVERINFO, NULL ), bufferSize );
+#else
+#if defined(USE_MULTIVM_RENDERER) || defined(USE_MULTIVM_CLIENT)
+    Q_strncpyz( buffer, Cvar_InfoString( CVAR_SERVERINFO, NULL ), bufferSize );
+#else
+    Q_strncpyz( buffer, Cvar_InfoString( CVAR_SERVERINFO, NULL ), bufferSize );
+#endif
+#endif
+
 	} else {
 		Q_strncpyz( buffer, sv.configstrings[ CS_SERVERINFO ], bufferSize );
 	}
 }
+
+
+
+#ifdef USE_MULTIVM_SERVER
+void SV_AddWorldlyEntities( void );
+void SV_RemoveWorldlyEntities( void );
+#endif
+
+
 
 
 /*
@@ -277,12 +338,24 @@ static void SV_LocateGameData( sharedEntity_t *gEnts, int numGEntities, int size
 		}
 	}
 
+
+#ifdef USE_MULTIVM_SERVER
+  sv.gentitiesWorlds[gvmi] = gEnts;
+  sv.gentitySizes[gvmi] = sizeofGEntity_t;
+  sv.num_entitiesWorlds[gvmi] = numGEntities;
+#else
 	sv.gentities = gEnts;
 	sv.gentitySize = sizeofGEntity_t;
 	sv.num_entities = numGEntities;
+#endif
+
 
 	sv.gameClients = clients;
 	sv.gameClientSize = sizeofGameClient;
+
+#ifdef USE_MULTIVM_SERVER
+	SV_AddWorldlyEntities();
+#endif
 }
 
 
@@ -359,11 +432,15 @@ The module is making a system call
 ====================
 */
 static intptr_t SV_GameSystemCalls( intptr_t *args ) {
+	//Com_Printf("world: %i, %i\n", gvmi, args[0]);
 	switch( args[0] ) {
 	case G_PRINT:
 		Com_Printf( "%s", (const char*)VMA(1) );
 		return 0;
 	case G_ERROR:
+		if(Q_stristr((const char*)VMA(1), "MD3 identifier 0")) {
+			return 0;
+		}
 		Com_Error( ERR_DROP, "%s", (const char*)VMA(1) );
 		return 0;
 	case G_MILLISECONDS:
@@ -390,7 +467,13 @@ static intptr_t SV_GameSystemCalls( intptr_t *args ) {
 		Cmd_ArgvBuffer( args[1], VMA(2), args[3] );
 		return 0;
 	case G_SEND_CONSOLE_COMMAND:
-		Cbuf_ExecuteText( args[1], VMA(2) );
+
+#if 0 //def USE_MULTIVM_SERVER
+		Cbuf_ExecuteTagged( args[1], VMA(2), gvmi );
+#else
+    Cbuf_ExecuteText( args[1], VMA(2) );
+#endif
+
 		return 0;
 
 	case G_FS_FOPEN_FILE:
@@ -993,12 +1076,33 @@ Called every time a map changes
 ===============
 */
 void SV_ShutdownGameProgs( void ) {
+
+#ifdef USE_MULTIVM_SERVER
+	for(int i = 0; i < MAX_NUM_VMS; i++) {
+		if ( !gvmWorlds[i] ) continue;
+		gvmi = i;
+		CM_SwitchMap(gameWorlds[gvmi]);
+		SV_SetAASgvm(gvmi);
+		SV_RemoveWorldlyEntities();
+#else
+
 	if ( !gvm ) {
 		return;
 	}
+#endif
+
+
 	VM_Call( gvm, 1, GAME_SHUTDOWN, qfalse );
 	VM_Free( gvm );
 	gvm = NULL;
+
+#ifdef USE_MULTIVM_SERVER
+	}
+	gvmi = 0;
+	CM_SwitchMap(gameWorlds[gvmi]);
+	SV_SetAASgvm(gvmi);
+#endif
+
 	FS_VM_CloseFiles( H_QAGAME );
 }
 
@@ -1020,13 +1124,21 @@ static void SV_InitGameVM( qboolean restart ) {
 	// a previous level
 	// https://zerowing.idsoftware.com/bugzilla/show_bug.cgi?id=522
 	// now done before GAME_INIT call
+#ifdef USE_MULTIVM_SERVER
+	if(gvmi == 0) // TODO: make svs. a MULTIVM array?
+#endif
 	for ( i = 0; i < sv.maxclients; i++ ) {
 		svs.clients[i].gentity = NULL;
 	}
+
 	
 	// use the current msec count for a random seed
 	// init for this gamestate
+#ifdef USE_MULTIVM_SERVER
+	VM_Call( gvm, 3, GAME_INIT, sv.time, Com_Milliseconds(), gvmi );
+#else
 	VM_Call( gvm, 3, GAME_INIT, sv.time, Com_Milliseconds(), restart );
+#endif
 }
 
 
@@ -1041,16 +1153,25 @@ void SV_RestartGameProgs( void ) {
 	if ( !gvm ) {
 		return;
 	}
+#ifndef USE_MULTIVM_SERVER
 	VM_Call( gvm, 1, GAME_SHUTDOWN, qtrue );
 
 	// do a restart instead of a free
+#ifndef BUILD_GAME_STATIC
 	gvm = VM_Restart( gvm );
+#endif
 	if ( !gvm ) {
 		Com_Error( ERR_DROP, "VM_Restart on game failed" );
 	}
 
 	SV_InitGameVM( qtrue );
 
+#else
+  // shut down and reload because Hunk_ClearToMark isn't used
+  SV_ShutdownGameProgs();
+  gvm = VM_Create( VM_GAME, SV_GameSystemCalls, SV_DllSyscall, Cvar_VariableIntegerValue( "vm_game" ) );
+  SV_InitGameVM( qfalse );
+#endif
 	// load userinfo filters
 	SV_LoadFilters( sv_filter->string );
 }
@@ -1063,7 +1184,12 @@ SV_InitGameProgs
 Called on a normal map change, not on a map_restart
 ===============
 */
-void SV_InitGameProgs( void ) {
+#ifdef USE_MULTIVM_SERVER
+void SV_InitGameProgs( qboolean createNew ) 
+#else
+void SV_InitGameProgs( void ) 
+#endif
+{
 	cvar_t	*var;
 	//FIXME these are temp while I make bots run in vm
 	extern int	bot_enable;
@@ -1097,6 +1223,13 @@ See if the current console command is claimed by the game
 ====================
 */
 qboolean SV_GameCommand( void ) {
+#ifdef USE_MULTIVM_SERVER
+	// TODO: allow server admins to set this somehow?
+	//gvmi = 0;
+	//CM_SwitchMap(gameWorlds[gvmi]);
+	//SV_SetAASgvm(gvmi);
+#endif
+
 	if ( sv.state != SS_GAME ) {
 		return qfalse;
 	}

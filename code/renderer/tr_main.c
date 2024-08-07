@@ -23,9 +23,15 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "tr_local.h"
 
+#ifndef __WASM__
 #include <string.h> // memcpy
+#endif
 
+#ifdef USE_MULTIVM_RENDERER
+trGlobals_t		trWorlds[MAX_NUM_WORLDS];
+#else
 trGlobals_t		tr;
+#endif
 
 static const float s_flipMatrix[16] = {
 	// convert from our coordinate system (looking down X)
@@ -750,7 +756,11 @@ Returns qtrue if it should be mirrored
 */
 static qboolean R_GetPortalOrientations( const drawSurf_t *drawSurf, int entityNum,
 							 orientation_t *surface, orientation_t *camera,
-							 vec3_t pvsOrigin, portalView_t *portalView ) {
+							 vec3_t pvsOrigin, portalView_t *portalView 
+#ifdef USE_MULTIVM_RENDERER
+							 , int *world 
+#endif
+							 ) {
 	int			i;
 	cplane_t	originalPlane, plane;
 	trRefEntity_t	*e;
@@ -825,8 +835,12 @@ static qboolean R_GetPortalOrientations( const drawSurf_t *drawSurf, int entityN
 		VectorSubtract( vec3_origin, camera->axis[0], camera->axis[0] );
 		VectorSubtract( vec3_origin, camera->axis[1], camera->axis[1] );
 
+#ifdef USE_MULTIVM_RENDERER
+		*world = e->e.oldframe >> 8;
+#endif
+
 		// optionally rotate
-		if ( e->e.oldframe ) {
+		if ( e->e.oldframe & (0xFF) ) {
 			// if a speed is specified
 			if ( e->e.frame ) {
 				// continuous rotate
@@ -1142,7 +1156,11 @@ static qboolean R_MirrorViewBySurface( const drawSurf_t *drawSurf, int entityNum
 	newParms.portalView = PV_NONE;
 
 	if ( !R_GetPortalOrientations( drawSurf, entityNum, &surface, &camera, 
-		newParms.pvsOrigin, &newParms.portalView ) ) {
+		newParms.pvsOrigin, &newParms.portalView 
+#ifdef USE_MULTIVM_RENDERER
+		, &newParms.newWorld
+#endif
+		) ) {
 		return qfalse;		// bad portal, no portalentity
 	}
 
@@ -1423,7 +1441,11 @@ R_DecomposeLitSort
 */
 void R_DecomposeLitSort( unsigned sort, int *entityNum, shader_t **shader, int *fogNum ) {
 	*fogNum = ( sort >> QSORT_FOGNUM_SHIFT ) & FOGNUM_MASK;
+#ifdef USE_MULTIVM_RENDERER
+	*shader = trWorlds[0].sortedShaders[ ( sort >> QSORT_SHADERNUM_SHIFT ) & SHADERNUM_MASK ];
+#else
 	*shader = tr.sortedShaders[ ( sort >> QSORT_SHADERNUM_SHIFT ) & SHADERNUM_MASK ];
+#endif
 	*entityNum = ( sort >> QSORT_REFENTITYNUM_SHIFT ) & REFENTITYNUM_MASK;
 }
 
@@ -1441,6 +1463,16 @@ void R_AddDrawSurf( surfaceType_t *surface, shader_t *shader,
 				   int fogIndex, int dlightMap ) {
 	int			index;
 
+#ifdef USE_MULTIVM_RENDERER
+	index = trWorlds[0].refdef.numDrawSurfs & DRAWSURF_MASK;
+	// the sort data is packed into a single 32 bit value so it can be
+	// compared quickly during the qsorting process
+	trWorlds[0].refdef.drawSurfs[index].sort = (shader->sortedIndex << QSORT_SHADERNUM_SHIFT) 
+		| trWorlds[0].shiftedEntityNum | ( fogIndex << QSORT_FOGNUM_SHIFT ) | (int)dlightMap;
+	trWorlds[0].refdef.drawSurfs[index].surface = surface;
+	trWorlds[0].refdef.numDrawSurfs++;
+
+#else
 	// instead of checking for overflow, we just mask the index
 	// so it wraps around
 	index = tr.refdef.numDrawSurfs & DRAWSURF_MASK;
@@ -1450,6 +1482,7 @@ void R_AddDrawSurf( surfaceType_t *surface, shader_t *shader,
 		| tr.shiftedEntityNum | ( fogIndex << QSORT_FOGNUM_SHIFT ) | (int)dlightMap;
 	tr.refdef.drawSurfs[index].surface = surface;
 	tr.refdef.numDrawSurfs++;
+#endif
 }
 
 
@@ -1461,7 +1494,11 @@ R_DecomposeSort
 void R_DecomposeSort( unsigned sort, int *entityNum, shader_t **shader, 
 					 int *fogNum, int *dlightMap ) {
 	*fogNum = ( sort >> QSORT_FOGNUM_SHIFT ) & FOGNUM_MASK;
+#ifdef USE_MULTIVM_RENDERER
+	*shader = trWorlds[0].sortedShaders[ ( sort >> QSORT_SHADERNUM_SHIFT ) & SHADERNUM_MASK ];
+#else
 	*shader = tr.sortedShaders[ ( sort >> QSORT_SHADERNUM_SHIFT ) & SHADERNUM_MASK ];
+#endif
 	*entityNum = ( sort >> QSORT_REFENTITYNUM_SHIFT ) & REFENTITYNUM_MASK;
 	*dlightMap = sort & DLIGHT_MASK;
 }
@@ -1509,9 +1546,11 @@ static void R_SortDrawSurfs( drawSurf_t *drawSurfs, int numDrawSurfs ) {
 			if ( r_portalOnly->integer ) {
 				return;
 			}
+#ifdef THIS_IS_A_SLOW_COMPUTER
 			if ( r_fastsky->integer == 0 ) {
 				break;	// only one mirror view at a time
 			}
+#endif
 		}
 	}
 
@@ -1549,6 +1588,7 @@ static void R_AddEntitySurfaces( void ) {
 		return;
 	}
 
+
 	for ( tr.currentEntityNum = 0;
 			tr.currentEntityNum < tr.refdef.num_entities;
 			tr.currentEntityNum++ ) {
@@ -1567,6 +1607,12 @@ static void R_AddEntitySurfaces( void ) {
 		if ( (ent->e.renderfx & RF_FIRST_PERSON) && (tr.viewParms.portalView != PV_NONE) ) {
 			continue;
 		}
+
+#ifdef USE_MULTIVM_RENDERER
+		if(ent->world != tr.viewParms.newWorld) {
+			continue;
+		}
+#endif
 
 		// simple generated models, like sprites and beams, are not culled
 		switch ( ent->e.reType ) {
@@ -1608,6 +1654,7 @@ static void R_AddEntitySurfaces( void ) {
 				case MOD_BRUSH:
 					R_AddBrushModelSurfaces( ent );
 					break;
+				case MOD_OBJ:
 				case MOD_BAD:		// null model axis
 					if ( (ent->e.renderfx & RF_THIRD_PERSON) && (tr.viewParms.portalView == PV_NONE) ) {
 						break;
@@ -1625,6 +1672,10 @@ static void R_AddEntitySurfaces( void ) {
 		}
 	}
 
+//#ifdef USE_MULTIVM_RENDERER
+//	rwi = 0;
+//#endif
+
 }
 
 
@@ -1637,6 +1688,8 @@ static void R_GenerateDrawSurfs( void ) {
 	R_AddWorldSurfaces ();
 
 	R_AddPolygonSurfaces();
+
+	R_AddPolygonBufferSurfaces();
 
 	// set the projection matrix with the minimum zfar
 	// now that we have the world bounded
@@ -1675,6 +1728,18 @@ void R_RenderView( const viewParms_t *parms ) {
 	tr.viewParms = *parms;
 	tr.viewParms.frameSceneNum = tr.frameSceneNum;
 	tr.viewParms.frameCount = tr.frameCount;
+#ifdef USE_MULTIVM_RENDERER
+	//tr.viewParms.newWorld = rwi;
+	world_t *previous = tr.world;
+	//Com_Printf("Rendering %i -> %i.\n", rwi, tr.viewParms.newWorld);
+	if(tr.viewParms.newWorld != rwi && 
+		trWorlds[tr.viewParms.newWorld].world) {
+		//Com_Printf("Substituting world model.\n");
+		tr.world = trWorlds[tr.viewParms.newWorld].world;
+	} else {
+	}
+
+#endif
 
 	firstDrawSurf = tr.refdef.numDrawSurfs;
 
@@ -1694,4 +1759,11 @@ void R_RenderView( const viewParms_t *parms ) {
 	}
 
 	R_SortDrawSurfs( tr.refdef.drawSurfs + firstDrawSurf, numDrawSurfs - firstDrawSurf );
+
+#ifdef USE_MULTIVM_RENDERER
+	//tr.viewParms.newWorld = rwi;
+	if(tr.viewParms.newWorld != rwi) {
+		tr.world = previous;
+	}
+#endif
 }

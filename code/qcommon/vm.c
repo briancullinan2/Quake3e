@@ -212,7 +212,12 @@ int		vm_debugLevel;
 // used by Com_Error to get rid of running vm's before longjmp
 static int forced_unload;
 
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
+// so that vminfo can list all of them
+static struct vm_s vmTable[ VM_COUNT * MAX_NUM_VMS ];
+#else
 static struct vm_s vmTable[ VM_COUNT ];
+#endif
 
 static const char *vmName[ VM_COUNT ] = {
 	"qagame",
@@ -269,11 +274,20 @@ VM_Init
 ==============
 */
 void VM_Init( void ) {
+#ifdef __WASM__ 
+// HAS_VM_COMPILED?
+#ifndef DEDICATED
+	Cvar_Get( "vm_ui", "1", CVAR_ARCHIVE | CVAR_PROTECTED );	// !@# SHIP WITH SET TO 2
+	Cvar_Get( "vm_cgame", "1", CVAR_ARCHIVE | CVAR_PROTECTED );	// !@# SHIP WITH SET TO 2
+#endif
+	Cvar_Get( "vm_game", "1", CVAR_ARCHIVE | CVAR_PROTECTED );	// !@# SHIP WITH SET TO 2
+#else
 #ifndef DEDICATED
 	Cvar_Get( "vm_ui", "2", CVAR_ARCHIVE | CVAR_PROTECTED );	// !@# SHIP WITH SET TO 2
 	Cvar_Get( "vm_cgame", "2", CVAR_ARCHIVE | CVAR_PROTECTED );	// !@# SHIP WITH SET TO 2
 #endif
 	Cvar_Get( "vm_game", "2", CVAR_ARCHIVE | CVAR_PROTECTED );	// !@# SHIP WITH SET TO 2
+#endif
 
 	Cmd_AddCommand( "vmprofile", VM_VmProfile_f );
 	Cmd_AddCommand( "vminfo", VM_VmInfo_f );
@@ -1748,11 +1762,21 @@ vm_t *VM_Create( vmIndex_t index, syscall_t systemCalls, dllSyscall_t dllSyscall
 
 	// see if we already have the VM
 	if ( vm->name ) {
+#if defined(USE_MULTIVM_SERVER) || defined(USE_MULTIVM_CLIENT)
+		// reserve the first 3 slots for the named VMs then find any empty slot
+		for(int i = VM_COUNT; i < VM_COUNT * MAX_NUM_VMS; i++) {
+			if ( !vmTable[i].name ) {
+				vm = &vmTable[i];
+				break;
+			}
+		}
+#else
 		if ( vm->index != index ) {
 			Com_Error( ERR_DROP, "VM_Create: bad allocated vm index %i", vm->index );
 			return NULL;
 		}
 		return vm;
+#endif
 	}
 
 	name = vmName[ index ];
@@ -1811,6 +1835,9 @@ vm_t *VM_Create( vmIndex_t index, syscall_t systemCalls, dllSyscall_t dllSyscall
 		interpret = VMI_BYTECODE;
 	}
 #else
+#ifdef __WASM__
+#error goddamnit
+#endif
 	if ( interpret >= VMI_COMPILED ) {
 		if ( VM_Compile( vm, header ) ) {
 			vm->compiled = qtrue;
@@ -1881,9 +1908,15 @@ void VM_Free( vm_t *vm ) {
 
 void VM_Clear( void ) {
 	int i;
+#if defined(USE_MULTIVM_SERVER) || defined(USE_MULTIVM_CLIENT)
+	for ( i = 0; i < VM_COUNT * MAX_NUM_VMS; i++ ) {
+		VM_Free( &vmTable[ i ] );
+	}
+#else
 	for ( i = 0; i < VM_COUNT; i++ ) {
 		VM_Free( &vmTable[ i ] );
 	}
+#endif
 }
 
 
@@ -1921,6 +1954,9 @@ locals from sp
 ==============
 */
 
+#ifdef __WASM__
+Q_EXPORT
+#endif
 intptr_t QDECL VM_Call( vm_t *vm, int nargs, int callnum, ... )
 {
 	//vm_t	*oldVM;
@@ -2097,6 +2133,9 @@ static void VM_VmInfo_f( void ) {
 	int		i;
 
 	Com_Printf( "Registered virtual machines:\n" );
+#if defined(USE_MULTIVM_SERVER) || defined(USE_MULTIVM_CLIENT)
+#define VM_COUNT VM_COUNT * MAX_NUM_VMS
+#endif
 	for ( i = 0 ; i < VM_COUNT ; i++ ) {
 		vm = &vmTable[i];
 		if ( !vm->name ) {

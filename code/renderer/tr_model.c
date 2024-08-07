@@ -28,6 +28,34 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 static qboolean R_LoadMD3(model_t *mod, int lod, void *buffer, int fileSize, const char *name );
 static qboolean R_LoadMDR(model_t *mod, void *buffer, int filesize, const char *name );
 
+qboolean R_LoadOBJ( model_t *mod, void *buffer, int filesize, const char *mod_name );
+
+qboolean makeSkin = qfalse;
+skin_t		*skin;
+skinSurface_t parseSurfaces[MAX_SKIN_SURFACES];
+
+void ClearSurfaces( void ) {
+	//memset(skin, 0, sizeof(skin_t));
+	memset(parseSurfaces, 0, sizeof(skinSurface_t));
+}
+
+void R_AddSkinSurface(char *name, shader_t *shader) {
+	static	skinSurface_t* surface;
+	int i;
+	//char normalName[MAX_OSPATH];
+	//COM_StripExtension(name, normalName, MAX_OSPATH);
+	for (i = 0, surface=&parseSurfaces[0]; i < skin->numSurfaces; i++, surface++) {
+		if ( !Q_stricmp( name, surface->name ) ) {
+			return; // found
+		}
+	}
+
+	surface = &parseSurfaces[skin->numSurfaces++];
+	Q_strncpyz( surface->name, name, sizeof( surface->name ) );
+	surface->shader = shader;
+}
+
+
 /*
 ====================
 R_RegisterMD3
@@ -194,6 +222,42 @@ static qhandle_t R_RegisterIQM(const char *name, model_t *mod)
 }
 
 
+
+/*
+====================
+R_RegisterOBJ
+====================
+*/
+static qhandle_t R_RegisterOBJ(const char *name, model_t *mod)
+{
+	union {
+		unsigned *u;
+		void *v;
+	} buf;
+	qboolean loaded = qfalse;
+	int filesize;
+
+	filesize = ri.FS_ReadFile(name, (void **) &buf.v);
+	if(!buf.u)
+	{
+		mod->type = MOD_BAD;
+		return 0;
+	}
+	
+	//loaded = R_LoadOBJ(mod, buf.u, filesize, name);
+
+	ri.FS_FreeFile (buf.v);
+	
+	if ( !loaded )
+	{
+		ri.Printf( PRINT_WARNING, "%s: couldn't load %s\n", __func__, name );
+		mod->type = MOD_BAD;
+		return 0;
+	}
+	
+	return mod->index;
+}
+
 typedef struct
 {
 	const char *ext;
@@ -206,7 +270,8 @@ static modelExtToLoaderMap_t modelLoaders[ ] =
 {
 	{ "iqm", R_RegisterIQM },
 	{ "mdr", R_RegisterMDR },
-	{ "md3", R_RegisterMD3 }
+	{ "md3", R_RegisterMD3 },
+	{ "obj", R_RegisterOBJ }
 };
 
 static int numModelLoaders = ARRAY_LEN(modelLoaders);
@@ -244,6 +309,12 @@ model_t *R_AllocModel( void ) {
 	mod = ri.Hunk_Alloc( sizeof( *tr.models[tr.numModels] ), h_low );
 	mod->index = tr.numModels;
 	tr.models[tr.numModels] = mod;
+
+#ifdef USE_MULTIVM_RENDERER
+	if(rwi != 0)
+		trWorlds[0].models[trWorlds[0].numModels++] = mod;
+#endif
+
 	tr.numModels++;
 
 	return mod;
@@ -261,6 +332,7 @@ optimization to prevent disk rescanning if they are
 asked for again.
 ====================
 */
+
 qhandle_t RE_RegisterModel( const char *name ) {
 	model_t		*mod;
 	qhandle_t	hModel;
@@ -270,6 +342,7 @@ qhandle_t RE_RegisterModel( const char *name ) {
 	char		localName[ MAX_QPATH ];
 	const char	*ext;
 	char		altName[ MAX_QPATH ];
+	char		strippedName[ MAX_QPATH ];
 
 	if ( !name || !name[0] ) {
 		ri.Printf( PRINT_ALL, "RE_RegisterModel: NULL name\n" );
@@ -280,6 +353,7 @@ qhandle_t RE_RegisterModel( const char *name ) {
 		ri.Printf( PRINT_ALL, "Model name exceeds MAX_QPATH\n" );
 		return 0;
 	}
+
 
 	//
 	// search the currently loaded models
@@ -315,6 +389,23 @@ qhandle_t RE_RegisterModel( const char *name ) {
 	Q_strncpyz( localName, name, MAX_QPATH );
 
 	ext = COM_GetExtension( localName );
+
+	// check if the model is going to need a default skin
+	COM_StripExtension( name, strippedName, MAX_QPATH );
+	int len = ri.FS_ReadFile( va("%s.skin", strippedName), NULL );
+	if(len < 1) {
+		len = ri.FS_ReadFile( va("%s_default.skin", strippedName), NULL );
+	}
+	if(len > 0 || tr.numSkins == MAX_SKINS) {
+		makeSkin = qfalse;
+	} else {
+		makeSkin = qtrue;
+		skin = ri.Hunk_Alloc( sizeof( skin_t ), h_low );
+		Q_strncpyz( skin->name, va("%s.skin", strippedName), sizeof( skin->name ) );
+		tr.skins[tr.numSkins++] = skin;
+		ClearSurfaces();
+	}
+
 
 	if( *ext )
 	{
@@ -375,6 +466,7 @@ qhandle_t RE_RegisterModel( const char *name ) {
 	return hModel;
 }
 
+void COM_StripFilename( const char *in, char *out, int destsize );
 
 /*
 =================
@@ -393,6 +485,7 @@ static qboolean R_LoadMD3( model_t *mod, int lod, void *buffer, int fileSize, co
 	md3Tag_t			*tag;
 	int					version;
 	int					size;
+	char	dirName[ MAX_QPATH ];
 
 	pinmodel = (md3Header_t *)buffer;
 
@@ -549,6 +642,8 @@ static qboolean R_LoadMD3( model_t *mod, int lod, void *buffer, int fileSize, co
 			surf->name[j-2] = 0;
 		}
 
+		COM_StripFilename(mod->name, dirName, MAX_QPATH);
+
 		// register the shaders
 		shader = (md3Shader_t *) ( (byte *)surf + surf->ofsShaders );
 		for ( j = 0 ; j < surf->numShaders ; j++, shader++ ) {
@@ -559,9 +654,27 @@ static qboolean R_LoadMD3( model_t *mod, int lod, void *buffer, int fileSize, co
 
 			sh = R_FindShader( shader->name, LIGHTMAP_NONE, qtrue );
 			if ( sh->defaultShader ) {
-				shader->shaderIndex = 0;
+				const char *temp;
+				const char *fname = strrchr(shader->name, '/');
+				if(!fname) {
+					fname = strrchr(shader->name, '\\');
+				}
+				temp = va("%s%s", dirName, fname);
+				if(fname) {
+					sh = R_FindShader( temp, LIGHTMAP_NONE, qtrue );
+					//Com_Printf("shader found! %s, %s, %s\n", dirName, fname, shader->name);
+				}
+				if ( sh->defaultShader ) {
+					shader->shaderIndex = 0;
+				} else {
+					shader->shaderIndex = sh->index;
+					if(makeSkin)
+						R_AddSkinSurface((char *)temp, sh);
+				}
 			} else {
 				shader->shaderIndex = sh->index;
+				if(makeSkin)
+					R_AddSkinSurface(surf->name, sh);
 			}
 		}
 
@@ -593,6 +706,11 @@ static qboolean R_LoadMD3( model_t *mod, int lod, void *buffer, int fileSize, co
 
 		// find the next surface
 		surf = (md3Surface_t *)( (byte *)surf + surf->ofsEnd );
+	}
+
+	if(makeSkin) {
+		skin->surfaces = ri.Hunk_Alloc( skin->numSurfaces * sizeof( skinSurface_t ), h_low );
+		memcpy( skin->surfaces, parseSurfaces, skin->numSurfaces * sizeof( skinSurface_t ) );
 	}
 
 	return qtrue;
@@ -822,7 +940,12 @@ static qboolean R_LoadMDR( model_t *mod, void *buffer, int filesize, const char 
 			// register the shaders
 			sh = R_FindShader(surf->shader, LIGHTMAP_NONE, qtrue);
 			if ( sh->defaultShader ) {
+#ifdef USE_MULTIVM_RENDERER
+        sh->remappedShader = tr.defaultShader;
+				surf->shaderIndex = sh->index;
+#else
 				surf->shaderIndex = 0;
+#endif
 			} else {
 				surf->shaderIndex = sh->index;
 			}
@@ -947,6 +1070,11 @@ static qboolean R_LoadMDR( model_t *mod, void *buffer, int filesize, const char 
 ** RE_BeginRegistration
 */
 void RE_BeginRegistration( glconfig_t *glconfigOut ) {
+#ifdef USE_MULTIVM_RENDERER
+if(rwi != 0) {
+	Com_Error(ERR_FATAL, "World not zero.");
+}
+#endif
 
 	R_Init();
 
@@ -976,6 +1104,12 @@ void R_ModelInit( void ) {
 
 	mod = R_AllocModel();
 	mod->type = MOD_BAD;
+#ifdef USE_MULTIVM_RENDERER
+	for(int i = 1; i < MAX_NUM_WORLDS; i++) {
+		trWorlds[i].models[0] = mod;
+		trWorlds[i].numModels = 1;
+	}
+#endif
 }
 
 
@@ -1148,6 +1282,12 @@ void R_ModelBounds( qhandle_t handle, vec3_t mins, vec3_t maxs ) {
 
 	model = R_GetModelByHandle( handle );
 
+	// brian cullinan - this hack for atmospheric effects in cgame/bg_tracemap
+	if(handle == 0 && tr.world) {
+		VectorCopy( tr.world->bmodels[0].bounds[0], mins );
+		VectorCopy( tr.world->bmodels[0].bounds[1], maxs );
+		return;
+	} else
 	if(model->type == MOD_BRUSH) {
 		VectorCopy( model->bmodel->bounds[0], mins );
 		VectorCopy( model->bmodel->bounds[1], maxs );
@@ -1186,6 +1326,13 @@ void R_ModelBounds( qhandle_t handle, vec3_t mins, vec3_t maxs ) {
 			VectorCopy(iqmData->bounds + 3, maxs);
 			return;
 		}
+	} else if(model->type == MOD_OBJ) {
+		objHeader_t *objData;
+
+		objData = model->modelData;
+
+		VectorCopy(objData->mins, mins);
+		VectorCopy(objData->maxs, maxs);
 	}
 
 	VectorClear( mins );

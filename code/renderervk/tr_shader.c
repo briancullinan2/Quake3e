@@ -2719,6 +2719,24 @@ static void SortNewShader( void ) {
 	float	sort;
 	shader_t	*newShader;
 
+
+#ifdef USE_MULTIVM_RENDERER
+	newShader = trWorlds[0].shaders[ trWorlds[0].numShaders - 1 ];
+	sort = newShader->sort;
+	for ( i = trWorlds[0].numShaders - 2 ; i >= 0 ; i-- ) {
+		if ( trWorlds[0].sortedShaders[ i ]->sort <= sort ) {
+			break;
+		}
+		trWorlds[0].sortedShaders[i+1] = trWorlds[0].sortedShaders[i];
+		trWorlds[0].sortedShaders[i+1]->sortedIndex++;
+	}
+	if(rwi == 0) {
+		FixRenderCommandList( i+1 );
+	}
+	newShader->sortedIndex = i+1;
+	trWorlds[0].sortedShaders[i+1] = newShader;
+#else
+
 	newShader = tr.shaders[ tr.numShaders - 1 ];
 	sort = newShader->sort;
 
@@ -2736,6 +2754,8 @@ static void SortNewShader( void ) {
 
 	newShader->sortedIndex = i+1;
 	tr.sortedShaders[i+1] = newShader;
+#endif
+
 }
 
 
@@ -2765,6 +2785,13 @@ static shader_t *GeneratePermanentShader( void ) {
 	newShader->sortedIndex = tr.numShaders;
 
 	tr.numShaders++;
+#ifdef USE_MULTIVM_RENDERER
+	if(rwi != 0) {
+		trWorlds[0].shaders[ trWorlds[0].numShaders ] = newShader;
+		trWorlds[0].sortedShaders[ trWorlds[0].numShaders ] = newShader;
+		trWorlds[0].numShaders++;
+	}
+#endif
 
 	for ( i = 0 ; i < newShader->numUnfoggedPasses ; i++ ) {
 		if ( !stages[i].active ) {
@@ -4360,6 +4387,37 @@ R_InitShaders
 ==================
 */
 void R_InitShaders( void ) {
+#if defined(USE_MULTIVM_RENDERER) || defined(USE_MULTIVM_SERVER)
+	int i;
+	ri.Printf( PRINT_ALL, "\nInitializing Shaders (%i)\n", rwi );
+
+	if(tr.numShaders == 0) {
+		Com_Memset(hashTable, 0, sizeof(hashTable));
+
+		CreateInternalShaders();
+
+#if defined(USE_MULTIVM_RENDERER)
+for(i = 1; i < MAX_NUM_WORLDS; i++) {
+	trWorlds[i].defaultShader = tr.defaultShader;
+	trWorlds[i].cinematicShader = tr.cinematicShader;
+	trWorlds[i].shadowShader = tr.shadowShader;
+	trWorlds[i].whiteShader = tr.whiteShader;
+	trWorlds[i].numShaders = 3;
+}
+#endif
+
+		ScanAndLoadShaderFiles();
+
+		CreateExternalShaders();
+
+
+	} else {
+		ScanAndLoadShaderFiles();
+	}
+
+
+#else
+
 	ri.Printf( PRINT_ALL, "Initializing Shaders\n" );
 
 	Com_Memset(hashTable, 0, sizeof(hashTable));
@@ -4369,4 +4427,5 @@ void R_InitShaders( void ) {
 	ScanAndLoadShaderFiles();
 
 	CreateExternalShaders();
+#endif
 }

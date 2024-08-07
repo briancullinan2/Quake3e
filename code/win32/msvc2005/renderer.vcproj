@@ -331,6 +331,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\..\renderercommon\tr_manipulation.c"
+				>
+			</File>
+			<File
 				RelativePath="..\..\renderer\tr_main.c"
 				>
 			</File>

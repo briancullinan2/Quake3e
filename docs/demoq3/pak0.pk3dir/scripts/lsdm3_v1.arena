@@ -1,0 +1,8 @@
+{
+map "lsdm3_v1"
+bots "Doom Major Daemia"
+longname "Eternal Blue Tourney V.1.0"
+fraglimit "20"
+timelimit "10"
+type "ffa tourney" 
+}

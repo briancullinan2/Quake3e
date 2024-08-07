@@ -99,6 +99,9 @@
     <ClCompile Include="..\..\server\sv_snapshot.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\server\sv_teleport.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\server\sv_world.c">
       <Filter>Source Files</Filter>
     </ClCompile>

@@ -22,6 +22,10 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 // tr_image.c
 #include "tr_local.h"
 
+#define VERBOSE qfalse
+#define BOOSTBLURFACTOR 90.0
+
+
 static byte	s_intensitytable[256];
 static byte	s_gammatable[256];
 
@@ -755,6 +759,47 @@ void R_UploadSubImage( byte *data, int x, int y, int width, int height, image_t 
 
 
 /*
+======================
+S_FreeOldestSound
+======================
+*/
+image_t *R_FreeOldestImage( void ) {
+	int	i, oldest, used;
+	image_t	*image;
+
+	oldest = 0;
+	used = 0;
+
+	for ( i = 1 ; i < tr.numImages ; i++ ) {
+		image = tr.images[i];
+		if ( (!image->lastTimeUsed || !image->texnum || image->lastTimeUsed - oldest <= 0)
+			&& image->imgName[0] != '*'
+		 	&& image->lastTimeUsed < tr.lastRegistrationTime) {
+			used = i;
+			if(oldest < image->lastTimeUsed) {
+				oldest = image->lastTimeUsed;
+			}
+		}
+	}
+
+	if(!used && i == MAX_DRAWIMAGES) {
+		return NULL;
+	}
+
+	image = tr.images[used];
+	
+	ri.Printf(PRINT_DEVELOPER, "R_FreeOldestImage: freeing image %s\n", image->imgName);
+	
+	if(image->texnum)
+		qglDeleteTextures( 1, &image->texnum );
+	Com_Memset(image, 0, sizeof( image_t ));
+	
+	return image;
+}
+
+
+
+/*
 ================
 R_CreateImage
 
@@ -785,10 +830,14 @@ image_t *R_CreateImage( const char *name, const char *name2, byte *pic, int widt
 	}
 
 	if ( tr.numImages == MAX_DRAWIMAGES ) {
-		ri.Error( ERR_DROP, "R_CreateImage: MAX_DRAWIMAGES hit" );
+		image = R_FreeOldestImage();
+		if(!image) {
+			ri.Error( ERR_DROP, "R_CreateImage: MAX_DRAWIMAGES hit" );
+		}
 	}
 
 	image = ri.Hunk_Alloc( sizeof( *image ) + namelen + namelen2, h_low );
+	image->lastTimeUsed = tr.lastRegistrationTime;
 	image->imgName = (char *)( image + 1 );
 	strcpy( image->imgName, name );
 	if ( namelen2 ) {
@@ -803,6 +852,10 @@ image_t *R_CreateImage( const char *name, const char *name2, byte *pic, int widt
 	hashTable[ hash ] = image;
 
 	tr.images[ tr.numImages++ ] = image;
+#ifdef USE_MULTIVM_RENDERER
+	if(rwi != 0)
+		trWorlds[0].images[ trWorlds[0].numImages++ ] = image;
+#endif
 
 	image->flags = flags;
 	image->width = width;
@@ -905,7 +958,7 @@ Loads any of the supported image types into a canonical
 32 bit format.
 =================
 */
-static const char *R_LoadImage( const char *name, byte **pic, int *width, int *height )
+const char *R_LoadImage( const char *name, byte **pic, int *width, int *height )
 {
 	static char localName[ MAX_QPATH ];
 	const char *altName, *ext;
@@ -982,6 +1035,243 @@ static const char *R_LoadImage( const char *name, byte **pic, int *width, int *h
 }
 
 
+extern qboolean shouldUseAlternate;
+
+
+byte *R_LoadAlternateImage_real( byte *pic, int width, int height, float greyscale, int invert, int edgy, int rainbow, 
+	int berserk, float hueShift, float satShift, float lumShift ) {
+	qboolean any = qfalse;
+	byte *workImage = pic;
+	byte *newWorkImage = pic;
+	if(greyscale > 0.0f) {
+		any = qtrue;
+		newWorkImage = R_GreyScale(greyscale, workImage, width, height);
+		workImage = newWorkImage;
+	}
+	if(invert) {
+		any = qtrue;
+		if(invert == 1) {
+			newWorkImage = R_InvertColors(workImage, width, height);
+		} else if (invert == 2) {
+			newWorkImage = R_InvertColors2(workImage, width, height);
+		} else if (invert == 3) {
+			newWorkImage = R_InvertColors3(workImage, width, height);
+		} else {
+			newWorkImage = R_InvertColors4(workImage, width, height);
+		}
+		if(workImage != pic) {
+			ri.Free(workImage);
+		}
+		workImage = newWorkImage;
+	}
+	if(edgy > 0) {
+		any = qtrue;
+		byte *rgb = R_RGBAtoR(workImage, width, height);
+		byte *edgy = ri.Malloc(width * height * 4);
+		canny_edge_detection((pixel_t *)rgb, width, height, (pixel_t *)edgy, 45, 55, 2.0f);
+		newWorkImage = R_RtoRGBA(edgy, pic, width, height);
+		ri.Free(edgy);
+		if(workImage != pic) {
+			ri.Free(workImage);
+		}
+		workImage = newWorkImage;
+	}
+	if(rainbow > 0) {
+		any = qtrue;
+		if(rainbow == 2) {
+			newWorkImage = R_Rainbow2(workImage, width, height);
+		} else {
+			newWorkImage = R_Rainbow(workImage, width, height);
+		}
+		if(workImage != pic) {
+			ri.Free(workImage);
+		}
+		workImage = newWorkImage;
+	}
+	if(berserk > 0) {
+		any = qtrue;
+		newWorkImage = R_Berserk(workImage, width, height);
+		if(workImage != pic) {
+			ri.Free(workImage);
+		}
+		workImage = newWorkImage;
+	}
+	if(hueShift != 0.0f) {
+		any = qtrue;
+		newWorkImage = R_HueShift(hueShift, workImage, width, height);
+		if(workImage != pic) {
+			ri.Free(workImage);
+		}
+		workImage = newWorkImage;
+	}
+	if(satShift != 0.0f) {
+		any = qtrue;
+		newWorkImage = R_SatShift(satShift, workImage, width, height);
+		if(workImage != pic) {
+			ri.Free(workImage);
+		}
+		workImage = newWorkImage;
+	}
+	if(lumShift != 0.0f) {
+		any = qtrue;
+		newWorkImage = R_LumShift(lumShift, workImage, width, height);
+		if(workImage != pic) {
+			ri.Free(workImage);
+		}
+		workImage = newWorkImage;
+	}
+
+	if(any && workImage) {
+		return workImage;
+	}
+	return NULL;
+}
+
+byte *R_LoadAlternateImage( byte *pic, int width, int height ) {
+	byte *workImage = R_LoadAlternateImage_real(pic, width, height, r_greyscale->value, r_invert->integer, r_edgy->integer, r_rainbow->integer, r_berserk->integer, 0.0f, 0.0f, 0.0f);
+	if(workImage) {
+		shouldUseAlternate = qtrue;
+		return workImage;
+	}
+	shouldUseAlternate = qfalse;
+	return NULL;
+}
+
+
+byte *R_LoadAlternateImageVariables( byte *pic, int width, int height, const char *variables) {
+	const char *start;
+	float hueShift = 0.0f;
+	float satShift = 0.0f;
+	float lumShift = 0.0f;
+	float greyscale = 0.0f;
+	int invert = 0;
+	int edgy = 0;
+	int rainbow = 0;
+	int berserk = 0;
+	if(Q_stristr(variables, "%berserk")) {
+		berserk = 1;
+	}
+	if(Q_stristr(variables, "%rainbow")) {
+		rainbow = 1;
+	}
+	if((start = Q_stristr(variables, "%hue"))) {
+		hueShift = atof((char[]){start[4], start[5], start[6], start[7]});
+	}
+	if((start = Q_stristr(variables, "%sat"))) {
+		satShift = atof((char[]){start[4], start[5], start[6], start[7]});
+	}
+	if((start = Q_stristr(variables, "%lum"))) {
+		lumShift = atof((char[]){start[4], start[5], start[6], start[7]});
+	}
+	if(Q_stristr(variables, "%invert")) {
+		invert = 1;
+		if(Q_stristr(variables, "%invert4")) {
+			invert = 4;
+		} else if(Q_stristr(variables, "%invert3")) {
+			invert = 3;
+		} else if(Q_stristr(variables, "%invert2")) {
+			invert = 2;
+		}
+	}
+	return R_LoadAlternateImage_real(pic, width, height, greyscale, invert, edgy, rainbow, berserk, hueShift, satShift, lumShift);
+}
+
+
+void R_UpdateAlternateImages( void ) {
+
+	// load or discard a new alternate image for every image
+	Com_Printf("Updating %i images, this may take a minute.\n", tr.numImages);
+  //tr.lastRegistrationTime = ri.Milliseconds();
+	for(int i = 0; i < tr.numImages; i++) {
+		image_t *image = tr.images[i];
+		if(image->imgName[0] == '*') {
+			continue;
+		}
+		if(Q_stristr(image->imgName, "-alternate")) {
+			qglDeleteTextures(1, &image->texnum);
+			image->texnum = 0;
+			image->lastTimeUsed = 0;
+			continue;
+		}
+		if(image->alternate) {
+			if(image->alternate->texnum) {
+				qglDeleteTextures(1, &image->alternate->texnum);
+				image->alternate->texnum = 0;
+			}
+			image->alternate = NULL;
+		}
+	}
+
+	for(int i = 0; i < tr.numImages; i++) {
+		image_t *image = tr.images[i];
+		if(image->imgName[0] == '*') {
+			continue;
+		}
+		if(Q_stristr(image->imgName, "-alternate")) {
+			continue;
+		}
+
+		// so original images dont get freed, only alternates
+	  //image->lastTimeUsed = tr.lastRegistrationTime;
+
+		byte	*pic;
+		int width, height;
+		const char *localName;
+		localName = R_LoadImage( image->imgName, &pic, &width, &height );
+		if(localName && pic) {
+			byte *altImage = R_LoadAlternateImage(pic, width, height);
+			if(altImage && altImage != pic) {
+				image->alternate = R_CreateImage( va("-alternate%s", image->imgName), va("-alternate%s", localName), altImage, width, height, image->flags);
+				ri.Free(altImage);
+			}
+			ri.Free(pic);
+		}
+	}
+
+}
+
+
+/*
+============
+COM_StripExtension
+============
+*/
+void COM_StripVariables( const char *in, char *out, int destsize )
+{
+	const char *dot = strchr(in, '%'), *slash;
+
+	if (dot && ((slash = strchr(in, '/')) == NULL || slash < dot))
+		destsize = (destsize < dot-in+1 ? destsize : dot-in+1);
+
+	if ( in == out && destsize > 1 )
+		out[destsize-1] = '\0';
+	else
+		Q_strncpyz(out, in, destsize);
+}
+
+
+/*
+============
+COM_StripExtension
+============
+*/
+void COM_StripFilename( const char *in, char *out, int destsize )
+{
+	const char *dot = strrchr(in, '\\'), *slash;
+	if(!dot) {
+		dot = strrchr(in, '/');
+	}
+
+	if (dot && ((slash = strchr(in, '/')) == NULL || slash < dot))
+		destsize = (destsize < dot-in+1 ? destsize : dot-in+1);
+
+	if ( in == out && destsize > 1 )
+		out[destsize-1] = '\0';
+	else
+		Q_strncpyz(out, in, destsize);
+}
+
+
 /*
 ===============
 R_FindImageFile
@@ -994,16 +1284,29 @@ image_t	*R_FindImageFile( const char *name, imgFlags_t flags )
 {
 	image_t	*image;
 	const char *localName;
+	char	strippedName2[ MAX_QPATH ];
 	char	strippedName[ MAX_QPATH ];
+	char  paletteName[ MAX_QPATH ];
 	int		width, height;
 	byte	*pic;
 	int		hash;
+	char variables[ MAX_QPATH ] = {'\0'};
 
 	if ( !name ) {
 		return NULL;
 	}
 
 	hash = generateHashValue( name );
+
+
+	const char *varStart = strchr(name, '%');
+	if (varStart) {
+		Q_strncpyz(variables, varStart, MAX_QPATH);
+	} else {
+		variables[0] = '\0';
+	}
+	COM_StripVariables( name, strippedName2, sizeof( strippedName ) );
+	COM_StripExtension( strippedName2, strippedName, sizeof( strippedName ) );
 
 	//
 	// see if the image is already loaded
@@ -1022,9 +1325,10 @@ image_t	*R_FindImageFile( const char *name, imgFlags_t flags )
 
 	if ( strrchr( name, '.' ) > name ) {
 		// try with stripped extension
-		COM_StripExtension( name, strippedName, sizeof( strippedName ) );
+		//COM_StripExtension( name, strippedName, sizeof( strippedName ) );
 		for ( image = hashTable[ hash ]; image; image = image->next ) {
-			if ( !Q_stricmp( strippedName, image->imgName ) ) {
+			if ( !Q_stricmp( strippedName, image->imgName )
+				&& (variables[0] == '\0' || Q_stristr(image->imgName, variables)) ) {
 				//if ( strcmp( strippedName, "*white" ) ) {
 					if ( image->flags != flags ) {
 						ri.Printf( PRINT_DEVELOPER, "WARNING: reused image %s with mixed flags (%i vs %i)\n", strippedName, image->flags, flags );
@@ -1035,33 +1339,50 @@ image_t	*R_FindImageFile( const char *name, imgFlags_t flags )
 		}
 	}
 
+
 	//
 	// load the pic from disk
 	//
-	localName = R_LoadImage( name, &pic, &width, &height );
+	byte* pal = R_FindPalette(strippedName2);
+	image_t *palette = NULL;
+	if(pal) {
+		Q_strncpy(paletteName, (char *)va("*pal%i-%i-%i-%i", pal[0], pal[1], pal[2], pal[3]), sizeof(paletteName));
+		palette = R_CreateImage(paletteName, paletteName, 
+			pal, 16, 16, IMGFLAG_CLAMPTOEDGE | IMGFLAG_MIPMAP );
+	}
+
+	if(Q_stristr(name, "*pal")) {
+		return palette;
+	}
+
+	localName = R_LoadImage( strippedName2, &pic, &width, &height );
 	if ( pic == NULL ) {
+
+		if(palette) { // because we know it's supposed to be there it's listed in a file
+			return palette;
+		}
 		return NULL;
 	}
 
-	if ( tr.mapLoading && r_mapGreyScale->value > 0 ) {
-		byte *img;
-		int i;
-		for ( i = 0, img = pic; i < width * height; i++, img += 4 ) {
-			if ( r_mapGreyScale->integer ) {
-				byte luma = LUMA( img[0], img[1], img[2] );
-				img[0] = luma;
-				img[1] = luma;
-				img[2] = luma;
-			} else {
-				float luma = LUMA( img[0], img[1], img[2] );
-				img[0] = LERP( img[0], luma, r_mapGreyScale->value );
-				img[1] = LERP( img[1], luma, r_mapGreyScale->value );
-				img[2] = LERP( img[2], luma, r_mapGreyScale->value );
-			}
+	// do this in a separate step in case the game loads with r_invert and the mod loads an inverted model, it's back to normal, funnier
+	if(variables[0] != '\0') {
+		byte *variableImage = R_LoadAlternateImageVariables(pic, width, height, variables);
+		if(variableImage && variableImage != pic) {
+			ri.Free(pic);
+			pic = variableImage;
 		}
 	}
 
+
+	// before createimage changes things, make copies
+	byte *altImage = R_LoadAlternateImage(pic, width, height);
 	image = R_CreateImage( name, localName, pic, width, height, flags );
+	image->palette = palette;
+	if(altImage && altImage != pic) {
+		image->alternate = R_CreateImage( va("-alternate%s", name), va("-alternate%s", localName), altImage, width, height, flags );
+		ri.Free(altImage);
+	}
+
 	ri.Free( pic );
 	return image;
 }
@@ -1118,6 +1439,12 @@ void R_InitFogTable( void ) {
 
 		tr.fogTable[i] = d;
 	}
+
+#ifdef USE_MULTIVM_RENDERER
+	for(i = 1; i < MAX_NUM_WORLDS; i++) {
+		memcpy(trWorlds[i].fogTable, tr.fogTable, sizeof(tr.fogTable));
+	}
+#endif
 }
 
 
@@ -1456,6 +1783,9 @@ void R_SetColorMappings( void ) {
 }
 
 
+void R_ClearPalettes( void );
+
+
 /*
 ===============
 R_InitImages
@@ -1470,12 +1800,25 @@ void R_InitImages( void ) {
 		s_gammatable_linear[i] = (unsigned char)i;
 
 	Com_Memset( hashTable, 0, sizeof( hashTable ) );
+	
+	R_ClearPalettes();
 
 	// build brightness translation tables
 	R_SetColorMappings();
 
 	// create default texture and white texture
 	R_CreateBuiltinImages();
+
+#ifdef USE_MULTIVM_RENDERER
+	for(i = 1; i < MAX_NUM_WORLDS; i++) {
+		trWorlds[i].whiteImage = tr.whiteImage;
+		trWorlds[i].defaultImage = tr.defaultImage;
+		trWorlds[i].identityLightImage = tr.identityLightImage;
+		trWorlds[i].dlightImage = tr.dlightImage;
+		trWorlds[i].fogImage = tr.fogImage;
+		trWorlds[i].numImages = 5;
+	}
+#endif
 }
 
 
@@ -1634,7 +1977,7 @@ RE_RegisterSkin
 */
 qhandle_t RE_RegisterSkin( const char *name ) {
 	skinSurface_t parseSurfaces[MAX_SKIN_SURFACES];
-	qhandle_t	hSkin;
+	qhandle_t	hSkin, iSkin;
 	skin_t		*skin;
 	skinSurface_t	*surf;
 	union {
@@ -1645,6 +1988,9 @@ qhandle_t RE_RegisterSkin( const char *name ) {
 	const char	*token;
 	char		surfName[MAX_QPATH];
 	int			totalSurfaces;
+	char	strippedName[ MAX_QPATH ];
+	char	variables[ MAX_QPATH ];
+	char	dirName[ MAX_QPATH ];
 
 	if ( !name || !name[0] ) {
 		ri.Printf( PRINT_DEVELOPER, "Empty name passed to RE_RegisterSkin\n" );
@@ -1680,9 +2026,18 @@ qhandle_t RE_RegisterSkin( const char *name ) {
 	skin->numSurfaces = 0;
 
 	//R_IssuePendingRenderCommands();
+	const char *varStart = strchr(name, '%');
+	if (varStart) {
+		Q_strncpyz(variables, varStart, MAX_QPATH);
+	} else {
+		variables[0] = '\0';
+	}
+	COM_StripVariables(name, strippedName, MAX_QPATH);
+	COM_StripFilename(strippedName, dirName, MAX_QPATH);
+
 
 	// If not a .skin file, load as a single shader
-	if ( strcmp( name + strlen( name ) - 5, ".skin" ) ) {
+	if ( strcmp( strippedName + strlen( strippedName ) - 5, ".skin" ) ) {
 		skin->numSurfaces = 1;
 		skin->surfaces = ri.Hunk_Alloc( sizeof( skinSurface_t ), h_low );
 		skin->surfaces[0].shader = R_FindShader( name, LIGHTMAP_NONE, qtrue );
@@ -1690,7 +2045,45 @@ qhandle_t RE_RegisterSkin( const char *name ) {
 	}
 
 	// load and parse the skin file
-	ri.FS_ReadFile( name, &text.v );
+	ri.FS_ReadFile( strippedName, &text.v );
+
+	if(!text.c && variables[0] != '\0') {
+
+		// TODO: strip colors from skin name
+
+		// TODO: try to find stripped skin name
+		for ( iSkin = 1; iSkin < tr.numSkins ; iSkin++ ) {
+			if ( !Q_stricmp( tr.skins[iSkin]->name, strippedName ) ) {
+				if( tr.skins[iSkin]->numSurfaces == 0 ) {
+					return 0;		// default skin
+				}
+				
+				// make a copy
+				skin->numSurfaces = tr.skins[iSkin]->numSurfaces;
+				skin->surfaces = ri.Hunk_Alloc( skin->numSurfaces * sizeof( skinSurface_t ), h_low );
+				memcpy(skin->surfaces, tr.skins[iSkin]->surfaces, skin->numSurfaces * sizeof( skinSurface_t ));
+
+				// reload shaders with variable args
+				for(int i = 0; i < skin->numSurfaces; i++) {
+					skin->surfaces[i].shader = R_FindShader(va("%s%s", skin->surfaces[i].shader->name, variables), LIGHTMAP_NONE, qtrue);
+					if(!skin->surfaces[i].shader || skin->surfaces[i].shader->defaultShader) {
+						const char *temp;
+						const char *fname;
+						fname = strrchr(skin->surfaces[i].shader->name, '/');
+						if(!fname) {
+							fname = strrchr(skin->surfaces[i].shader->name, '\\');
+						}
+						temp = va("%s%s%s", dirName, fname, variables);
+
+						skin->surfaces[i].shader = R_FindShader( temp, LIGHTMAP_NONE, qtrue );
+					}
+				}
+
+				return hSkin;
+			}
+		}
+	}
+
 	if ( !text.c ) {
 		return 0;
 	}
@@ -1698,6 +2091,9 @@ qhandle_t RE_RegisterSkin( const char *name ) {
 	totalSurfaces = 0;
 	text_p = text.c;
 	while ( text_p && *text_p ) {
+		const char *temp;
+		const char *fname;
+
 		// get surface name
 		token = CommaParse( &text_p );
 		Q_strncpyz( surfName, token, sizeof( surfName ) );
@@ -1718,11 +2114,27 @@ qhandle_t RE_RegisterSkin( const char *name ) {
 
 		// parse the shader name
 		token = CommaParse( &text_p );
+		fname = strrchr(token, '/');
+		if(!fname) {
+			fname = strrchr(token, '\\');
+		}
 
 		if ( skin->numSurfaces < MAX_SKIN_SURFACES ) {
 			surf = &parseSurfaces[skin->numSurfaces];
 			Q_strncpyz( surf->name, surfName, sizeof( surf->name ) );
-			surf->shader = R_FindShader( token, LIGHTMAP_NONE, qtrue );
+			if(varStart) {
+				surf->shader = R_FindShader( va("%s%s", token, variables), LIGHTMAP_NONE, qtrue );
+				if(!surf->shader || surf->shader->defaultShader) {
+					temp = va("%s%s%s", dirName, fname, variables);
+					surf->shader = R_FindShader( temp, LIGHTMAP_NONE, qtrue );
+				}
+			} else {
+				surf->shader = R_FindShader( token, LIGHTMAP_NONE, qtrue );
+				if(!surf->shader || surf->shader->defaultShader) {
+					temp = va("%s%s", dirName, fname);
+					surf->shader = R_FindShader( temp, LIGHTMAP_NONE, qtrue );
+				}
+			}
 			skin->numSurfaces++;
 		}
 
@@ -1765,6 +2177,14 @@ void	R_InitSkins( void ) {
 	skin->numSurfaces = 1;
 	skin->surfaces = ri.Hunk_Alloc( sizeof( skinSurface_t ), h_low );
 	skin->surfaces[0].shader = tr.defaultShader;
+
+#ifdef USE_MULTIVM_RENDERER
+	int i;
+	for(i = 1; i < MAX_NUM_WORLDS; i++) {
+		trWorlds[i].skins[0] = skin;
+		trWorlds[i].numSkins = 3;
+	}
+#endif
 }
 
 

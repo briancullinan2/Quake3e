@@ -36,6 +36,9 @@ static const char *svc_strings[256] = {
 	"svc_EOF",
 	"svc_voipSpeex", // ioq3 extension
 	"svc_voipOpus",  // ioq3 extension
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+	"svc_mvWorld",
+#endif
 };
 
 static void SHOWNET( msg_t *msg, const char *s ) {
@@ -61,12 +64,21 @@ Parses deltas from the given base and adds the resulting entity
 to the current frame
 ==================
 */
-static void CL_DeltaEntity( msg_t *msg, clSnapshot_t *frame, int newnum, const entityState_t *old, qboolean unchanged) {
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+static void CL_DeltaEntity( msg_t *msg, clSnapshot_t *frame, int newnum, const entityState_t *old, qboolean unchanged, int igs) 
+#else
+static void CL_DeltaEntity( msg_t *msg, clSnapshot_t *frame, int newnum, const entityState_t *old, qboolean unchanged) 
+#endif
+{
 	entityState_t	*state;
 
 	// save the parsed entity state into the big circular buffer so
 	// it can be used as the source for a later delta
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+  state = &cl.parseEntities[cl.parseEntitiesNumWorlds[igs] & (MAX_PARSE_ENTITIES-1)];
+#else  
 	state = &cl.parseEntities[cl.parseEntitiesNum & (MAX_PARSE_ENTITIES-1)];
+#endif
 
 	if ( unchanged ) {
 		*state = *old;
@@ -77,7 +89,11 @@ static void CL_DeltaEntity( msg_t *msg, clSnapshot_t *frame, int newnum, const e
 	if ( state->number == (MAX_GENTITIES-1) ) {
 		return;		// entity was delta removed
 	}
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+	cl.parseEntitiesNumWorlds[igs]++;
+#else
 	cl.parseEntitiesNum++;
+#endif
 	frame->numEntities++;
 }
 
@@ -87,12 +103,22 @@ static void CL_DeltaEntity( msg_t *msg, clSnapshot_t *frame, int newnum, const e
 CL_ParsePacketEntities
 ==================
 */
-static void CL_ParsePacketEntities( msg_t *msg, const clSnapshot_t *oldframe, clSnapshot_t *newframe ) {
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+static void CL_ParsePacketEntities( msg_t *msg, const clSnapshot_t *oldframe, clSnapshot_t *newframe, int igs ) 
+#else
+static void CL_ParsePacketEntities( msg_t *msg, const clSnapshot_t *oldframe, clSnapshot_t *newframe )
+#endif
+{
 	const entityState_t	*oldstate;
 	int	newnum;
 	int	oldindex, oldnum;
 
+
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+  newframe->parseEntitiesNum = cl.parseEntitiesNumWorlds[igs];
+#else
 	newframe->parseEntitiesNum = cl.parseEntitiesNum;
+#endif
 	newframe->numEntities = 0;
 
 	// delta from the entities present in oldframe
@@ -127,7 +153,11 @@ static void CL_ParsePacketEntities( msg_t *msg, const clSnapshot_t *oldframe, cl
 			if ( cl_shownet->integer == 3 ) {
 				Com_Printf ("%3i:  unchanged: %i\n", msg->readcount, oldnum);
 			}
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+			CL_DeltaEntity( msg, newframe, oldnum, oldstate, qtrue, igs );
+#else
 			CL_DeltaEntity( msg, newframe, oldnum, oldstate, qtrue );
+#endif
 
 			oldindex++;
 
@@ -144,7 +174,11 @@ static void CL_ParsePacketEntities( msg_t *msg, const clSnapshot_t *oldframe, cl
 			if ( cl_shownet->integer == 3 ) {
 				Com_Printf ("%3i:  delta: %i\n", msg->readcount, newnum);
 			}
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+			CL_DeltaEntity( msg, newframe, newnum, oldstate, qfalse, igs );
+#else
 			CL_DeltaEntity( msg, newframe, newnum, oldstate, qfalse );
+#endif
 
 			oldindex++;
 
@@ -163,7 +197,11 @@ static void CL_ParsePacketEntities( msg_t *msg, const clSnapshot_t *oldframe, cl
 			if ( cl_shownet->integer == 3 ) {
 				Com_Printf ("%3i:  baseline: %i\n", msg->readcount, newnum);
 			}
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+			CL_DeltaEntity( msg, newframe, newnum, &cl.entityBaselines[newnum], qfalse, igs );
+#else
 			CL_DeltaEntity( msg, newframe, newnum, &cl.entityBaselines[newnum], qfalse );
+#endif
 			continue;
 		}
 
@@ -175,7 +213,11 @@ static void CL_ParsePacketEntities( msg_t *msg, const clSnapshot_t *oldframe, cl
 		if ( cl_shownet->integer == 3 ) {
 			Com_Printf ("%3i:  unchanged: %i\n", msg->readcount, oldnum);
 		}
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+		CL_DeltaEntity( msg, newframe, oldnum, oldstate, qtrue, igs );
+#else
 		CL_DeltaEntity( msg, newframe, oldnum, oldstate, qtrue );
+#endif
 
 		oldindex++;
 
@@ -190,6 +232,8 @@ static void CL_ParsePacketEntities( msg_t *msg, const clSnapshot_t *oldframe, cl
 }
 
 
+void CL_AddLagometerSnapshotInfo(clSnapshot_t *snapshot);
+
 /*
 ================
 CL_ParseSnapshot
@@ -199,12 +243,20 @@ cl.snap and saved in cl.snapshots[].  If the snapshot is invalid
 for any reason, no changes to the state will be made at all.
 ================
 */
-static void CL_ParseSnapshot( msg_t *msg ) {
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+void CL_ParseSnapshot( msg_t *msg, int igs ) 
+#else
+static void CL_ParseSnapshot( msg_t *msg )
+#endif
+{
 	const clSnapshot_t *old;
 	clSnapshot_t	newSnap;
 	int			deltaNum;
 	int			oldMessageNum;
 	int			i, n, packetNum;
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+	newSnap.world = igs;
+#endif
 
 	// get the reliable sequence acknowledge number
 	// NOTE: now sent with all server to client messages
@@ -243,7 +295,11 @@ static void CL_ParseSnapshot( msg_t *msg ) {
 		old = NULL;
 		clc.demowaiting = qfalse;	// we can start recording now
 	} else {
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+    old = &cl.snapshotWorlds[igs][newSnap.deltaNum & PACKET_MASK];
+#else
 		old = &cl.snapshots[newSnap.deltaNum & PACKET_MASK];
+#endif
 		if ( !old->valid ) {
 			// should never happen
 			Com_Printf ("Delta from invalid frame (not supposed to happen!).\n");
@@ -251,7 +307,11 @@ static void CL_ParseSnapshot( msg_t *msg ) {
 			// The frame that the server did the delta from
 			// is too old, so we can't reconstruct it properly.
 			Com_Printf ("Delta frame too old.\n");
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+		} else if ( cl.parseEntitiesNumWorlds[igs] - old->parseEntitiesNum > MAX_PARSE_ENTITIES - MAX_SNAPSHOT_ENTITIES ) {
+#else
 		} else if ( cl.parseEntitiesNum - old->parseEntitiesNum > MAX_PARSE_ENTITIES - MAX_SNAPSHOT_ENTITIES ) {
+#endif
 			Com_Printf ("Delta parseEntitiesNum too old.\n");
 		} else {
 			newSnap.valid = qtrue;	// valid delta parse
@@ -279,11 +339,16 @@ static void CL_ParseSnapshot( msg_t *msg ) {
 
 	// read packet entities
 	SHOWNET( msg, "packet entities" );
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+	CL_ParsePacketEntities( msg, old, &newSnap, igs );
+#else
 	CL_ParsePacketEntities( msg, old, &newSnap );
+#endif
 
 	// if not valid, dump the entire thing now that it has
 	// been properly read
 	if ( !newSnap.valid ) {
+    //CL_AddLagometerSnapshotInfo(NULL);
 		return;
 	}
 
@@ -340,11 +405,21 @@ new information out of it.  This will happen at every
 gamestate, and possibly during gameplay.
 ==================
 */
-void CL_SystemInfoChanged( qboolean onlyGame ) {
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+void CL_SystemInfoChanged( qboolean onlyGame, int igs ) 
+#else
+void CL_SystemInfoChanged( qboolean onlyGame ) 
+#endif
+{
 	const char		*systemInfo;
 	const char		*s, *t;
 	char			key[BIG_INFO_KEY];
 	char			value[BIG_INFO_VALUE];
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)  
+	if(igs == -1) {
+		igs = 0;
+	}
+#endif
 
 	systemInfo = cl.gameState.stringData + cl.gameState.stringOffsets[ CS_SYSTEMINFO ];
 	// NOTE TTimo:
@@ -405,6 +480,7 @@ void CL_SystemInfoChanged( qboolean onlyGame ) {
 
 		s = Info_ValueForKey( systemInfo, "sv_referencedPaks" );
 		t = Info_ValueForKey( systemInfo, "sv_referencedPakNames" );
+		Com_Printf("referenced paks: %s\n", s);
 		FS_PureServerSetReferencedPaks( s, t );
 	}
 
@@ -472,7 +548,11 @@ qboolean CL_GameSwitch( void )
 CL_ParseServerInfo
 ==================
 */
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+static void CL_ParseServerInfo( int igs )
+#else
 static void CL_ParseServerInfo( void )
+#endif
 {
 	const char *serverInfo;
 	size_t	len;
@@ -485,6 +565,12 @@ static void CL_ParseServerInfo( void )
 	Q_strncpyz(clc.sv_dlURL,
 		Info_ValueForKey(serverInfo, "sv_dlURL"),
 		sizeof(clc.sv_dlURL));
+
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+  clc.isMultiGame = strcmp(Info_ValueForKey(serverInfo, "gamename"), "multigame") == 0;
+  clc.sv_mvWorld = strcmp(Info_ValueForKey(serverInfo, "sv_mvWorld"), "1") == 0;
+  clc.sv_mvOmnipresent = strcmp(Info_ValueForKey(serverInfo, "sv_mvOmnipresent"), "1") == 0;
+#endif
 
 	/* remove ending slash in URLs */
 	len = strlen( clc.sv_dlURL );
@@ -508,6 +594,9 @@ static void CL_ParseGamestate( msg_t *msg ) {
 	char			oldGame[ MAX_QPATH ];
 	char			reconnectArgs[ MAX_CVAR_VALUE_STRING ];
 	qboolean		gamedirModified;
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+  int igs = 0;
+#endif
 
 	Con_Close();
 
@@ -533,13 +622,27 @@ static void CL_ParseGamestate( msg_t *msg ) {
 	clc.serverCommandSequence = MSG_ReadLong( msg );
 
 	// parse all the configstrings and baselines
+//#ifndef USE_MULTIVM_SERVER
 	cl.gameState.dataCount = 1;	// leave a 0 at the beginning for uninitialized configstrings
+//#endif
 	while ( 1 ) {
 		cmd = MSG_ReadByte( msg );
 
 		if ( cmd == svc_EOF ) {
 			break;
 		}
+
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+		if ( cmd == svc_mvWorld ) {
+			//if(cls.state == CA_PRIMED) {
+				igs = cgvmi_ref = clc.selectedWorld = MSG_ReadByte( msg );
+			//}
+			memset(&cl.snapWorlds[igs], 0, sizeof(cl.snapWorlds[igs]));
+			memset(cl.snapshotWorlds[igs], 0, sizeof(cl.snapshotWorlds[igs]));
+			cl.gameState.dataCount = 1;
+			Com_Printf("Received new gamestate: %i\n", igs); 
+		} else
+#endif
 
 		if ( cmd == svc_configstring ) {
 			int		len;
@@ -582,18 +685,32 @@ static void CL_ParseGamestate( msg_t *msg ) {
 
 	clc.eventMask |= EM_GAMESTATE;
 
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+	clc.selectedClient = 
+#endif
 	clc.clientNum = MSG_ReadLong(msg);
+
 	// read the checksum feed
 	clc.checksumFeed = MSG_ReadLong( msg );
 
 	// save old gamedir
 	Cvar_VariableStringBuffer( "fs_game", oldGame, sizeof( oldGame ) );
 
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+
+	// parse useful values out of CS_SERVERINFO
+	CL_ParseServerInfo(igs);
+
+	// parse serverId and other cvars
+	CL_SystemInfoChanged( qtrue, igs );
+#else
+
 	// parse useful values out of CS_SERVERINFO
 	CL_ParseServerInfo();
 
 	// parse serverId and other cvars
 	CL_SystemInfoChanged( qtrue );
+#endif
 
 	// stop recording now so the demo won't have an unnecessary level load at the end.
 	if ( cl_autoRecordDemo->integer && clc.demorecording ) {
@@ -799,6 +916,7 @@ static void CL_ParseCommandString( msg_t *msg ) {
 	if ( clc.serverCommandSequence - seq >= 0 ) {
 		return;
 	}
+
 	clc.serverCommandSequence = seq;
 
 	index = seq & (MAX_RELIABLE_COMMANDS-1);
@@ -828,6 +946,11 @@ static void CL_ParseCommandString( msg_t *msg ) {
 }
 
 
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+int MSG_ReadBits( msg_t *msg, int bits );
+#endif
+
+
 /*
 =====================
 CL_ParseServerMessage
@@ -835,6 +958,10 @@ CL_ParseServerMessage
 */
 void CL_ParseServerMessage( msg_t *msg ) {
 	int cmd;
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+	qboolean firstBaseline = qtrue;
+	int igs = 0;
+#endif
 
 	if ( cl_shownet->integer == 1 ) {
 		Com_Printf( "%i ",msg->cursize );
@@ -864,7 +991,7 @@ void CL_ParseServerMessage( msg_t *msg ) {
 	// parse the message
 	while ( 1 ) {
 		if ( msg->readcount > msg->cursize ) {
-			Com_Error( ERR_DROP,"CL_ParseServerMessage: read past end of server message" );
+			Com_Error( ERR_DROP,"CL_ParseServerMessage: read past end of server message (%i > %i)", msg->readcount, msg->cursize );
 			break;
 		}
 
@@ -896,9 +1023,44 @@ void CL_ParseServerMessage( msg_t *msg ) {
 		case svc_gamestate:
 			CL_ParseGamestate( msg );
 			break;
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+		case svc_baseline:
+			{
+				entityState_t	nullstate;
+				entityState_t	*es;
+				int				newnum;
+				Com_Memset( &nullstate, 0, sizeof( nullstate ) );
+
+				newnum = MSG_ReadBits( msg, GENTITYNUM_BITS );
+				if(firstBaseline) {
+					//igvm = MSG_ReadByte( msg );
+					memset(cl.entityBaselines, 0, sizeof(cl.entityBaselines));
+					memset(cl.baselineUsed, 0, sizeof(cl.baselineUsed));
+					//Com_Printf("------------------ ents (%i): %i ----------------\n", igs, newnum);
+					firstBaseline = qfalse;
+				}
+				// parse baselines after a world change
+				if ( newnum < 0 || newnum >= MAX_GENTITIES ) {
+					Com_Error( ERR_DROP, "Baseline number out of range: %i", newnum );
+				}
+				es = &cl.entityBaselines[ newnum ];
+				MSG_ReadDeltaEntity( msg, &nullstate, es, newnum );
+				cl.baselineUsed[ newnum ] = 1;
+			}
+			break;
+		case svc_mvWorld:
+			igs = MSG_ReadByte( msg );
+			firstBaseline = qtrue;
+			break;
+		case svc_snapshot:
+			CL_ParseSnapshot( msg, igs );
+			firstBaseline = qtrue;
+			break;
+#else // !USE_MULTIVM_RENDERER
 		case svc_snapshot:
 			CL_ParseSnapshot( msg );
 			break;
+#endif
 		case svc_download:
 			if ( clc.demofile != FS_INVALID_HANDLE )
 				return;

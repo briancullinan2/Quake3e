@@ -33,8 +33,19 @@ void RE_LoadWorldMap( const char *name );
 
 */
 
+#ifdef USE_MULTIVM_RENDERER
+static 		world_t		s_worldDatas[MAX_NUM_WORLDS];
+int       rwi = 0; // render world, should match number of loaded clip maps, 
+                   //   since they are reusable
+int 			rwi_ref = 0;
+#define s_worldData s_worldDatas[rwi]
+#else
 static	world_t		s_worldData;
+#endif
+
 static	byte		*fileBase;
+
+cvar_t  *r_scale;
 
 static int	c_gridVerts;
 
@@ -141,6 +152,7 @@ void R_ColorShiftLightingBytes( const byte in[4], byte out[4], qboolean hasAlpha
 	if ( hasAlpha ) {
 		out[3] = in[3];
 	}
+
 }
 
 
@@ -281,6 +293,8 @@ static float R_ProcessLightmap( byte *image, const byte *buf_p, float maxIntensi
 }
 
 
+#if !defined(__WASM__) && !defined(USE_MULTIVM_SERVER) && !defined(USE_MULTIVM_RENDERER)
+
 static int SetLightmapParams( int numLightmaps, int maxTextureSize )
 {
 	lightmapWidth = log2pad( LIGHTMAP_LEN, 1 );
@@ -309,6 +323,8 @@ static int SetLightmapParams( int numLightmaps, int maxTextureSize )
 	return numLightmaps;
 }
 
+#endif
+
 
 int R_GetLightmapCoords( const int lightmapIndex, float *x, float *y )
 {
@@ -323,6 +339,7 @@ int R_GetLightmapCoords( const int lightmapIndex, float *x, float *y )
 	return lightmapNum;
 }
 
+#if !defined(__WASM__) && !defined(USE_MULTIVM_SERVER) && !defined(USE_MULTIVM_RENDERER)
 
 /*
 ===============
@@ -380,13 +397,18 @@ static void R_LoadMergedLightmaps( const lump_t *l, byte *image )
 	//}
 }
 
+#endif
+
+
+byte *R_LoadAlternateImage( byte *pic, int width, int height );
+
 
 /*
 ===============
 R_LoadLightmaps
 ===============
 */
-static void R_LoadLightmaps( const lump_t *l ) {
+void R_LoadLightmaps( const lump_t *l ) {
 	const byte	*buf;
 	byte		image[LIGHTMAP_LEN*LIGHTMAP_LEN*4];
 	int			i, numLightmaps;
@@ -415,6 +437,7 @@ static void R_LoadLightmaps( const lump_t *l ) {
 
 	numLightmaps = l->filelen / (LIGHTMAP_SIZE * LIGHTMAP_SIZE * 3);
 
+#if !defined(__WASM__) && !defined(USE_MULTIVM_SERVER) && !defined(USE_MULTIVM_RENDERER)
 	if ( r_mergeLightmaps->integer && numLightmaps > 1 ) {
 		// check for low texture sizes
 		if ( glConfig.maxTextureSize >= LIGHTMAP_LEN*2 ) {
@@ -423,6 +446,7 @@ static void R_LoadLightmaps( const lump_t *l ) {
 			return;
 		}
 	}
+#endif
 
 	buf = fileBase + l->fileofs;
 
@@ -435,8 +459,15 @@ static void R_LoadLightmaps( const lump_t *l ) {
 	tr.lightmaps = ri.Hunk_Alloc( tr.numLightmaps * sizeof(image_t *), h_low );
 	for ( i = 0 ; i < tr.numLightmaps ; i++ ) {
 		maxIntensity = R_ProcessLightmap( image, buf + i * LIGHTMAP_SIZE * LIGHTMAP_SIZE * 3, maxIntensity );
+		byte *altImage = R_LoadAlternateImage(image, LIGHTMAP_SIZE, LIGHTMAP_SIZE);
 		tr.lightmaps[i] = R_CreateImage( va( "*lightmap%d", i ), NULL, image, LIGHTMAP_SIZE, LIGHTMAP_SIZE,
 			lightmapFlags | IMGFLAG_CLAMPTOEDGE );
+
+		if(altImage && altImage != image) {
+			tr.lightmaps[i]->alternate = R_CreateImage( va( "*lightmapalt%d", i ), NULL, altImage, LIGHTMAP_SIZE, LIGHTMAP_SIZE,
+				lightmapFlags | IMGFLAG_CLAMPTOEDGE );
+			ri.Free(altImage);
+		}
 	}
 
 	//if ( r_lightmap->integer == 2 )	{
@@ -574,6 +605,8 @@ static void GenerateNormals( srfSurfaceFace_t *face )
 #endif // USE_PMLIGHT
 
 
+
+
 /*
 ===============
 ParseFace
@@ -622,11 +655,13 @@ static void ParseFace( const dsurface_t *ds, const drawVert_t *verts, msurface_t
 	cv->numIndices = numIndexes;
 	cv->ofsIndices = ofsIndexes;
 
+	ClearBounds( cv->bounds[0], cv->bounds[1] );
 	verts += LittleLong( ds->firstVert );
 	for ( i = 0 ; i < numPoints ; i++ ) {
 		for ( j = 0 ; j < 3 ; j++ ) {
-			cv->points[i][j] = LittleFloat( verts[i].xyz[j] );
+			cv->points[i][j] = LittleFloat( verts[i].xyz[j] ) * r_scale->value;
 		}
+		AddPointToBounds( cv->points[i], cv->bounds[0], cv->bounds[1] );
 		for ( j = 0 ; j < 2 ; j++ ) {
 			cv->points[i][3+j] = LittleFloat( verts[i].st[j] );
 			cv->points[i][5+j] = LittleFloat( verts[i].lightmap[j] );
@@ -666,9 +701,44 @@ static void ParseFace( const dsurface_t *ds, const drawVert_t *verts, msurface_t
 	}
 #endif
 
-	cv->plane.dist = DotProduct( cv->points[0], cv->plane.normal );
+	cv->plane.dist = DotProduct( cv->points[0], cv->plane.normal ); // * r_scale->value;
 	SetPlaneSignbits( &cv->plane );
 	cv->plane.type = PlaneTypeForNormal( cv->plane.normal );
+
+#ifdef USE_AUTO_TERRAIN
+if(r_autoTerrain->integer) {
+	shader_t        *parent;
+	byte shaderIndexes[ 256 ];
+	float offsets[ 256 ];
+	if((surf->shader->surfaceFlags & SURF_TERRAIN)
+		|| (surf->shader->remappedShader
+		&& surf->shader->remappedShader->surfaceFlags & SURF_TERRAIN)) {
+
+		for ( i = 0; i < numPoints; i++ )
+		{
+			shaderIndexes[ i ] = GetShaderIndexForPoint( &s_worldData.terrain, s_worldData.bounds, cv->points[i], cv->points[i][3], cv->points[i][4] );
+			offsets[ i ] = 0; // b->im->offsets[ shaderIndexes[ i ] ];
+			//%	Sys_Printf( "%f ", offsets[ i ] );
+		}
+
+		/* get matching shader and set alpha */
+		parent = surf->shader;
+		surf->shader = R_FindShader(GetIndexedShader( &s_worldData.terrain, numPoints, shaderIndexes ), LIGHTMAP_NONE, qfalse);
+		if(surf->shader->defaultShader) {
+			surf->shader = parent;
+		}
+
+		for ( i = 0; i < numPoints; i++ )
+		{
+			((byte *)&cv->points[i][7])[3] = shaderIndexes[ i ];
+		}
+	} else {
+		//Com_Printf("terrain %s\n", surf->shader->name);
+	}
+
+	
+}
+#endif
 
 	surf->data = (surfaceType_t *)cv;
 }
@@ -720,7 +790,7 @@ static void ParseMesh( const dsurface_t *ds, const drawVert_t *verts, msurface_t
 	numPoints = width * height;
 	for ( i = 0 ; i < numPoints ; i++ ) {
 		for ( j = 0 ; j < 3 ; j++ ) {
-			points[i].xyz[j] = LittleFloat( verts[i].xyz[j] );
+			points[i].xyz[j] = LittleFloat( verts[i].xyz[j] ) * r_scale->value;
 			points[i].normal[j] = LittleFloat( verts[i].normal[j] );
 		}
 		for ( j = 0 ; j < 2 ; j++ ) {
@@ -799,7 +869,7 @@ static void ParseTriSurf( const dsurface_t *ds, const drawVert_t *verts, msurfac
 	verts += LittleLong( ds->firstVert );
 	for ( i = 0 ; i < numVerts ; i++ ) {
 		for ( j = 0 ; j < 3 ; j++ ) {
-			tri->verts[i].xyz[j] = LittleFloat( verts[i].xyz[j] );
+			tri->verts[i].xyz[j] = LittleFloat( verts[i].xyz[j] ) * r_scale->value;
 			tri->verts[i].normal[j] = LittleFloat( verts[i].normal[j] );
 		}
 		AddPointToBounds( tri->verts[i].xyz, tri->bounds[0], tri->bounds[1] );
@@ -809,12 +879,50 @@ static void ParseTriSurf( const dsurface_t *ds, const drawVert_t *verts, msurfac
 		}
 
 		R_ColorShiftLightingBytes( verts[i].color.rgba, tri->verts[i].color.rgba, qtrue );
+#if 0 //def USE_AUTO_TERRAIN
+{
+			tri->verts[i].color.rgba[3] = (tri->verts[i].xyz[2] - s_worldData.bounds[0][2]) / (s_worldData.bounds[1][2] - s_worldData.bounds[0][2]);
+}
+#endif
 		if ( lightmapNum >= 0 && tr.mergeLightmaps ) {
 			// adjust lightmap coords
 			tri->verts[i].lightmap[0] = tri->verts[i].lightmap[0] * tr.lightmapScale[0] + lightmapX;
 			tri->verts[i].lightmap[1] = tri->verts[i].lightmap[1] * tr.lightmapScale[1] + lightmapY;
 		}
 	}
+
+#if 0 //def USE_AUTO_TERRAIN
+{
+	float oneFifth = (s_worldData.bounds[1][2] - s_worldData.bounds[0][2]) / 8;
+	float center = (tri->bounds[1][2] + (tri->bounds[1][2] - tri->bounds[0][2]) / 2) - s_worldData.bounds[0][2]; // + cv->plane.normal[2] * (cv->plane.dist / 2) - s_worldData.bounds[0][2];
+	Com_Printf("oneFifth: %s\n", surf->shader->name);
+
+	//Com_Printf("plane: %f\n", center);
+	if((surf->shader->surfaceFlags & SURF_TERRAIN)
+		|| surf->shader == s_worldData.terrainShader[0]
+		|| surf->shader == s_worldData.terrainShader[1]) {
+		//Com_Printf("normal: %f > %f\n", cv->points[0][2], oneFifth + s_worldData.bounds[0][2]);
+		if(center > (oneFifth * 7) ) {
+			surf->shader = s_worldData.terrainShader[7];
+		} else 
+		if(center > (oneFifth * 6) && tri->verts[0].normal[2] > 1) {
+			surf->shader = s_worldData.terrainShader[6];
+		} else
+		if(center > (oneFifth * 5)) {
+			surf->shader = s_worldData.terrainShader[5];
+		} else
+		if(center > (oneFifth * 4)) {
+			surf->shader = s_worldData.terrainShader[4];
+		} else 
+		if(center > (oneFifth * 3)) {
+			surf->shader = s_worldData.terrainShader[3];
+		} else {
+			surf->shader = s_worldData.terrainShader[2];
+		} 
+	}
+}
+#endif
+
 
 	// copy indexes
 	indexes += LittleLong( ds->firstIndex );
@@ -1663,8 +1771,8 @@ static void R_LoadSubmodels( const lump_t *l ) {
 		Com_sprintf( model->name, sizeof( model->name ), "*%d", i );
 
 		for (j=0 ; j<3 ; j++) {
-			out->bounds[0][j] = LittleFloat (in->mins[j]);
-			out->bounds[1][j] = LittleFloat (in->maxs[j]);
+			out->bounds[0][j] = LittleFloat (in->mins[j]) * r_scale->value;
+			out->bounds[1][j] = LittleFloat (in->maxs[j]) * r_scale->value;
 		}
 
 		out->firstSurface = s_worldData.surfaces + LittleLong( in->firstSurface );
@@ -1722,8 +1830,8 @@ static void R_LoadNodesAndLeafs( const lump_t *nodeLump, const lump_t *leafLump 
 	{
 		for (j=0 ; j<3 ; j++)
 		{
-			out->mins[j] = LittleLong (in->mins[j]);
-			out->maxs[j] = LittleLong (in->maxs[j]);
+			out->mins[j] = LittleLong (in->mins[j]) * r_scale->value;
+			out->maxs[j] = LittleLong (in->maxs[j]) * r_scale->value;
 		}
 	
 		p = LittleLong(in->planeNum);
@@ -1747,8 +1855,8 @@ static void R_LoadNodesAndLeafs( const lump_t *nodeLump, const lump_t *leafLump 
 	{
 		for (j=0 ; j<3 ; j++)
 		{
-			out->mins[j] = LittleLong (inLeaf->mins[j]);
-			out->maxs[j] = LittleLong (inLeaf->maxs[j]);
+			out->mins[j] = LittleLong (inLeaf->mins[j]) * r_scale->value;
+			out->maxs[j] = LittleLong (inLeaf->maxs[j]) * r_scale->value;
 		}
 
 		out->cluster = LittleLong(inLeaf->cluster);
@@ -1876,7 +1984,7 @@ static	void R_LoadPlanes( const lump_t *l ) {
 			}
 		}
 
-		out->dist = LittleFloat (in->dist);
+		out->dist = LittleFloat (in->dist) * r_scale->value;
 		out->type = PlaneTypeForNormal( out->normal );
 		out->signbits = bits;
 	}
@@ -2008,7 +2116,7 @@ static void R_LoadFogs( const lump_t *l, const lump_t *brushesLump, const lump_t
 				out->hasSurface = qtrue;
 				planeNum = LittleLong( sides[ sideOffset ].planeNum );
 				VectorSubtract( vec3_origin, s_worldData.planes[ planeNum ].normal, out->surface );
-				out->surface[3] = -s_worldData.planes[ planeNum ].dist;
+				out->surface[3] = -s_worldData.planes[ planeNum ].dist * r_scale->value;
 			}
 		}
 
@@ -2120,7 +2228,7 @@ static void R_LoadEntities( const lump_t *l ) {
 			}
 			*vs++ = '\0';
 			if ( r_vertexLight->integer && tr.vertexLightingAllowed ) {
-				RE_RemapShader(value, s, "0");
+				RE_RemapShader(value, vs, "0");
 			}
 			continue;
 		}
@@ -2133,9 +2241,31 @@ static void R_LoadEntities( const lump_t *l ) {
 				break;
 			}
 			*vs++ = '\0';
-			RE_RemapShader(value, s, "0");
+			RE_RemapShader(value, vs, "0");
 			continue;
 		}
+
+#ifdef USE_AUTO_TERRAIN
+if(r_autoTerrain->integer) {
+		s = "_shader";
+		if (!Q_strncmp(keyname, s, (int)strlen(s)) ) {
+			Q_strncpyz( w->terrain.terrainMaster, value, MAX_QPATH );
+			 
+		}
+		s = "_indexmap";
+		if (!Q_strncmp(keyname, s, (int)strlen(s)) ) {
+			Q_strncpyz( w->terrain.terrainIndex, value, MAX_QPATH );
+			 
+		}
+		s = "_layers";
+		if (!Q_strncmp(keyname, s, (int)strlen(s)) ) {
+			w->terrain.terrainLayers = atoi(value);
+		}
+}
+
+#endif
+
+
 		// check for a different grid size
 		if (!Q_stricmp(keyname, "gridsize")) {
 			//sscanf(value, "%f %f %f", &w->lightGridSize[0], &w->lightGridSize[1], &w->lightGridSize[2] );
@@ -2147,6 +2277,7 @@ static void R_LoadEntities( const lump_t *l ) {
 		}
 	}
 }
+
 
 
 /*
@@ -2168,6 +2299,10 @@ qboolean RE_GetEntityToken( char *buffer, int size ) {
 }
 
 
+
+const char *R_LoadImage( const char *name, byte **pic, int *width, int *height );
+
+
 /*
 =================
 RE_LoadWorldMap
@@ -2175,7 +2310,12 @@ RE_LoadWorldMap
 Called directly from cgame
 =================
 */
-void RE_LoadWorldMap( const char *name ) {
+#ifdef USE_MULTIVM_RENDERER
+int RE_LoadWorldMap( const char *name )
+#else
+void RE_LoadWorldMap( const char *name )
+#endif
+{
 	int			i;
 	int32_t		size;
 	dheader_t	*header;
@@ -2185,9 +2325,40 @@ void RE_LoadWorldMap( const char *name ) {
 	} buffer;
 	byte		*startMarker;
 
+	R_IssuePendingRenderCommands();
+
+	RE_ClearScene();
+
+#ifdef USE_MULTIVM_RENDERER
+	int j, empty = -1;
+	for(j = 0; j < MAX_NUM_WORLDS; j++) {
+		if ( !Q_stricmp( s_worldDatas[j].name, name ) ) {
+			// TODO: PRINT_DEVELOPER
+			rwi = 0;
+			ri.Printf( PRINT_ALL, "RE_LoadWorldMap (%i): Already loaded %s\n", j, name );
+			return j;
+		} else if (s_worldDatas[j].name[0] == '\0' && empty == -1) {
+			// load additional world in to next slot
+			empty = j;
+		}
+	}
+	rwi = empty;
+	// TODO: if (empty == -1) FreeOldestClipmap
+
+#else
+	if ( tr.worldMapLoaded ) {
+#ifdef USE_LAZY_MEMORY
+  	ri.Printf( PRINT_WARNING, "ERROR: attempted to redundantly load world map\n" );
+#else
 	if ( tr.worldMapLoaded ) {
 		ri.Error( ERR_DROP, "ERROR: attempted to redundantly load world map" );
 	}
+#endif
+	}
+
+#endif
+
+	r_scale = ri.Cvar_Get("cm_scale", "1.0", 0);
 
 	// set default sun direction to be used if it isn't
 	// overridden by a shader
@@ -2246,6 +2417,55 @@ void RE_LoadWorldMap( const char *name ) {
 	// load into heap
 	R_LoadLightmaps( &header->lumps[LUMP_LIGHTMAPS] );
 	R_LoadShaders( &header->lumps[LUMP_SHADERS] );
+	R_LoadEntities( &header->lumps[LUMP_ENTITIES] );
+
+#ifdef USE_AUTO_TERRAIN
+if(r_autoTerrain->integer) {
+		int j;
+		lump_t *subs = &header->lumps[LUMP_MODELS];
+		const dmodel_t *in = (void *)(fileBase + subs->fileofs);
+
+		// checkout shaders for terrain
+
+if(s_worldData.terrain.terrainIndex[0]) {
+		R_LoadImage(s_worldData.terrain.terrainIndex, &s_worldData.terrain.terrainImage, &s_worldData.terrain.terrainWidth, &s_worldData.terrain.terrainHeight);
+} 
+if(!s_worldData.terrain.terrainImage) {
+		R_LoadImage(va("maps/%s_alphamap.tga", s_worldData.baseName), &s_worldData.terrain.terrainImage, &s_worldData.terrain.terrainWidth, &s_worldData.terrain.terrainHeight);
+}
+if(!s_worldData.terrain.terrainImage) {
+		R_LoadImage(va("maps/%s_tracemap.tga", s_worldData.baseName), &s_worldData.terrain.terrainImage, &s_worldData.terrain.terrainWidth, &s_worldData.terrain.terrainHeight);
+	s_worldData.terrain.terrainFlip = qtrue;
+}
+
+if(s_worldData.terrain.terrainImage) {
+	// if we have an image but no layers default to 3 i guess
+	if(!s_worldData.terrain.terrainLayers) {
+		s_worldData.terrain.terrainLayers = 3;
+	}
+
+	for ( i = 0; i < s_worldData.terrain.terrainHeight * s_worldData.terrain.terrainWidth * 4; i++ )
+	{
+		s_worldData.terrain.terrainImage[ i ] = ( ( s_worldData.terrain.terrainImage[ i ] & 0xFF ) * s_worldData.terrain.terrainLayers ) / 256;
+		if ( s_worldData.terrain.terrainImage[ i ] >= s_worldData.terrain.terrainLayers ) {
+			s_worldData.terrain.terrainImage[ i ] = s_worldData.terrain.terrainLayers - 1;
+		}
+	}
+	
+}
+
+
+		// read the map bounds out of the first submodel (world mesh)
+		for (j=0 ; j<3 ; j++) {
+			s_worldData.bounds[0][j] = LittleFloat (in->mins[j]);
+			s_worldData.bounds[1][j] = LittleFloat (in->maxs[j]);
+		}
+
+		// as the map loads, check the plane normals and update the shader for the various surfaces
+
+}
+#endif
+
 	R_LoadPlanes( &header->lumps[LUMP_PLANES] );
 	R_LoadFogs( &header->lumps[LUMP_FOGS], &header->lumps[LUMP_BRUSHES], &header->lumps[LUMP_BRUSHSIDES] );
 	R_LoadSurfaces( &header->lumps[LUMP_SURFACES], &header->lumps[LUMP_DRAWVERTS], &header->lumps[LUMP_DRAWINDEXES] );
@@ -2253,7 +2473,6 @@ void RE_LoadWorldMap( const char *name ) {
 	R_LoadNodesAndLeafs( &header->lumps[LUMP_NODES], &header->lumps[LUMP_LEAFS] );
 	R_LoadSubmodels( &header->lumps[LUMP_MODELS] );
 	R_LoadVisibility( &header->lumps[LUMP_VISIBILITY] );
-	R_LoadEntities( &header->lumps[LUMP_ENTITIES] );
 	R_LoadLightGrid( &header->lumps[LUMP_LIGHTGRID] );
 
 #ifdef USE_VBO
@@ -2268,4 +2487,10 @@ void RE_LoadWorldMap( const char *name ) {
 	tr.world = &s_worldData;
 
 	ri.FS_FreeFile( buffer.v );
+
+#ifdef USE_MULTIVM_RENDERER
+	rwi = 0;
+	return empty;
+#endif
+
 }

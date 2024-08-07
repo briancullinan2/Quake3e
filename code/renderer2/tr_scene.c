@@ -34,7 +34,10 @@ static int			r_numpolys;
 static int			r_firstScenePoly;
 
 static int			r_numpolyverts;
+static int     r_numindexes;
 
+static int r_firstScenePolybuffer;
+static int r_numpolybuffers;
 
 /*
 ====================
@@ -57,6 +60,10 @@ void R_InitNextFrame( void ) {
 	r_firstScenePoly = 0;
 
 	r_numpolyverts = 0;
+	r_numindexes = 0;
+
+	r_numpolybuffers = 0;
+	r_firstScenePolybuffer = 0;
 }
 
 
@@ -70,6 +77,7 @@ void RE_ClearScene( void ) {
 	r_firstSceneDlight = r_numdlights;
 	r_firstSceneEntity = r_numentities;
 	r_firstScenePoly = r_numpolys;
+	r_firstScenePolybuffer = r_numpolybuffers;
 }
 
 /*
@@ -109,7 +117,12 @@ RE_AddPolyToScene
 
 =====================
 */
-void RE_AddPolyToScene( qhandle_t hShader, int numVerts, const polyVert_t *verts, int numPolys ) {
+#ifdef USE_MULTIVM_RENDERER
+void RE_AddPolyToScene( qhandle_t hShader, int numVerts, const polyVert_t *verts, int numPolys, int world ) 
+#else
+void RE_AddPolyToScene( qhandle_t hShader, int numVerts, const polyVert_t *verts, int numPolys ) 
+#endif
+{
 	srfPoly_t	*poly;
 	int			i, j;
 	int			fogIndex;
@@ -200,14 +213,23 @@ RE_AddRefEntityToScene
 
 =====================
 */
-void RE_AddRefEntityToScene( const refEntity_t *ent, qboolean intShaderTime ) {
+#ifdef USE_MULTIVM_RENDERER
+void RE_AddRefEntityToScene( const refEntity_t *ent, qboolean intShaderTime, int world ) 
+#else
+void RE_AddRefEntityToScene( const refEntity_t *ent, qboolean intShaderTime ) 
+#endif
+{
 	vec3_t cross;
 
 	if ( !tr.registered ) {
 		return;
 	}
 	if ( r_numentities >= MAX_REFENTITIES ) {
+#ifdef USE_MULTIVM_RENDERER
+		ri.Printf( PRINT_DEVELOPER, "RE_AddRefEntityToScene (%i): Dropping refEntity, reached MAX_REFENTITIES\n", rwi );
+#else
 		ri.Printf(PRINT_DEVELOPER, "RE_AddRefEntityToScene: Dropping refEntity, reached MAX_REFENTITIES\n");
+#endif
 		return;
 	}
 	if ( Q_isnan(ent->origin[0]) || Q_isnan(ent->origin[1]) || Q_isnan(ent->origin[2]) ) {
@@ -225,6 +247,9 @@ void RE_AddRefEntityToScene( const refEntity_t *ent, qboolean intShaderTime ) {
 	backEndData->entities[r_numentities].e = *ent;
 	backEndData->entities[r_numentities].lightingCalculated = qfalse;
 	backEndData->entities[r_numentities].intShaderTime = intShaderTime;
+#ifdef USE_MULTIVM_RENDERER
+	backEndData->entities[r_numentities].world = world;
+#endif
 
 	CrossProduct(ent->axis[0], ent->axis[1], cross);
 	backEndData->entities[r_numentities].mirrored = (DotProduct(ent->axis[2], cross) < 0.f);
@@ -258,9 +283,16 @@ static void RE_AddDynamicLightToScene( const vec3_t org, float intensity, float 
 	dl = &backEndData->dlights[r_numdlights++];
 	VectorCopy (org, dl->origin);
 	dl->radius = intensity;
-	dl->color[0] = r;
-	dl->color[1] = g;
-	dl->color[2] = b;
+	if(r_greyscale->integer) {
+		byte luma = LUMA(r, g, b);
+		r = luma;
+		g = luma;
+		b = luma;
+	} else {
+		dl->color[0] = r;
+		dl->color[1] = g;
+		dl->color[2] = b;
+	}
 	dl->additive = additive;
 }
 
@@ -270,7 +302,12 @@ RE_AddLightToScene
 
 =====================
 */
-void RE_AddLightToScene( const vec3_t org, float intensity, float r, float g, float b ) {
+#ifdef USE_MULTIVM_RENDERER
+void RE_AddLightToScene( const vec3_t org, float intensity, float r, float g, float b, int world ) 
+#else
+void RE_AddLightToScene( const vec3_t org, float intensity, float r, float g, float b ) 
+#endif
+{
 	RE_AddDynamicLightToScene( org, intensity, r, g, b, qfalse );
 }
 
@@ -280,12 +317,21 @@ RE_AddAdditiveLightToScene
 
 =====================
 */
-void RE_AddAdditiveLightToScene( const vec3_t org, float intensity, float r, float g, float b ) {
+#ifdef USE_MULTIVM_RENDERER
+void RE_AddAdditiveLightToScene( const vec3_t org, float intensity, float r, float g, float b, int world ) 
+#else
+void RE_AddAdditiveLightToScene( const vec3_t org, float intensity, float r, float g, float b ) 
+#endif
+{
 	RE_AddDynamicLightToScene( org, intensity, r, g, b, qtrue );
 }
 
 
+#ifdef USE_MULTIVM_RENDERER
+void RE_BeginScene(const refdef_t *fd, int world)
+#else
 void RE_BeginScene(const refdef_t *fd)
+#endif
 {
 	Com_Memcpy( tr.refdef.text, fd->text, sizeof( tr.refdef.text ) );
 
@@ -415,6 +461,9 @@ void RE_BeginScene(const refdef_t *fd)
 	tr.refdef.numPolys = r_numpolys - r_firstScenePoly;
 	tr.refdef.polys = &backEndData->polys[r_firstScenePoly];
 
+	tr.refdef.numPolyBuffers = r_numpolybuffers - r_firstScenePolybuffer;
+	tr.refdef.polybuffers = &backEndData->polybuffers[r_firstScenePolybuffer];
+
 	tr.refdef.num_pshadows = 0;
 	tr.refdef.pshadows = &backEndData->pshadows[0];
 
@@ -443,6 +492,7 @@ void RE_EndScene(void)
 	r_firstSceneEntity = r_numentities;
 	r_firstSceneDlight = r_numdlights;
 	r_firstScenePoly = r_numpolys;
+	r_firstScenePolybuffer = r_numpolybuffers;
 }
 
 /*
@@ -456,7 +506,12 @@ Rendering a scene may require multiple views to be rendered
 to handle mirrors,
 @@@@@@@@@@@@@@@@@@@@@
 */
-void RE_RenderScene( const refdef_t *fd ) {
+#ifdef USE_MULTIVM_RENDERER
+void RE_RenderScene( const refdef_t *fd, int world ) 
+#else
+void RE_RenderScene( const refdef_t *fd ) 
+#endif
+{
 	viewParms_t		parms;
 	int				startTime;
 
@@ -475,7 +530,11 @@ void RE_RenderScene( const refdef_t *fd ) {
 		ri.Error (ERR_DROP, "R_RenderScene: NULL worldmodel");
 	}
 
+#ifdef USE_MULTIVM_RENDERER
+	RE_BeginScene(fd, world);
+#else
 	RE_BeginScene(fd);
+#endif
 
 	// SmileTheory: playing with shadow mapping
 	if (!( fd->rdflags & RDF_NOWORLDMODEL ) && tr.refdef.num_dlights && r_dlightMode->integer >= 2)
@@ -540,10 +599,20 @@ void RE_RenderScene( const refdef_t *fd ) {
 	// convert to GL's 0-at-the-bottom space
 	//
 	Com_Memset( &parms, 0, sizeof( parms ) );
+
+#ifdef USE_MULTIVM_RENDERER
+	parms.newWorld = world;
+
+	parms.viewportX = tr.refdef.x * dvrXScale + (dvrXOffset * glConfig.vidWidth);
+	parms.viewportY = glConfig.vidHeight - ( (tr.refdef.y * dvrYScale + (dvrYOffset * glConfig.vidHeight)) + (tr.refdef.height * dvrYScale) );
+	parms.viewportWidth = tr.refdef.width * dvrXScale;
+	parms.viewportHeight = tr.refdef.height * dvrYScale;
+#else
 	parms.viewportX = tr.refdef.x;
 	parms.viewportY = glConfig.vidHeight - ( tr.refdef.y + tr.refdef.height );
 	parms.viewportWidth = tr.refdef.width;
 	parms.viewportHeight = tr.refdef.height;
+#endif
 	parms.isPortal = qfalse;
 
 	parms.fovX = tr.refdef.fov_x;
@@ -571,4 +640,82 @@ void RE_RenderScene( const refdef_t *fd ) {
 	RE_EndScene();
 
 	tr.frontEndMsec += ri.Milliseconds() - startTime;
+}
+
+
+/*
+=====================
+R_AddPolygonBufferSurfaces
+
+Adds all the scene's polys into this view's drawsurf list
+=====================
+*/
+void R_AddPolygonBufferSurfaces( void ) {
+	int i;
+	shader_t        *sh;
+	srfPolyBuffer_t *polybuffer;
+
+	tr.currentEntityNum = REFENTITYNUM_WORLD;
+	tr.shiftedEntityNum = tr.currentEntityNum << QSORT_REFENTITYNUM_SHIFT;
+
+	for ( i = 0, polybuffer = tr.refdef.polybuffers; i < tr.refdef.numPolyBuffers ; i++, polybuffer++ ) {
+		sh = R_GetShaderByHandle( polybuffer->pPolyBuffer->shader );
+
+		R_AddDrawSurf( ( void * )polybuffer, sh, polybuffer->fogIndex, 0, 0, 0 );
+	}
+}
+
+
+/*
+=====================
+RE_AddPolyBufferToScene
+
+=====================
+*/
+#ifdef USE_MULTIVM_RENDERER
+void RE_AddPolyBufferToScene( polyBuffer_t* pPolyBuffer, int world ) 
+#else
+void RE_AddPolyBufferToScene( polyBuffer_t* pPolyBuffer ) 
+#endif
+{
+	srfPolyBuffer_t*    pPolySurf;
+	int fogIndex;
+	fog_t*              fog;
+	vec3_t bounds[2];
+	int i;
+
+	if ( r_numpolybuffers >= max_polybuffers 
+		|| r_numpolyverts + pPolyBuffer->numVerts >= max_polyverts 
+	) {
+		ri.Printf( PRINT_DEVELOPER, "WARNING: RE_AddPolyBufferToScene: r_numpolybuffers or r_maxpolyverts reached\n");
+		return;
+	}
+
+	pPolySurf = &backEndData->polybuffers[r_numpolybuffers];
+	r_numpolybuffers++;
+
+	pPolySurf->surfaceType = SF_POLYBUFFER;
+	pPolySurf->pPolyBuffer = pPolyBuffer;
+
+	VectorCopy( pPolyBuffer->xyz[0], bounds[0] );
+	VectorCopy( pPolyBuffer->xyz[0], bounds[1] );
+	for ( i = 1 ; i < pPolyBuffer->numVerts ; i++ ) {
+		AddPointToBounds( pPolyBuffer->xyz[i], bounds[0], bounds[1] );
+	}
+	for ( fogIndex = 1 ; fogIndex < tr.world->numfogs ; fogIndex++ ) {
+		fog = &tr.world->fogs[fogIndex];
+		if ( bounds[1][0] >= fog->bounds[0][0]
+			 && bounds[1][1] >= fog->bounds[0][1]
+			 && bounds[1][2] >= fog->bounds[0][2]
+			 && bounds[0][0] <= fog->bounds[1][0]
+			 && bounds[0][1] <= fog->bounds[1][1]
+			 && bounds[0][2] <= fog->bounds[1][2] ) {
+			break;
+		}
+	}
+	if ( fogIndex == tr.world->numfogs ) {
+		fogIndex = 0;
+	}
+
+	pPolySurf->fogIndex = fogIndex;
 }

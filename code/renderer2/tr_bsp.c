@@ -37,7 +37,16 @@ void RE_LoadWorldMap( const char *name );
 
 */
 
+#ifdef USE_MULTIVM_RENDERER
+static 		world_t		s_worldDatas[MAX_NUM_WORLDS];
+int       rwi = 0; // render world, should match number of loaded clip maps, 
+                   //   since they are reusable
+int 			rwi_ref = 0;
+#define s_worldData s_worldDatas[rwi]
+#else
 static	world_t		s_worldData;
+#endif
+
 static	byte		*fileBase;
 
 static int	c_gridVerts;
@@ -251,6 +260,8 @@ static	void R_LoadLightmaps( const lump_t *l, const lump_t *surfs ) {
 		numLightmaps >>= 1;
 
 	// Use fat lightmaps of an appropriate size.
+#if !defined(__WASM__) && !defined(USE_MULTIVM_SERVER) && !defined(USE_MULTIVM_RENDERER)
+
 	if (r_mergeLightmaps->integer)
 	{
 		int maxLightmapsPerAxis = glConfig.maxTextureSize / tr.lightmapSize;
@@ -270,6 +281,7 @@ static	void R_LoadLightmaps( const lump_t *l, const lump_t *surfs ) {
 		tr.numLightmaps = (numLightmaps + (numLightmapsPerPage - 1)) / numLightmapsPerPage;
 	}
 	else
+#endif
 	{
 		tr.numLightmaps = numLightmaps;
 	}
@@ -290,6 +302,7 @@ static	void R_LoadLightmaps( const lump_t *l, const lump_t *surfs ) {
 			textureInternalFormat = GL_RGBA16;
 	}
 
+#if !defined(__WASM__) && !defined(USE_MULTIVM_SERVER) && !defined(USE_MULTIVM_RENDERER)
 	if (r_mergeLightmaps->integer)
 	{
 		int width  = tr.fatLightmapCols * tr.lightmapSize;
@@ -303,6 +316,8 @@ static	void R_LoadLightmaps( const lump_t *l, const lump_t *surfs ) {
 				tr.deluxemaps[i] = R_CreateImage(va("_fatdeluxemap%d", i), NULL, width, height, IMGTYPE_DELUXE, imgFlags, 0);
 		}
 	}
+#endif
+
 
 	for(i = 0; i < numLightmaps; i++)
 	{
@@ -310,6 +325,7 @@ static	void R_LoadLightmaps( const lump_t *l, const lump_t *surfs ) {
 		int lightmapnum = i;
 		// expand the 24 bit on-disk to 32 bit
 
+#if !defined(__WASM__) && !defined(USE_MULTIVM_SERVER) && !defined(USE_MULTIVM_RENDERER)
 		if (r_mergeLightmaps->integer)
 		{
 			int lightmaponpage = i % numLightmapsPerPage;
@@ -318,6 +334,7 @@ static	void R_LoadLightmaps( const lump_t *l, const lump_t *surfs ) {
 
 			lightmapnum /= numLightmapsPerPage;
 		}
+#endif
 
 		// if (tr.worldLightmapping)
 		{
@@ -457,9 +474,11 @@ static	void R_LoadLightmaps( const lump_t *l, const lump_t *surfs ) {
 				}
 			}
 
+#if !defined(__WASM__) && !defined(USE_MULTIVM_SERVER) && !defined(USE_MULTIVM_RENDERER)
 			if (r_mergeLightmaps->integer)
 				R_UpdateSubImage(tr.lightmaps[lightmapnum], image, xoff, yoff, tr.lightmapSize, tr.lightmapSize, textureInternalFormat);
 			else
+#endif
 				tr.lightmaps[i] = R_CreateImage(va("*lightmap%d", i), image, tr.lightmapSize, tr.lightmapSize, IMGTYPE_COLORALPHA, imgFlags, textureInternalFormat );
 
 			if (hdrLightmap)
@@ -486,9 +505,11 @@ static	void R_LoadLightmaps( const lump_t *l, const lump_t *surfs ) {
 				image[j*4+3] = 255;
 			}
 
+#if !defined(__WASM__) && !defined(USE_MULTIVM_SERVER) && !defined(USE_MULTIVM_RENDERER)
 			if (r_mergeLightmaps->integer)
 				R_UpdateSubImage(tr.deluxemaps[lightmapnum], image, xoff, yoff, tr.lightmapSize, tr.lightmapSize, GL_RGBA8 );
 			else
+#endif
 				tr.deluxemaps[i] = R_CreateImage(va("*deluxemap%d", i), image, tr.lightmapSize, tr.lightmapSize, IMGTYPE_DELUXE, imgFlags, 0 );
 		}
 	}
@@ -777,6 +798,43 @@ static void ParseFace( const dsurface_t *ds, const drawVert_t *verts, float *hdr
 	SetPlaneSignbits( &cv->cullPlane );
 	cv->cullPlane.type = PlaneTypeForNormal( cv->cullPlane.normal );
 	surf->cullinfo.plane = cv->cullPlane;
+
+
+
+#ifdef USE_AUTO_TERRAIN
+if(r_autoTerrain->integer) {
+	shader_t        *parent;
+	byte shaderIndexes[ 256 ];
+	float offsets[ 256 ];
+	if((surf->shader->surfaceFlags & SURF_TERRAIN)
+		|| (surf->shader->remappedShader
+		&& surf->shader->remappedShader->surfaceFlags & SURF_TERRAIN)) {
+
+		for ( i = 0; i < numVerts; i++ )
+		{
+			shaderIndexes[ i ] = GetShaderIndexForPoint( &s_worldData.terrain, s_worldData.bounds, cv->verts[i].xyz, cv->verts[i].st[0], cv->verts[i].st[1] );
+			offsets[ i ] = 0; // b->im->offsets[ shaderIndexes[ i ] ];
+			//%	Sys_Printf( "%f ", offsets[ i ] );
+		}
+
+		/* get matching shader and set alpha */
+		parent = surf->shader;
+		surf->shader = R_FindShader(GetIndexedShader( &s_worldData.terrain, numVerts, shaderIndexes ), LIGHTMAP_NONE, qfalse);
+		if(surf->shader->defaultShader) {
+			surf->shader = parent;
+		}
+
+		for ( i = 0; i < numVerts; i++ )
+		{
+			cv->verts[i].color[3] = shaderIndexes[ i ];
+		}
+	} else {
+		//Com_Printf("terrain %s\n", surf->shader->name);
+	}
+
+	
+}
+#endif
 
 	surf->data = (surfaceType_t *)cv;
 
@@ -2327,9 +2385,11 @@ static void R_LoadEntities( const lump_t *l ) {
 				break;
 			}
 			*vs++ = 0;
+#ifndef __WASM__
 			if ( r_vertexLight->integer && tr.vertexLightingAllowed ) {
 				R_RemapShader(value, s, "0");
 			}
+#endif
 			continue;
 		}
 		// check for remapping of shaders
@@ -2344,6 +2404,29 @@ static void R_LoadEntities( const lump_t *l ) {
 			R_RemapShader(value, s, "0");
 			continue;
 		}
+
+
+#ifdef USE_AUTO_TERRAIN
+if(r_autoTerrain->integer) {
+		s = "_shader";
+		if (!Q_strncmp(keyname, s, (int)strlen(s)) ) {
+			Q_strncpyz( w->terrain.terrainMaster, value, MAX_QPATH );
+			 
+		}
+		s = "_indexmap";
+		if (!Q_strncmp(keyname, s, (int)strlen(s)) ) {
+			Q_strncpyz( w->terrain.terrainIndex, value, MAX_QPATH );
+			 
+		}
+		s = "_layers";
+		if (!Q_strncmp(keyname, s, (int)strlen(s)) ) {
+			w->terrain.terrainLayers = atoi(value);
+		}
+}
+
+#endif
+
+
 		// check for a different grid size
 		if (!Q_stricmp(keyname, "gridsize")) {
 			sscanf(value, "%f %f %f", &w->lightGridSize[0], &w->lightGridSize[1], &w->lightGridSize[2] );
@@ -2698,6 +2781,12 @@ static void R_CalcVertexLightDirs( void )
 	}
 }
 
+#if 0 //def __WASM__
+extern void R_LoadImage( const char *name, byte **pic, int *width, int *height, GLenum *picFormat, int *numMips, qboolean *dynamicLoad );
+#else
+extern void R_LoadImage( const char *name, byte **pic, int *width, int *height, GLenum *picFormat, int *numMips );
+#endif
+
 
 /*
 =================
@@ -2706,7 +2795,12 @@ RE_LoadWorldMap
 Called directly from cgame
 =================
 */
-void RE_LoadWorldMap( const char *name ) {
+#ifdef USE_MULTIVM_RENDERER
+int RE_LoadWorldMap( const char *name )
+#else
+void RE_LoadWorldMap( const char *name ) 
+#endif
+{
 	int			i;
 	dheader_t	*header;
 	union {
@@ -2715,9 +2809,35 @@ void RE_LoadWorldMap( const char *name ) {
 	} buffer;
 	byte		*startMarker;
 
-	if ( tr.worldMapLoaded ) {
-		ri.Error( ERR_DROP, "ERROR: attempted to redundantly load world map" );
+	R_IssuePendingRenderCommands();
+
+	RE_ClearScene();
+
+#ifdef USE_MULTIVM_RENDERER
+	int j, empty = -1;
+	for(j = 0; j < MAX_NUM_WORLDS; j++) {
+		if ( !Q_stricmp( s_worldDatas[j].name, name ) ) {
+			// TODO: PRINT_DEVELOPER
+			rwi = 0;
+			ri.Printf( PRINT_ALL, "RE_LoadWorldMap (%i): Already loaded %s\n", j, name );
+			return j;
+		} else if (s_worldDatas[j].name[0] == '\0' && empty == -1) {
+			// load additional world in to next slot
+			empty = j;
+		}
 	}
+	rwi = empty;
+	// TODO: if (empty == -1) FreeOldestClipmap
+
+#else
+	if ( tr.worldMapLoaded ) {
+#if defined(__WASM__) || defined(USE_MULTIVM_RENDERER) || defined(USE_LAZY_MEMORY)
+  	ri.Printf( PRINT_WARNING, "ERROR: attempted to redundantly load world map\n" );
+#else
+		ri.Error( ERR_DROP, "ERROR: attempted to redundantly load world map" );
+#endif
+	}
+#endif
 
 	// set default map light scale
 	tr.sunShadowScale = 0.5f;
@@ -2781,6 +2901,75 @@ void RE_LoadWorldMap( const char *name ) {
 	R_LoadEntities( &header->lumps[LUMP_ENTITIES] );
 	R_LoadShaders( &header->lumps[LUMP_SHADERS] );
 	R_LoadLightmaps( &header->lumps[LUMP_LIGHTMAPS], &header->lumps[LUMP_SURFACES] );
+	
+	
+#ifdef USE_AUTO_TERRAIN
+if(r_autoTerrain->integer) {
+		int j;
+		lump_t *subs = &header->lumps[LUMP_MODELS];
+		const dmodel_t *in = (void *)(fileBase + subs->fileofs);
+
+		// checkout shaders for terrain
+		GLenum picFormat;
+		int numMips;
+#if 0 //def __WASM__
+qboolean dynamicLoad = qfalse;
+
+if(s_worldData.terrain.terrainIndex[0]) {
+		R_LoadImage(s_worldData.terrain.terrainIndex, &s_worldData.terrain.terrainImage, &s_worldData.terrain.terrainWidth, &s_worldData.terrain.terrainHeight, &picFormat, &numMips, &dynamicLoad);
+} 
+if(!s_worldData.terrain.terrainImage) {
+		R_LoadImage(va("maps/%s_alphamap.tga", s_worldData.baseName), &s_worldData.terrain.terrainImage, &s_worldData.terrain.terrainWidth, &s_worldData.terrain.terrainHeight, &picFormat, &numMips, &dynamicLoad);
+}
+if(!s_worldData.terrain.terrainImage) {
+		R_LoadImage(va("maps/%s_tracemap.tga", s_worldData.baseName), &s_worldData.terrain.terrainImage, &s_worldData.terrain.terrainWidth, &s_worldData.terrain.terrainHeight, &picFormat, &numMips, &dynamicLoad);
+	s_worldData.terrain.terrainFlip = qtrue;
+}
+
+#else
+
+if(s_worldData.terrain.terrainIndex[0]) {
+		R_LoadImage(s_worldData.terrain.terrainIndex, &s_worldData.terrain.terrainImage, &s_worldData.terrain.terrainWidth, &s_worldData.terrain.terrainHeight, &picFormat, &numMips);
+} 
+if(!s_worldData.terrain.terrainImage) {
+		R_LoadImage(va("maps/%s_alphamap.tga", s_worldData.baseName), &s_worldData.terrain.terrainImage, &s_worldData.terrain.terrainWidth, &s_worldData.terrain.terrainHeight, &picFormat, &numMips);
+}
+if(!s_worldData.terrain.terrainImage) {
+		R_LoadImage(va("maps/%s_tracemap.tga", s_worldData.baseName), &s_worldData.terrain.terrainImage, &s_worldData.terrain.terrainWidth, &s_worldData.terrain.terrainHeight, &picFormat, &numMips);
+	s_worldData.terrain.terrainFlip = qtrue;
+}
+
+#endif
+
+if(s_worldData.terrain.terrainImage) {
+	// if we have an image but no layers default to 3 i guess
+	if(!s_worldData.terrain.terrainLayers) {
+		s_worldData.terrain.terrainLayers = 3;
+	}
+
+	for ( i = 0; i < s_worldData.terrain.terrainHeight * s_worldData.terrain.terrainWidth * 4; i++ )
+	{
+		s_worldData.terrain.terrainImage[ i ] = ( ( s_worldData.terrain.terrainImage[ i ] & 0xFF ) * s_worldData.terrain.terrainLayers ) / 256;
+		if ( s_worldData.terrain.terrainImage[ i ] >= s_worldData.terrain.terrainLayers ) {
+			s_worldData.terrain.terrainImage[ i ] = s_worldData.terrain.terrainLayers - 1;
+		}
+	}
+	
+}
+
+
+		// read the map bounds out of the first submodel (world mesh)
+		for (j=0 ; j<3 ; j++) {
+			s_worldData.bounds[0][j] = LittleFloat (in->mins[j]);
+			s_worldData.bounds[1][j] = LittleFloat (in->maxs[j]);
+		}
+
+		// as the map loads, check the plane normals and update the shader for the various surfaces
+
+}
+#endif
+
+	
 	R_LoadPlanes (&header->lumps[LUMP_PLANES]);
 	R_LoadFogs( &header->lumps[LUMP_FOGS], &header->lumps[LUMP_BRUSHES], &header->lumps[LUMP_BRUSHSIDES] );
 	R_LoadSurfaces( &header->lumps[LUMP_SURFACES], &header->lumps[LUMP_DRAWVERTS], &header->lumps[LUMP_DRAWINDEXES] );
@@ -3019,4 +3208,9 @@ void RE_LoadWorldMap( const char *name ) {
 	}
 
     ri.FS_FreeFile( buffer.v );
+
+#ifdef USE_MULTIVM_RENDERER
+	rwi = 0;
+	return empty;
+#endif
 }

@@ -49,7 +49,12 @@ SURFACE SHADERS
 =============================================================
 */
 
+#ifdef USE_MULTIVM_RENDERER
+shaderCommands_t	tessWorlds[MAX_NUM_WORLDS];
+#else
 shaderCommands_t	tess;
+#endif
+
 static qboolean	setArraysOnce;
 
 /*
@@ -96,6 +101,63 @@ void R_BindAnimatedImage( const textureBundle_t *bundle ) {
 	GL_Bind( bundle->image[ index ] );
 }
 
+/*
+================
+DrawTris
+
+Draws triangle outlines for debugging
+================
+*/
+static void DrawTris2( const shaderCommands_t *input, qboolean depthHack, int thickness, float r, float g, float b, float a ) {
+
+	if ( r_showtris->integer == 1 && backEnd.drawConsole )
+		return;
+
+	if ( tess.numIndexes == 0 )
+		return;
+
+	GL_ProgramDisable();
+
+#ifdef USE_PMLIGHT
+	tess.dlightUpdateParams = qtrue;
+#endif
+
+	GL_ClientState( 0, CLS_NONE );
+	qglDisable( GL_TEXTURE_2D );
+
+#ifdef USE_PMLIGHT
+	if ( tess.dlightPass )
+		qglColor4f( 1.0f, 0.33f, 0.2f, 1.0f );
+	else
+#endif
+	qglColor4f( r, g, b, a );
+
+	if(depthHack) {
+		GL_State( GLS_POLYMODE_LINE | GLS_DEPTHMASK_TRUE );
+		qglDepthRange( 0, 0 );
+	} else {
+		GL_State( GLS_POLYMODE_LINE /*| GLS_DEPTHMASK_TRUE*/ );
+	}
+
+	qglLineWidth(thickness); 
+
+	qglVertexPointer( thickness, GL_FLOAT, sizeof( input->xyz[0] ), input->xyz );
+
+	if ( qglLockArraysEXT ) {
+		qglLockArraysEXT( 0, input->numVertexes );
+	}
+
+	R_DrawElements( input->numIndexes, input->indexes );
+
+	if ( qglUnlockArraysEXT ) {
+		qglUnlockArraysEXT();
+	}
+
+	qglEnable( GL_TEXTURE_2D );
+
+	qglDepthRange( 0, 1 );
+}
+
 
 /*
 ================
@@ -130,6 +192,8 @@ static void DrawTris( const shaderCommands_t *input ) {
 
 	GL_State( GLS_POLYMODE_LINE | GLS_DEPTHMASK_TRUE );
 	qglDepthRange( 0, 0 );
+
+	qglLineWidth(3); 
 
 	qglVertexPointer( 3, GL_FLOAT, sizeof( input->xyz[0] ), input->xyz );
 
@@ -323,6 +387,12 @@ static void DrawMultitextured( const shaderCommands_t *input, int stage ) {
 	qglDisable( GL_TEXTURE_2D );
 
 	GL_SelectTexture( 0 );
+	if(r_showverts->integer == 2) {
+		DrawTris2( input, qtrue, 25, 0, 255, 0, 255 );
+	}
+	else if(r_showverts->integer) {
+		DrawTris2( input, qtrue, 35, 0, 0, 0, 255 );
+	}
 }
 
 
@@ -476,8 +546,19 @@ Blends a fog texture on top of everything else
 static void RB_FogPass( void ) {
 	const fog_t *fog = tr.world->fogs + tess.fogNum;
 	int i;
+	color4ub_t red;
+	if(r_berserk->integer) {
+		int luma = LUMA(fog->colorInt.rgba[0], fog->colorInt.rgba[1], fog->colorInt.rgba[2]);
+		red.rgba[0] = luma;
+		red.rgba[1] = 0;
+		red.rgba[2] = 0;
+		red.rgba[3] = fog->colorInt.rgba[0];
+	}
 
 	for ( i = 0; i < tess.numVertexes; i++ ) {
+		if(r_berserk->integer) {
+			tess.svars.colors[i] = red;
+		} else
 		tess.svars.colors[i] = fog->colorInt;
 	}
 
@@ -580,7 +661,16 @@ void R_ComputeColors( const shaderStage_t *pStage )
 				fog = tr.world->fogs + tess.fogNum;
 
 				for ( i = 0; i < tess.numVertexes; i++ ) {
-					tess.svars.colors[i] = fog->colorInt;
+					if(r_berserk->integer) {
+						color4ub_t red;
+						int luma = LUMA(fog->colorInt.rgba[0], fog->colorInt.rgba[1], fog->colorInt.rgba[2]);
+						red.rgba[0] = luma;
+						red.rgba[1] = 0;
+						red.rgba[2] = 0;
+						red.rgba[3] = fog->colorInt.rgba[0];
+						tess.svars.colors[i] = red;
+					} else
+						tess.svars.colors[i] = fog->colorInt;
 				}
 			}
 			break;
@@ -828,6 +918,13 @@ static void RB_IterateStagesGeneric( const shaderCommands_t *input )
 		if ( !pStage )
 			break;
 
+
+
+	if(input->shader && input->shader->lightmapIndex == LIGHTMAP_2D
+		&& pStage->bundle[0].image[0] && input->shader->surfaceFlags == 0) {
+		pStage->bundle[0].image[0]->palette = NULL;
+	}
+
 		//
 		// do multitexture
 		//
@@ -866,6 +963,15 @@ static void RB_IterateStagesGeneric( const shaderCommands_t *input )
 				GL_ProgramEnable();
 				R_DrawElements( input->numIndexes, input->indexes );
 				GL_ProgramDisable();
+			}
+
+			if(r_showverts->integer && !(input->shader->surfaceFlags & SURF_SKY)
+				&& input->shader && input->shader->lightmapIndex != LIGHTMAP_2D) {
+				if(r_showverts->integer == 2) {
+					DrawTris2( input, qtrue, 3, 0, 255, 0, 255 );
+				} else {
+					DrawTris2( input, qtrue, 10, 0, 0, 255, 255 );
+				}
 			}
 		}
 
@@ -1082,7 +1188,7 @@ void RB_EndSurface( void ) {
 #else
 	{
 #endif
-		if ( r_showtris->integer ) {
+		if ( r_showtris->integer || backEnd.currentEntity->e.renderfx & RF_STENCIL ) {
 			DrawTris( input );
 		}
 		if ( r_shownormals->integer ) {

@@ -24,6 +24,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 backEndData_t	*backEndData;
 backEndState_t	backEnd;
 
+qboolean shouldUseAlternate = qfalse;
+
 const float *GL_Ortho( const float left, const float right, const float bottom, const float top, const float znear, const float zfar )
 {
 	static float m[ 16 ] = { 0 };
@@ -51,6 +53,14 @@ void GL_Bind( image_t *image ) {
 		texnum = tr.defaultImage->texnum;
 	} else {
 		texnum = image->texnum;
+	}
+
+	if(image && r_paletteMode->integer && image->palette) {
+		texnum = image->palette->texnum;
+	}
+
+	if(image && shouldUseAlternate && image->alternate) {
+		texnum = image->alternate->texnum;
 	}
 
 	if ( r_nobind->integer && tr.dlightImage ) {		// performance evaluation option
@@ -647,7 +657,8 @@ static void RB_RenderDrawSurfList( drawSurf_t *drawSurfs, int numDrawSurfs ) {
 					R_TransformDlights( backEnd.refdef.num_dlights, backEnd.refdef.dlights, &backEnd.or );
 				}
 #endif // USE_LEGACY_DLIGHTS
-				if ( backEnd.currentEntity->e.renderfx & RF_DEPTHHACK ) {
+				if ( (backEnd.currentEntity->e.renderfx & RF_DEPTHHACK)
+					|| (backEnd.currentEntity->e.renderfx & RF_DEPTHEXTRAHACKY) ) {
 					// hack the depth range to prevent view model from poking into walls
 					depthRange = qtrue;
 
@@ -704,8 +715,15 @@ static void RB_RenderDrawSurfList( drawSurf_t *drawSurfs, int numDrawSurfs ) {
 						}
 					}
 
+if((backEnd.currentEntity->e.renderfx & RF_DEPTHEXTRAHACKY)) {
 					if(!oldDepthRange)
 						qglDepthRange (0, 0.3);
+
+} else {
+					if(!oldDepthRange)
+						qglDepthRange (0.0f, 0.3f);
+
+}
 				}
 				else
 				{
@@ -987,7 +1005,7 @@ Stretches a raw 32 bit power of 2 bitmap image over the given screen rectangle.
 Used for cinematics.
 =============
 */
-void RE_StretchRaw( int x, int y, int w, int h, int cols, int rows, byte *data, int client, qboolean dirty ) {
+void RE_StretchRaw( int x, int y, int w, int h, int cols, int rows, const byte *data, int client, qboolean dirty ) {
 	int			i, j;
 	int			start, end;
 
@@ -1021,12 +1039,12 @@ void RE_StretchRaw( int x, int y, int w, int h, int cols, int rows, byte *data, 
 }
 
 
-void RE_UploadCinematic( int w, int h, int cols, int rows, byte *data, int client, qboolean dirty ) {
+void RE_UploadCinematic( int w, int h, int cols, int rows, const byte *data, int client, qboolean dirty ) {
 
 	image_t *image;
 
 	if ( !tr.scratchImage[ client ] ) {
-		tr.scratchImage[ client ] = R_CreateImage( va( "*scratch%i", client ), NULL, data, cols, rows, IMGFLAG_CLAMPTOEDGE | IMGFLAG_RGB | IMGFLAG_NOSCALE );
+		tr.scratchImage[ client ] = R_CreateImage( va( "*scratch%i", client ), NULL, (byte *)data, cols, rows, IMGFLAG_CLAMPTOEDGE | IMGFLAG_RGB | IMGFLAG_NOSCALE );
 	}
 
 	image = tr.scratchImage[ client ];
@@ -1578,6 +1596,32 @@ static const void *RB_SwapBuffers( const void *data ) {
 }
 
 
+#ifdef USE_MULTIVM_RENDERER
+/*
+=============
+RB_SetWorld
+=============
+*/
+static const void *RB_SetWorld( const void *data ) {
+	const setWorldCommand_t	*cmd;
+	cmd = (const setWorldCommand_t *)data;
+
+//Com_Printf("switching world: %i -> %i", rwi, cmd->world);
+	//rwi = cmd->world;
+	// TODO: skip world options
+	if(cmd->next) {
+		if(qtrue && ((const setWorldCommand_t *)data)) {
+
+		}
+
+		//return cmd->next;
+	}
+
+	return (const void *)(cmd + 1);
+}
+#endif
+
+
 /*
 ====================
 RB_ExecuteRenderCommands
@@ -1591,6 +1635,13 @@ void RB_ExecuteRenderCommands( const void *data ) {
 		data = PADP(data, sizeof(void *));
 
 		switch ( *(const int *)data ) {
+
+#ifdef USE_MULTIVM_RENDERER
+		case RC_SET_WORLD:
+			data = RB_SetWorld( data );
+			break;
+#endif
+
 		case RC_SET_COLOR:
 			data = RB_SetColor( data );
 			break;

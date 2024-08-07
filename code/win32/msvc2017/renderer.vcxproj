@@ -213,6 +213,7 @@
     <ClCompile Include="..\..\renderercommon\tr_image_tga.c" />
     <ClCompile Include="..\..\renderer\tr_init.c" />
     <ClCompile Include="..\..\renderer\tr_light.c" />
+    <ClCompile Include="..\..\renderercommon\tr_manipulation.c" />
     <ClCompile Include="..\..\renderer\tr_main.c" />
     <ClCompile Include="..\..\renderer\tr_marks.c" />
     <ClCompile Include="..\..\renderer\tr_mesh.c" />

@@ -94,6 +94,9 @@ typedef struct {
 	int			ambientLightInt;	// 32 bit rgba packed
 	vec3_t		directedLight;
 	qboolean	intShaderTime;
+#ifdef USE_MULTIVM_RENDERER
+	int world;
+#endif
 } trRefEntity_t;
 
 
@@ -382,7 +385,7 @@ typedef enum
 	ST_GLSL
 } stageType_t;
 
-typedef struct {
+typedef struct shaderStage_s {
 	qboolean		active;
 	
 	textureBundle_t	bundle[NUM_TEXTURE_BUNDLES];
@@ -436,6 +439,7 @@ typedef struct {
 
 typedef struct shader_s {
 	char		name[MAX_QPATH];		// game path, including extension
+  int     lastTimeUsed;
 	int			lightmapSearchIndex;	// for a shader to match, both name and lightmapIndex must match
 	int			lightmapIndex;			// for rendering
 
@@ -450,6 +454,8 @@ typedef struct shader_s {
 										// something calls RE_RegisterShader again with
 										// the same name, we don't try looking for it again
 
+	qboolean	noVertexLightingCollapse;
+	qboolean  allowCompress;
 	qboolean	explicitlyDefined;		// found in a .shader file
 
 	int			surfaceFlags;			// if explicitlyDefined, this will have SURF_* flags
@@ -468,6 +474,7 @@ typedef struct shader_s {
 	qboolean	polygonOffset;			// set for decals and other items that must be offset 
 	qboolean	noMipMaps;				// for console fonts, 2D elements, etc.
 	qboolean	noPicMip;				// for images that must always be full resolution
+	qboolean  noVLcollapse;
 
 	fogPass_t	fogPass;				// draw a blended pass, possibly with depth test equals
 
@@ -752,6 +759,9 @@ typedef struct {
 	int			numPolys;
 	struct srfPoly_s	*polys;
 
+	int numPolyBuffers;
+	struct srfPolyBuffer_s  *polybuffers;
+
 	int			numDrawSurfs;
 	struct drawSurf_s	*drawSurfs;
 
@@ -804,6 +814,13 @@ typedef struct {
 } fog_t;
 
 typedef enum {
+	PV_NONE = 0,
+	PV_PORTAL, // this view is through a portal
+	PV_MIRROR, // portal + inverted face culling
+	PV_COUNT
+} portalView_t;
+
+typedef enum {
 	VPF_NONE            = 0x00,
 	VPF_NOVIEWMODEL     = 0x01,
 	VPF_SHADOWMAP       = 0x02,
@@ -819,6 +836,11 @@ typedef struct {
 	orientationr_t	or;
 	orientationr_t	world;
 	vec3_t		pvsOrigin;			// may be different than or.origin for portals
+	portalView_t portalView;
+  int       portalEntity;
+#ifdef USE_MULTIVM_RENDERER
+	int       newWorld;  // switch to a different world when rendering a camera view
+#endif
 	qboolean	isPortal;			// true if this view is through a portal
 	qboolean	isMirror;			// the portal is a mirror, invert the face culling
 	viewParmFlags_t flags;
@@ -860,6 +882,7 @@ typedef enum {
 	SF_IQM,
 	SF_FLARE,
 	SF_ENTITY,				// beams, rails, lightning, etc that can be determined by entity
+	SF_POLYBUFFER,
 	SF_VAO_MDVMESH,
 	SF_VAO_IQM,
 
@@ -888,6 +911,12 @@ typedef struct srfPoly_s {
 	polyVert_t		*verts;
 } srfPoly_t;
 
+
+typedef struct srfPolyBuffer_s {
+	surfaceType_t surfaceType;
+	int fogIndex;
+	polyBuffer_t*   pPolyBuffer;
+} srfPolyBuffer_t;
 
 typedef struct srfFlare_s {
 	surfaceType_t	surfaceType;
@@ -1141,6 +1170,11 @@ typedef struct {
 	char		name[MAX_QPATH];		// ie: maps/tim_dm2.bsp
 	char		baseName[MAX_QPATH];	// ie: tim_dm2
 
+#ifdef USE_AUTO_TERRAIN
+	struct terrain_s terrain;
+	vec3_t		bounds[2];
+#endif
+
 	int			dataSize;
 
 	int			numShaders;
@@ -1281,6 +1315,7 @@ typedef struct model_s {
 	void	*modelData;			// only if type == (MOD_MDR | MOD_IQM)
 
 	int			 numLods;
+	int lastTimeUsed;
 } model_t;
 
 
@@ -1296,8 +1331,8 @@ void		R_Modellist_f (void);
 
 //====================================================
 
-#define	MAX_DRAWIMAGES			2048
-#define	MAX_SKINS				1024
+#define	MAX_DRAWIMAGES			4096
+#define	MAX_SKINS				4096
 
 
 #define	MAX_DRAWSURFS			0x10000
@@ -1483,6 +1518,7 @@ typedef struct {
 */
 typedef struct {
 	qboolean				registered;		// cleared at shutdown, set at beginRegistration
+  int							lastRegistrationTime;
 
 	int						visIndex;
 	int						visClusters[MAX_VISCOUNTS];
@@ -1658,7 +1694,22 @@ typedef struct {
 } trGlobals_t;
 
 extern backEndState_t	backEnd;
+
+#ifdef USE_MULTIVM_RENDERER
+
+#define MAX_NUM_WORLDS MAX_NUM_VMS
+
+extern float dvrXScale;
+extern float dvrYScale;
+extern float dvrXOffset;
+extern float dvrYOffset;
+extern int     rwi;
+extern trGlobals_t	trWorlds[MAX_NUM_WORLDS];
+#define tr trWorlds[rwi]
+#else
 extern trGlobals_t	tr;
+#endif
+
 extern glstate_t	glState;		// outside of TR since it shouldn't be cleared during ref re-init
 extern glRefConfig_t glRefConfig;
 
@@ -1819,7 +1870,19 @@ extern	cvar_t	*r_debugSort;
 
 extern	cvar_t	*r_printShaders;
 
-extern cvar_t	*r_marksOnTriangleMeshes;
+extern  cvar_t	*r_marksOnTriangleMeshes;
+
+extern  cvar_t  *r_paletteMode;
+extern	cvar_t	*r_showverts;
+extern	cvar_t	*r_edgy;
+extern	cvar_t	*r_invert;
+extern	cvar_t	*r_rainbow;
+extern	cvar_t	*r_berserk;
+
+
+#ifdef USE_AUTO_TERRAIN
+extern cvar_t	*r_autoTerrain;
+#endif
 
 //====================================================================
 
@@ -1862,7 +1925,7 @@ void R_AddNullModelSurfaces( trRefEntity_t *e );
 void R_AddBeamSurfaces( trRefEntity_t *e );
 void R_AddRailSurfaces( trRefEntity_t *e, qboolean isUnderwater );
 void R_AddLightningBoltSurfaces( trRefEntity_t *e );
-
+void R_AddPolygonBufferSurfaces( void );
 void R_AddPolygonSurfaces( void );
 
 void R_DecomposeSort( unsigned sort, int *entityNum, shader_t **shader, 
@@ -1945,7 +2008,15 @@ void	RE_UploadCinematic( int w, int h, int cols, int rows, const byte *data, int
 
 void		RE_BeginFrame( stereoFrame_t stereoFrame );
 void		RE_BeginRegistration( glconfig_t *glconfig );
+
+#ifdef USE_MULTIVM_RENDERER
+int		RE_LoadWorldMap( const char *mapname );
+void    RE_SetDvrFrame( float x, float y, float width, float height );
+
+#else
 void		RE_LoadWorldMap( const char *mapname );
+#endif
+
 void		RE_SetWorldVisData( const byte *vis );
 qhandle_t	RE_RegisterModel( const char *name );
 qhandle_t	RE_RegisterSkin( const char *name );
@@ -2051,7 +2122,19 @@ typedef struct shaderCommands_s
 	shaderStage_t	**xstages;
 } shaderCommands_t;
 
+#ifdef USE_MULTIVM_RENDERER
+
+typedef struct {
+	int		commandId;
+	int 	world;
+	const void *next;
+} setWorldCommand_t;
+
+extern	shaderCommands_t	tessWorlds[MAX_NUM_WORLDS];
+#define tess tessWorlds[rwi]
+#else
 extern	shaderCommands_t	tess;
+#endif
 
 void RB_BeginSurface(shader_t *shader, int fogNum, int cubemapIndex );
 void RB_EndSurface(void);
@@ -2111,7 +2194,11 @@ LIGHTS
 void R_DlightBmodel( bmodel_t *bmodel );
 void R_SetupEntityLighting( const trRefdef_t *refdef, trRefEntity_t *ent );
 void R_TransformDlights( int count, dlight_t *dl, orientationr_t *or );
+#ifdef USE_MULTIVM_RENDERER
+int R_LightForPoint( vec3_t point, vec3_t ambientLight, vec3_t directedLight, vec3_t lightDir, int world );
+#else
 int R_LightForPoint( vec3_t point, vec3_t ambientLight, vec3_t directedLight, vec3_t lightDir );
+#endif
 int R_LightDirForPoint( vec3_t point, vec3_t lightDir, vec3_t normal, world_t *world );
 int R_CubemapForPoint( vec3_t point );
 
@@ -2239,12 +2326,30 @@ SCENE GENERATION
 void R_InitNextFrame( void );
 
 void RE_ClearScene( void );
+
+#ifdef USE_MULTIVM_RENDERER
+
+void RE_AddRefEntityToScene( const refEntity_t *ent, qboolean intShaderTime, int world );
+void RE_AddPolyToScene( qhandle_t hShader , int numVerts, const polyVert_t *verts, int num, int world );
+void RE_AddPolyBufferToScene( polyBuffer_t* pPolyBuffer, int world );
+void RE_AddLightToScene( const vec3_t org, float intensity, float r, float g, float b, int world );
+void RE_AddAdditiveLightToScene( const vec3_t org, float intensity, float r, float g, float b, int world );
+void RE_AddLinearLightToScene( const vec3_t start, const vec3_t end, float intensity, float r, float g, float b, int world );
+void RE_BeginScene( const refdef_t *fd, int world );
+void RE_RenderScene( const refdef_t *fd, int world );
+
+#else
+
 void RE_AddRefEntityToScene( const refEntity_t *ent, qboolean intShaderTime );
 void RE_AddPolyToScene( qhandle_t hShader , int numVerts, const polyVert_t *verts, int num );
+void RE_AddPolyBufferToScene( polyBuffer_t* pPolyBuffer );
 void RE_AddLightToScene( const vec3_t org, float intensity, float r, float g, float b );
 void RE_AddAdditiveLightToScene( const vec3_t org, float intensity, float r, float g, float b );
 void RE_BeginScene( const refdef_t *fd );
 void RE_RenderScene( const refdef_t *fd );
+
+#endif
+
 void RE_EndScene( void );
 
 /*
@@ -2426,6 +2531,11 @@ typedef struct {
 typedef enum {
 	RC_END_OF_LIST,
 	RC_SET_COLOR,
+
+#ifdef USE_MULTIVM_RENDERER
+	RC_SET_WORLD,
+#endif
+
 	RC_STRETCH_PIC,
 	RC_DRAW_SURFS,
 	RC_DRAW_BUFFER,
@@ -2443,8 +2553,15 @@ typedef enum {
 // these are sort of arbitrary limits.
 // the limits apply to the sum of all scenes in a frame --
 // the main view, all the 3D icons, etc
+#ifdef USE_MULTIVM_RENDERER
+#define	MAX_POLYS		3000
+#define	MAX_POLYVERTS	15000
+#define MAX_POLYBUFFERS	512
+#else
 #define	MAX_POLYS		600
 #define	MAX_POLYVERTS	3000
+#define MAX_POLYBUFFERS	256
+#endif
 
 // all of the information needed by the back end must be
 // contained in a backEndData_t
@@ -2454,12 +2571,15 @@ typedef struct {
 	trRefEntity_t	entities[MAX_REFENTITIES];
 	srfPoly_t	*polys;//[MAX_POLYS];
 	polyVert_t	*polyVerts;//[MAX_POLYVERTS];
+	srfPolyBuffer_t *polybuffers; //[MAX_POLYBUFFERS];
+  int	*indexes;//[MAX_POLYVERTS];
 	pshadow_t pshadows[MAX_CALC_PSHADOWS];
 	renderCommandList_t	commands;
 } backEndData_t;
 
 extern	int		max_polys;
 extern	int		max_polyverts;
+extern	int		max_polybuffers;
 
 extern	backEndData_t	*backEndData;	// the second one may not be allocated
 

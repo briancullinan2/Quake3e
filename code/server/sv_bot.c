@@ -59,6 +59,10 @@ int SV_BotAllocateClient( void ) {
 		return -1;
 	}
 
+#ifdef USE_MULTIVM_SERVER
+	cl->newWorld = cl->gameWorld = gvmi;
+#endif
+
 	cl->gentity = SV_GentityNum( i );
 	cl->gentity->s.number = i;
 	cl->state = CS_ACTIVE;
@@ -69,6 +73,12 @@ int SV_BotAllocateClient( void ) {
 
 	cl->tld[0] = '\0';
 	cl->country = "BOT";
+
+#ifdef USE_MULTIVM_SERVER
+	Com_Printf("Allocating: %i (%i)\n", i, gvmi);
+#else
+  Com_Printf("Allocating: %i\n", i);
+#endif
 
 	return i;
 }
@@ -268,7 +278,18 @@ static void BotImport_BSPModelMinsMaxsOrigin(int modelnum, vec3_t angles, vec3_t
 	float max;
 	int	i;
 
-	h = CM_InlineModel(modelnum);
+
+#ifdef USE_MULTIVM_SERVER
+	CM_SwitchMap(gameWorlds[gvmi]);
+	h = CM_InlineModel(modelnum, 5, gvmi);
+#else
+#if defined(USE_MULTIVM_RENDERER) || defined(USE_MULTIVM_CLIENT)
+  h = CM_InlineModel(modelnum, 5, 0);
+#else
+  h = CM_InlineModel(modelnum);
+#endif
+#endif
+
 	CM_ModelBounds(h, mins, maxs);
 	//if the model is rotated
 	if ((angles[0] || angles[1] || angles[2])) {
@@ -312,9 +333,11 @@ BotImport_HunkAlloc
 =================
 */
 static void *BotImport_HunkAlloc( int size ) {
+#ifndef USE_MULTIVM_SERVER
 	if( Hunk_CheckMark() ) {
 		Com_Error( ERR_DROP, "%s(): Alloc with marks already set", __func__ );
 	}
+#endif
 	return Hunk_Alloc( size, h_high );
 }
 
@@ -445,6 +468,17 @@ static void BotClientCommand( int client, const char *command ) {
 	}
 }
 
+
+
+#ifdef USE_MULTIVM_SERVER
+void SV_SetAASgvm(int gvmi) {
+	if(botlib_export && bot_enable && botlib_export->SetAASgvm)
+		botlib_export->SetAASgvm(gvmi);
+}
+#endif
+
+
+
 /*
 ==================
 SV_BotFrame
@@ -498,7 +532,6 @@ SV_BotInitCvars
 ==================
 */
 void SV_BotInitCvars(void) {
-
 	Cvar_Get("bot_enable", "1", 0);						//enable the bot
 	Cvar_Get("bot_developer", "0", CVAR_CHEAT);			//bot developer mode
 	Cvar_Get("bot_debug", "0", CVAR_CHEAT);				//enable bot debugging
@@ -649,7 +682,16 @@ SV_BotGetSnapshotEntity
 int SV_BotGetSnapshotEntity( int client, int sequence ) {
 	if ( (unsigned) client < sv.maxclients ) {
 		const client_t* cl = &svs.clients[client];
-		const clientSnapshot_t* frame = &cl->frames[cl->netchan.outgoingSequence & PACKET_MASK];
+		const clientSnapshot_t* frame;
+
+
+#ifdef USE_MULTIVM_SERVER
+	frame = &cl->frames[gvmi][cl->netchan.outgoingSequence & PACKET_MASK];
+#else
+  frame = &cl->frames[cl->netchan.outgoingSequence & PACKET_MASK];
+#endif
+
+
 		if ( (unsigned) sequence >= frame->num_entities ) {
 			return -1;
 		}
