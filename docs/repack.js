@@ -5,6 +5,7 @@ const {glob} = require('glob')
 const {spawnSync} = require('child_process')
 
 const MODNAME = 'demoq3'
+const DEFAULT_MODEL = 'sarge'
 const SOURCE_PATH = path.join(__dirname, '../../docs/')
 const OUTPUT_PATH = path.join(__dirname, '../../docs/maps/')
 
@@ -27,7 +28,7 @@ const SUPPORTED_FORMATS = [
 ]
 
 // include icons because menu uses it to load, not a lazy check unforntunatly
-const FILE_TYPES = new RegExp('menu\/|gfx\/2d\/|players\/[^\/]*?\/icon.*\.tga|players\/sarge\/|_tracemap\.tga', 'ig')
+const FILE_TYPES = new RegExp('menu\/|gfx\/2d\/|players\/[^\/]*?\/icon.*\.tga|players\/' + DEFAULT_MODEL + '\/|_tracemap\.tga', 'ig')
 
 let lockFunc = false
 let lockPromise
@@ -139,7 +140,7 @@ async function convertImage(pk3File) {
 
     let imageProcess
     if(pk3File.indexOf('.png') != -1) {
-      imageProcess = await spawnSync('magick', [altPath, '-compose', 'DstOver', '-quality', '50%', '-auto-orient', pk3Path], {
+      imageProcess = await spawnSync('magick', [altPath, '-auto-orient', '-quality', '50%', pk3Path], {
         cwd: SOURCE_PATH,
         timeout: 3000,
       })

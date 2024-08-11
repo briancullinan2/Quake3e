@@ -107,6 +107,7 @@ function getQueryCommands() {
 	// TODO: from URL or default.cfg?
 	if(!startup.includes('fs_game')) {
 		startup.push.apply(startup, [
+			'+set', 'fs_basegame', MODNAME,
 			'+set', 'fs_game', MODNAME,
 		])
 		if(typeof FS.virtual[MODNAME] == 'undefined') {

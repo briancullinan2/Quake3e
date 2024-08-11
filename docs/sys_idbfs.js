@@ -233,7 +233,7 @@ async function readPreFS() {
 
   // write description to pk3dir so that it loads as a pak when the engine starts
   //   this is key to making async work on fresh loads
-  let nameStr = '/base/' + MODNAME + '/pak0.pk3dir/description.txt'
+  let nameStr = '/base/' + MODNAME + '/pak2.pk3dir/description.txt'
   FS_CreatePath(stringToAddress(nameStr))
   FS.virtual[nameStr] = {
     timestamp: new Date(),
