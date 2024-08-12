@@ -614,7 +614,7 @@ extern qboolean s_soundMuted;
 	if(key == K_MOUSE1 && first_click) {
 		first_click = qfalse;
 		cls.soundStarted = qtrue;
-		S_Init();
+		//S_Init();
     gw_active = qtrue;
     s_soundStarted = qtrue;
     s_soundMuted = qfalse;
