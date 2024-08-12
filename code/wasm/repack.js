@@ -11,7 +11,7 @@ const OUTPUT_PATH = path.join(__dirname, '../../docs/maps/')
 
 const SUPPORTED_FORMATS = [
   '.cfg', '.qvm', '.jts', '.bot',
-  '.txt', '.hit',
+  '.txt', '.hit', '.dat', // for fonts
   '.shader', '.shaderx',
   '.crosshair', '.skin', '.font',
   '.config', '.menu',
@@ -28,7 +28,7 @@ const SUPPORTED_FORMATS = [
 ]
 
 // include icons because menu uses it to load, not a lazy check unforntunatly
-const FILE_TYPES = new RegExp('menu\/|gfx\/2d\/|players\/[^\/]*?\/icon.*\.tga|players\/' + DEFAULT_MODEL + '\/|_tracemap\.tga', 'ig')
+const FILE_TYPES = new RegExp('menu\/|fonts\/|gfx\/2d\/|players\/[^\/]*?\/icon.*\.tga|players\/' + DEFAULT_MODEL + '\/|_tracemap\.tga', 'ig')
 
 let lockFunc = false
 let lockPromise
