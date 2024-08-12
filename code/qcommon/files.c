@@ -3657,7 +3657,11 @@ static char **FS_ListFilteredFiles( const char *path, const char *extension, con
 					}
 
 					// check for extension match
-					length = (int)strlen( name );
+					if(extLen == 1 && extension[0] == '/') {
+						length = (int)strlen( zpath );
+					} else {
+						length = (int)strlen( name );
+					}
 
 					if ( fnamecallback ) {
 						// use custom filter
@@ -3673,8 +3677,14 @@ static char **FS_ListFilteredFiles( const char *path, const char *extension, con
 									continue;
 								}
 							} else {
-								if ( Q_stricmp( name + length - extLen, extension ) ) {
-									continue;
+								if(extLen == 1 && extension[0] == '/') {
+									if ( Q_stricmpn( name + length, extension, extLen ) ) {
+										continue;
+									}
+								} else {
+									if ( Q_stricmp( name + length - extLen, extension ) ) {
+										continue;
+									}
 								}
 							}
 						}
@@ -3685,7 +3695,11 @@ static char **FS_ListFilteredFiles( const char *path, const char *extension, con
 					if (pathLength) {
 						temp++;		// include the '/'
 					}
-					nfiles = FS_AddFileToList( name + temp, list, nfiles );
+					if(extLen == 1 && extension[0] == '/') {
+						nfiles = FS_AddFileToList( zpath + temp, list, nfiles );
+					} else {
+						nfiles = FS_AddFileToList( name + temp, list, nfiles );
+					}
 				}
 			}
 		} else if ( search->dir 
@@ -5415,6 +5429,7 @@ const char *FS_ReferencedPakChecksums( void ) {
 
 #ifdef __WASM__
 
+extern vm_t *cgvm;
 qboolean fs_cgameSawAsync = qfalse;
 qboolean fs_uiSawAsync = qfalse;
 qboolean fs_gameSawAsync = qfalse;
@@ -5434,7 +5449,7 @@ int FS_GetAsyncFiles(char **files, int max) {
 Q_EXPORT void FS_RecordFile(const char *file) {
 
 	if(fs_cgameSawAsync
-	|| (!com_cl_running->integer && fs_uiSawAsync) /*&& fs_uiSawAsync
+	|| (!cgvm && fs_uiSawAsync) /*&& fs_uiSawAsync
 		&& (!com_sv_running->integer || fs_gameSawAsync)*/
 	) {
 		numAsyncFiles = 0;
