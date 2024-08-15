@@ -1635,6 +1635,12 @@ static void R_AddEntitySurfaces( void ) {
 
 		case RT_MODEL:
 			// we must set up parts of tr.or for model culling
+			if(ent->e.renderfx & RF_BILLBOARD) {
+				vec3_t forward;
+				vectoangles(tr.refdef.viewaxis[0], forward);
+				forward[YAW] += 180;
+				AnglesToAxis(forward, ent->e.axis);
+			}
 			R_RotateForEntity( ent, &tr.viewParms, &tr.or );
 
 			tr.currentModel = R_GetModelByHandle( ent->e.hModel );
