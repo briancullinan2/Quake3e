@@ -113,7 +113,7 @@ clientActive_t		cl;
 clientConnection_t	clc;
 clientStatic_t		cls;
 
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+#if defined(USE_MULTIVM_CLIENT)
 cvar_t  *cl_mvHighlight;
 #endif
 
@@ -361,7 +361,7 @@ static void CL_WriteGamestate( qboolean initial )
 	int			len;
 	entityState_t	*ent;
 	entityState_t	nullstate;
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+#if defined(USE_MULTIVM_CLIENT)
 	int igs = cgvmi_ref;
 #endif
 
@@ -443,7 +443,7 @@ static void CL_EmitPacketEntities( clSnapshot_t *from, clSnapshot_t *to, msg_t *
 	int		oldindex, newindex;
 	int		oldnum, newnum;
 	int		from_num_entities;
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+#if defined(USE_MULTIVM_CLIENT)
 	int igs = cgvmi_ref;
 #endif
 
@@ -508,11 +508,11 @@ static void CL_EmitPacketEntities( clSnapshot_t *from, clSnapshot_t *to, msg_t *
 CL_WriteSnapshot
 ====================
 */
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+#if defined(USE_MULTIVM_CLIENT)
 #undef snap
 #endif
 static void CL_WriteSnapshot( void ) {
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+#if defined(USE_MULTIVM_CLIENT)
 	int igs = cgvmi_ref;
 #endif
 
@@ -523,7 +523,7 @@ static void CL_WriteSnapshot( void ) {
 	byte	bufData[ MAX_MSGLEN_BUF ];
 	msg_t	msg;
 	int		i, len;
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+#if defined(USE_MULTIVM_CLIENT)
 	snap = &cl.snapshots[ cl.snapWorlds[cgvmi_ref].messageNum & PACKET_MASK ]; // current snapshot
 #else
 	snap = &cl.snapshots[ cl.snap.messageNum & PACKET_MASK ]; // current snapshot
@@ -1181,7 +1181,7 @@ memory on the hunk from cgame, ui, and renderer
 =====================
 */
 void CL_MapLoading( void ) {
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+#if defined(USE_MULTIVM_CLIENT)
 	int igs = cgvmi_ref;
 #endif
 	if ( com_dedicated->integer ) {
@@ -2020,7 +2020,7 @@ CL_Configstrings_f
 static void CL_Configstrings_f( void ) {
 	int		i;
 	int		ofs;
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+#if defined(USE_MULTIVM_CLIENT)
 	int igs = cgvmi_ref;
 #endif
 
@@ -2049,7 +2049,7 @@ static void CL_Clientinfo_f( void ) {
 	Com_Printf( "state: %i\n", cls.state );
 	Com_Printf( "Server: %s\n", cls.servername );
 	Com_Printf ("User info settings:\n");
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+#if defined(USE_MULTIVM_CLIENT)
 // TODO: something here
   Info_Print( Cvar_InfoString( CVAR_USERINFO, NULL ) );
 #else
@@ -2067,7 +2067,7 @@ CL_Serverinfo_f
 static void CL_Serverinfo_f( void ) {
 	int		ofs;
 
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+#if defined(USE_MULTIVM_CLIENT)
 	ofs = cl.gameStates[cgvmi_ref].stringOffsets[ CS_SERVERINFO ];
 #else
 	ofs = cl.gameState.stringOffsets[ CS_SERVERINFO ];
@@ -2076,7 +2076,7 @@ static void CL_Serverinfo_f( void ) {
 		return;
 
 	Com_Printf( "Server info settings:\n" );
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+#if defined(USE_MULTIVM_CLIENT)
 	Info_Print( cl.gameStates[cgvmi_ref].stringData + ofs );
 #else
 	Info_Print( cl.gameState.stringData + ofs );
@@ -2092,7 +2092,7 @@ CL_Systeminfo_f
 static void CL_Systeminfo_f( void ) {
 	int ofs;
 
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+#if defined(USE_MULTIVM_CLIENT)
 	ofs = cl.gameStates[cgvmi_ref].stringOffsets[ CS_SYSTEMINFO ];
 #else
 	ofs = cl.gameState.stringOffsets[ CS_SYSTEMINFO ];
@@ -2101,7 +2101,7 @@ static void CL_Systeminfo_f( void ) {
 		return;
 
 	Com_Printf( "System info settings:\n" );
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+#if defined(USE_MULTIVM_CLIENT)
 	Info_Print( cl.gameStates[cgvmi_ref].stringData + ofs );
 #else
 	Info_Print( cl.gameState.stringData + ofs );
@@ -2180,7 +2180,7 @@ static void CL_DownloadsComplete( void ) {
 	// this will also (re)load the UI
 	// if this is a local client then only the client part of the hunk
 	// will be cleared, note that this is done after the hunk mark has been set
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER) || defined(USE_PTHREADS)
+#if defined(USE_MULTIVM_RENDERER) || defined(USE_PTHREADS)
 	// TODO: cl_norenderRestart
 	re.InitShaders();
 	S_Shutdown();
@@ -2358,7 +2358,7 @@ and determine if we need to download them
 =================
 */
 void CL_InitDownloads( void ) {
-#ifdef USE_MULTIVM_RENDERER
+#ifdef USE_MULTIVM_CLIENT
 #ifdef USE_CURL
 	int igs = cgvmi_ref;
 #endif
@@ -2467,7 +2467,7 @@ static void CL_CheckForResend( void ) {
 		port = Cvar_VariableIntegerValue( "net_qport" );
 
 		infoTruncated = qfalse;
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+#if defined(USE_MULTIVM_CLIENT)
     Q_strncpyz( info, Cvar_InfoString( CVAR_USERINFO, &infoTruncated ), sizeof( info ) );
 #else
 		Q_strncpyz( info, Cvar_InfoString( CVAR_USERINFO, &infoTruncated ), sizeof( info ) );
@@ -3170,7 +3170,7 @@ static void CL_CheckUserinfo( void ) {
 
 		cvar_modifiedFlags &= ~CVAR_USERINFO;
 
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+#if defined(USE_MULTIVM_CLIENT)
 		info = Cvar_InfoString( CVAR_USERINFO, &infoTruncated );
 #else
 		info = Cvar_InfoString( CVAR_USERINFO, &infoTruncated );
@@ -3404,7 +3404,7 @@ CL_InitRenderer
 */
 static void CL_InitRenderer( void ) {
 
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+#if defined(USE_MULTIVM_CLIENT)
 	if(cls.state > CA_CONNECTING) {
 		cgvmi_ref = clc.selectedWorld;
 	} else {
@@ -3463,7 +3463,7 @@ This is the only place that any of these functions are called from
 ============================
 */
 void CL_StartHunkUsers( void ) {
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+#if defined(USE_MULTIVM_CLIENT)
 	int igs = cgvmi_ref;
 #endif
 
@@ -4104,7 +4104,7 @@ static void CL_InitGLimp_Cvars( void )
 #endif
 }
 
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+#if defined(USE_MULTIVM_CLIENT)
 
 extern int worldMaps[MAX_NUM_VMS];
 
@@ -4167,7 +4167,11 @@ void CL_LoadVM_f( void ) {
     for(i = 0; i < MAX_NUM_VMS; i++) {
 			if(worldMaps[i] > -1);
       else {
+#ifdef USE_MULTIVM_RENDERER
         worldMaps[i] = re.LoadWorld( va("maps/%s.bsp", name) );
+#else
+      	re.LoadWorld( va("maps/%s.bsp", name) );
+#endif
         Com_Printf("World loaded on %i\n", i);
         break;
       }
@@ -4191,7 +4195,7 @@ void CL_Tele_f ( void ) {
 
 #endif
 
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+#if defined(USE_MULTIVM_CLIENT)
 void CL_Game_f ( void ) {
 	// must spy on game command so we can switch cgvmi_ref to the right view when it starts receiving packets
 	if ( Cmd_Argc() > 3 || cls.state < CA_PRIMED) {
@@ -4442,7 +4446,7 @@ void CL_Init( void ) {
   }
 #endif
 
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+#if defined(USE_MULTIVM_CLIENT)
 	Cvar_Get( "mvproto", va( "%i", MV_MULTIWORLD_VERSION ), CVAR_USERINFO | CVAR_ROM );
   cl_mvHighlight = Cvar_Get("cl_mvHighlight", "1", CVAR_ARCHIVE);
   Cvar_CheckRange( cl_mvHighlight, "0", "1", CV_INTEGER );
@@ -4517,7 +4521,7 @@ void CL_Init( void ) {
 	// userinfo
 	Cvar_Get ("name", "UnnamedPlayer", CVAR_USERINFO | CVAR_ARCHIVE_ND );
 	Cvar_Get ("rate", "25000", CVAR_USERINFO | CVAR_ARCHIVE );
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+#if defined(USE_MULTIVM_CLIENT)
 	Cvar_Get ("snaps", "100", CVAR_USERINFO | CVAR_ARCHIVE );
 #else
 	Cvar_Get ("snaps", "40", CVAR_USERINFO | CVAR_ARCHIVE );
@@ -4590,7 +4594,7 @@ void CL_Init( void ) {
 
 
 
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+#if defined(USE_MULTIVM_CLIENT)
 	Cmd_AddCommand( "load", CL_LoadVM_f );
 	//Cmd_SetDescription("load", "Load extra VMs for showing multiple players or maps\nUsage: load [ui|cgame|game]");
 	Cmd_AddCommand ("tele", CL_Tele_f);
@@ -4685,7 +4689,7 @@ void CL_Shutdown( const char *finalmsg, qboolean quit ) {
 #endif
 
 
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+#if defined(USE_MULTIVM_CLIENT)
 	Cmd_RemoveCommand( "load" );
 #endif
 

@@ -665,7 +665,7 @@ static void Con_DrawNotify( void )
 	int		skip;
 	int		currentColorIndex;
 	int		colorIndex;
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+#if defined(USE_MULTIVM_CLIENT)
   int igs = cgvmi_ref;
 #endif
 

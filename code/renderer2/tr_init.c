@@ -1757,7 +1757,7 @@ refexport_t *GetRefAPI ( int apiVersion, refimport_t *rimp ) {
 
 	re.AddPolyBufferToScene =   RE_AddPolyBufferToScene;
 
-#if defined(USE_MULTIVM_RENDERER) || defined(USE_MULTIVM_CLIENT) || defined(USE_PTHREADS)
+#if defined(USE_MULTIVM_RENDERER) || defined(USE_PTHREADS)
 	re.InitShaders = R_InitShaders;
 #endif
 #if defined(__WASM__)

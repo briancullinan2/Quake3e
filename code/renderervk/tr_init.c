@@ -2133,7 +2133,7 @@ refexport_t *GetRefAPI ( int apiVersion, refimport_t *rimp ) {
 	re.VertexLighting = RE_VertexLighting;
 	re.SyncRender = RE_SyncRender;
 
-#if defined(USE_MULTIVM_RENDERER) || defined(USE_MULTIVM_CLIENT) || defined(USE_PTHREADS)
+#if defined(USE_MULTIVM_RENDERER) || defined(USE_PTHREADS)
 	re.InitShaders = R_InitShaders;
 #endif
 

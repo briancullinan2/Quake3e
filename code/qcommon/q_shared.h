@@ -59,11 +59,11 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 // show did you mean? results for map names, cvars, command names, etc
 #define USE_DIDYOUMEAN 1
 
-//#define USE_MULTIVM_CLIENT 1
-//#ifndef __WASM__
-//#define USE_MULTIVM_SERVER 1
-//#endif
-//#define USE_MULTIVM_RENDERER 1
+#define USE_MULTIVM_CLIENT 1
+#ifndef __WASM__
+#define USE_MULTIVM_SERVER 1
+#endif
+#define USE_MULTIVM_RENDERER 1
 //#define USE_PTHREADS 1
 //#define MAX_PTHREADS 20
 

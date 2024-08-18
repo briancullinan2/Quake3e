@@ -4387,7 +4387,7 @@ R_InitShaders
 ==================
 */
 void R_InitShaders( void ) {
-#if defined(USE_MULTIVM_RENDERER) || defined(USE_MULTIVM_CLIENT)
+#if defined(USE_MULTIVM_RENDERER)
 	int i;
 	ri.Printf( PRINT_ALL, "\nInitializing Shaders (%i)\n", rwi );
 

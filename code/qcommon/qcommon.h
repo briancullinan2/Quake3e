@@ -1227,7 +1227,7 @@ void Key_WriteBindings( fileHandle_t f );
 void S_ClearSoundBuffer( void );
 // call before filesystem access
 
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+#if defined(USE_MULTIVM_CLIENT)
 void CL_SystemInfoChanged( qboolean onlyGame, int igs );
 #else
 void CL_SystemInfoChanged( qboolean onlyGame );
