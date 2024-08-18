@@ -59,11 +59,11 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 // show did you mean? results for map names, cvars, command names, etc
 #define USE_DIDYOUMEAN 1
 
-#define USE_MULTIVM_CLIENT 1
-#ifndef __WASM__
-#define USE_MULTIVM_SERVER 1
-#endif
-#define USE_MULTIVM_RENDERER 1
+//#define USE_MULTIVM_CLIENT 1
+//#ifndef __WASM__
+//#define USE_MULTIVM_SERVER 1
+//#endif
+//#define USE_MULTIVM_RENDERER 1
 //#define USE_PTHREADS 1
 //#define MAX_PTHREADS 20
 
@@ -346,7 +346,7 @@ typedef int		clipHandle_t;
 #define	BIG_INFO_VALUE		8192
 
 
-#define	MAX_QPATH			64		// max length of a quake game pathname
+#define	MAX_QPATH			128		// max length of a quake game pathname
 #ifdef PATH_MAX
 #define MAX_OSPATH			PATH_MAX
 #else
@@ -1476,7 +1476,7 @@ typedef struct {
 typedef struct {
   glyphInfo_t glyphs [GLYPHS_PER_FONT];
   float glyphScale;
-  char name[MAX_QPATH];
+  char name[64];
 } fontInfo_t;
 
 #define Square(x) ((x)*(x))
