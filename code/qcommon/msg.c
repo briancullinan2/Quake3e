@@ -152,11 +152,7 @@ void MSG_WriteBits( msg_t *msg, int value, int bits ) {
 }
 
 
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
 int MSG_ReadBits( msg_t *msg, int bits ) 
-#else
-static int MSG_ReadBits( msg_t *msg, int bits ) 
-#endif
 {
 	int		value;
 	qboolean	sgn;

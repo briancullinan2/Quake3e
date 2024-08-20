@@ -623,7 +623,7 @@ ifeq ($(COMPILE_PLATFORM),darwin)
     CLIENT_EXTRA_FILES += $(MACLIBSDIR)/libSDL2-2.0.0.dylib
   else
   ifneq ($(SDL_INCLUDE),)
-    BASE_CFLAGS += $(SDL_INCLUDE)
+    BASE_CFLAGS += $(SDL_INCLUDE) -DUSE_ICON 
     CLIENT_LDFLAGS = $(SDL_LIBS)
   else
     BASE_CFLAGS += -I/Library/Frameworks/SDL2.framework/Headers

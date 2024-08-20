@@ -552,6 +552,16 @@ static void Message_Key( int key ) {
 
 //============================================================================
 
+void CL_Play_f( void );
+void CL_Pause_f( void );
+
+#ifdef __WASM__
+extern	qboolean	first_click;
+void S_SoundInfo( void );
+qboolean SNDDMA_Init( void );
+extern qboolean s_soundStarted;
+extern qboolean s_soundMuted;
+#endif
 
 /*
 ===================
@@ -605,11 +615,6 @@ static void CL_KeyDownEvent( int key, unsigned time )
 	}
 
 #ifdef __WASM__
-extern	qboolean	first_click;
-void S_SoundInfo( void );
-qboolean SNDDMA_Init( void );
-extern qboolean s_soundStarted;
-extern qboolean s_soundMuted;
 
 	if(key == K_MOUSE1 && first_click) {
 		first_click = qfalse;
@@ -627,6 +632,14 @@ extern qboolean s_soundMuted;
 	}
 
 #endif
+
+	if(clc.demoplaying && key == K_SPACE) {
+		if(cl_paused->integer) {
+			CL_Play_f();
+		} else {
+			CL_Pause_f();
+		}
+	}
 
 
 	// escape is always handled special

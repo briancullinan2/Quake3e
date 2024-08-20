@@ -1638,6 +1638,7 @@ static void R_AddEntitySurfaces( void ) {
 			if(ent->e.renderfx & RF_BILLBOARD) {
 				vec3_t forward;
 				vectoangles(tr.refdef.viewaxis[0], forward);
+				forward[PITCH] = -forward[PITCH];
 				forward[YAW] += 180;
 				AnglesToAxis(forward, ent->e.axis);
 			}

@@ -23,6 +23,9 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "tr_local.h"
 
+static char	variables[ MAX_QPATH ] = {'\0'};
+#define R_FindShader(x, y, z) R_FindShader( variables[0] == '\0' ? x : va("%s%s", x, variables), y, z )
+
 /*
 
 Loads and prepares a map file for scene rendering.
@@ -2301,6 +2304,7 @@ qboolean RE_GetEntityToken( char *buffer, int size ) {
 
 
 const char *R_LoadImage( const char *name, byte **pic, int *width, int *height );
+void COM_StripVariables( const char *in, char *out, int destsize );
 
 
 /*
@@ -2324,15 +2328,27 @@ void RE_LoadWorldMap( const char *name )
 		void *v;
 	} buffer;
 	byte		*startMarker;
+	char		strippedName2[MAX_QPATH];
 
 	R_IssuePendingRenderCommands();
 
 	RE_ClearScene();
 
+
+	const char *varStart = strchr(name, '%');
+	if (varStart) {
+		Q_strncpyz(variables, varStart, MAX_QPATH);
+	} else {
+		variables[0] = '\0';
+	}
+	COM_StripVariables(name, strippedName2, MAX_QPATH);
+
+
+
 #ifdef USE_MULTIVM_RENDERER
 	int j, empty = -1;
 	for(j = 0; j < MAX_NUM_WORLDS; j++) {
-		if ( !Q_stricmp( s_worldDatas[j].name, name ) ) {
+		if ( !Q_stricmp( s_worldDatas[j].name, strippedName2 ) ) {
 			// TODO: PRINT_DEVELOPER
 			rwi = 0;
 			ri.Printf( PRINT_ALL, "RE_LoadWorldMap (%i): Already loaded %s\n", j, name );
@@ -2371,7 +2387,7 @@ void RE_LoadWorldMap( const char *name )
 	tr.worldMapLoaded = qtrue;
 
 	// load it
-	size = ri.FS_ReadFile( name, &buffer.v );
+	size = ri.FS_ReadFile( strippedName2, &buffer.v );
 	if ( !buffer.b ) {
 		ri.Error( ERR_DROP, "%s: couldn't load %s", __func__, name );
 	}
@@ -2386,7 +2402,7 @@ void RE_LoadWorldMap( const char *name )
 	tr.world = NULL;
 
 	Com_Memset( &s_worldData, 0, sizeof( s_worldData ) );
-	Q_strncpyz( s_worldData.name, name, sizeof( s_worldData.name ) );
+	Q_strncpyz( s_worldData.name, strippedName2, sizeof( s_worldData.name ) );
 
 	Q_strncpyz( s_worldData.baseName, COM_SkipPath( s_worldData.name ), sizeof( s_worldData.name ) );
 	COM_StripExtension(s_worldData.baseName, s_worldData.baseName, sizeof(s_worldData.baseName));

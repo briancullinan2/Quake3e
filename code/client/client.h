@@ -302,15 +302,17 @@ typedef struct {
 	int     selectedClient;
 	qboolean      sv_mvWorld;
 	qboolean      sv_mvOmnipresent;
-//  fileHandle_t	demofiles[MAX_NUM_VMS];
-//#define demofile demofiles[igs]
-//  int			      numDemoIndexes[MAX_NUM_VMS];
-//#define numDemoIndex numDemoIndexes[igs]
-//  demoIndex_t  *demoIndexes[MAX_NUM_VMS];
-//#define demoIndex demoIndexes[igs]
+  fileHandle_t	demofiles[MAX_NUM_VMS];
+#define demofile demofiles[igs]
+  int			      numDemoIndexes[MAX_NUM_VMS];
+#define numDemoIndex numDemoIndexes[igs]
+  demoIndex_t  *demoIndexes[MAX_NUM_VMS];
+#define demoIndex demoIndexes[igs]
 #else
-#endif
 	fileHandle_t	demofile;
+  int			      numDemoIndex;
+	demoIndex_t  *demoIndex;
+#endif
 
 	fileHandle_t	recordfile;
 

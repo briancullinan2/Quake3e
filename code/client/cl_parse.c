@@ -233,6 +233,7 @@ static void CL_ParsePacketEntities( msg_t *msg, const clSnapshot_t *oldframe, cl
 
 
 void CL_AddLagometerSnapshotInfo(clSnapshot_t *snapshot);
+extern int serverShift;
 
 /*
 ================
@@ -246,7 +247,7 @@ for any reason, no changes to the state will be made at all.
 #if defined(USE_MULTIVM_CLIENT)
 void CL_ParseSnapshot( msg_t *msg, int igs ) 
 #else
-static void CL_ParseSnapshot( msg_t *msg )
+void CL_ParseSnapshot( msg_t *msg )
 #endif
 {
 	const clSnapshot_t *old;
@@ -270,7 +271,7 @@ static void CL_ParseSnapshot( msg_t *msg )
 	// message before we got to svc_snapshot
 	newSnap.serverCommandNum = clc.serverCommandSequence;
 
-	newSnap.serverTime = MSG_ReadLong( msg );
+	newSnap.serverTime = MSG_ReadLong( msg ) - serverShift;
 
 	// if we were just unpaused, we can only *now* really let the
 	// change come into effect or the client hangs.
