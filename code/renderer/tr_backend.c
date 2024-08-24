@@ -992,7 +992,9 @@ void RB_SetGL2D( void ) {
 		GLS_DSTBLEND_ONE_MINUS_SRC_ALPHA );
 
 	GL_Cull( CT_TWO_SIDED );
+#ifndef __WASM__
 	qglDisable( GL_CLIP_PLANE0 );
+#endif
 
 	// set time for 2D shaders
 	backEnd.refdef.time = ri.Milliseconds();

@@ -2125,5 +2125,61 @@ palettes/default
   palette "models/players/anarki/color_h.jpg" 255,52,33,25
   palette "models/mapobjects/multiplant/invisible.jpg" 255,0,0,0
   palette "models/mapobjects/banner/q3banner02x.jpg" 255,19,12,3
+  palette "levelshots/zv4q3.jpg" 255,85,47,31
+  palette "levelshots/zastavka.jpg" 255,87,119,94
+  palette "levelshots/xccc_dm3.jpg" 255,62,45,30
+  palette "levelshots/wvwq3dm7.jpg" 255,30,53,46
+  palette "levelshots/wmgdm1.jpg" 255,101,111,115
+  palette "levelshots/wintergames.jpg" 255,87,87,91
+  palette "levelshots/toxicmetal.jpg" 255,45,52,35
+  palette "levelshots/thegantlet.jpg" 255,77,70,64
+  palette "levelshots/tabq1dm5_pure.jpg" 255,34,25,11
+  palette "levelshots/tabq1dm5.jpg" 255,57,40,18
+  palette "levelshots/tabd2map01_pure.jpg" 255,38,25,16
+  palette "levelshots/tabd2map01.jpg" 255,37,25,16
+  palette "levelshots/stchdm1.jpg" 255,112,90,55
+  palette "levelshots/shibam.jpg" 255,133,116,89
+  palette "levelshots/reqbath.jpg" 255,85,78,70
+  palette "levelshots/qsc_town.jpg" 255,48,47,36
+  palette "levelshots/q3fp2002.jpg" 255,62,43,33
+  palette "levelshots/q3d1hangar.jpg" 255,53,38,22
+  palette "levelshots/q3Death.jpg" 255,93,51,21
+  palette "levelshots/q3Damned.jpg" 255,104,84,53
+  palette "levelshots/q3Adler.jpg" 255,59,64,66
+  palette "levelshots/pom_bots.jpg" 255,42,42,36
+  palette "levelshots/platform6.jpg" 255,120,116,129
+  palette "levelshots/phantq3dm4.jpg" 255,38,34,29
+  palette "levelshots/padshop.jpg" 255,104,87,72
+  palette "levelshots/padkitchen.jpg" 255,70,76,67
+  palette "levelshots/nor3ctf1.jpg" 255,42,39,43
+  palette "levelshots/nodm10.jpg" 255,33,27,24
+  palette "levelshots/noca1.jpg" 255,33,27,24
+  palette "levelshots/marsv1.jpg" 255,52,42,40
+  palette "levelshots/lun3dm3.jpg" 255,61,88,57
+  palette "levelshots/lun3dm3-cpm.jpg" 255,60,89,57
+  palette "levelshots/lffd.jpg" 255,31,50,63
+  palette "levelshots/ironwood.jpg" 255,74,66,58
+  palette "levelshots/gm3tourney2.jpg" 255,60,40,30
+  palette "levelshots/gas-st.jpg" 255,106,91,58
+  palette "levelshots/estatica.jpg" 255,36,35,75
+  palette "levelshots/dk_msg4_ctf.jpg" 255,67,64,61
+  palette "levelshots/dawnoftime.jpg" 255,95,87,63
+  palette "levelshots/csq3sg1_top.jpg" 255,19,21,22
+  palette "levelshots/csq3sg1.jpg" 255,45,50,49
+  palette "levelshots/chartres.tga" 255,38,39,27
+  palette "levelshots/chartres.jpg" 255,38,39,28
+  palette "levelshots/cascades.jpg" 255,177,178,186
+  palette "levelshots/bloodrust.jpg" 255,32,31,26
+  palette "levelshots/axdm1.jpg" 255,20,13,9
+  palette "levelshots/aedm7.jpg" 255,40,37,30
+  palette "levelshots/aearena.jpg" 255,101,71,72
+  palette "levelshots/Runtfest.jpg" 255,117,98,80
+  palette "levelshots/Q3HIPDM1.jpg" 255,28,24,23
+  palette "levelshots/Marsv1.tga" 255,42,24,17
+  palette "levelshots/FLWFW.tga" 255,162,142,83
+  palette "levelshots/FLWFW.jpg" 255,161,142,83
+  palette "levelshots/13tokay.tga" 255,78,47,28
+  palette "levelshots/13tokay.jpg" 255,78,47,28
+  palette "levelshots/13house.jpg" 255,44,34,30
   }
   

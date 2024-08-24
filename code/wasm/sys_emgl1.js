@@ -537,11 +537,11 @@ var _glDrawArrays = (mode, first, count) => {
   GLImmediate.mode = -1;
 };
 
-var _glDrawBuffer = () => { throw 'glDrawBuffer: TODO' };
+
 
 function assert(condition, text) {
   if (!condition) {
-    abort('Assertion failed' + (text ? ': ' + text : ''));
+    throw new Error('Assertion failed' + (text ? ': ' + text : ''));
   }
 }
 
@@ -553,7 +553,10 @@ var _glDrawElements = (mode, count, type, indices, start, end) => {
     return;
   }
   if (!GLctx.currentElementArrayBufferBinding) {
-    assert(type == GLctx.UNSIGNED_SHORT); // We can only emulate buffers of this kind, for now
+    //assert(type == GLctx.UNSIGNED_SHORT); // We can only emulate buffers of this kind, for now
+    if(type != GLctx.UNSIGNED_SHORT) {
+      return;
+    }
   }
   out("DrawElements doesn't actually prepareClientAttributes properly.");
   GLImmediate.prepareClientAttributes(count, false);
@@ -849,15 +852,6 @@ var stringToUTF8Array = (str, heap, outIdx, maxBytesToWrite) => {
   return outIdx - startIdx;
 };
 
-
-var stringToNewUTF8 = (str) => {
-  var size = lengthBytesUTF8(str) + 1;
-  var ret = malloc(size);
-  if (ret) stringToUTF8(str, ret, size);
-  return ret;
-};
-
-
 var webglGetExtensions = function $webglGetExtensions() {
   var exts = getEmscriptenSupportedExtensions(GLctx);
   exts = exts.concat(exts.map((e) => "GL_" + e));
@@ -869,7 +863,7 @@ var _glGetString = (name_) => {
   if (!ret) {
     switch (name_) {
       case 0x1F03 /* GL_EXTENSIONS */:
-        ret = stringToNewUTF8(webglGetExtensions().join(' '));
+        ret = stringToAddress(webglGetExtensions().join(' '));
         break;
       case 0x1F00 /* GL_VENDOR */:
       case 0x1F01 /* GL_RENDERER */:
@@ -879,7 +873,7 @@ var _glGetString = (name_) => {
         if (!s) {
           GL.recordError(0x500/*GL_INVALID_ENUM*/);
         }
-        ret = s ? stringToNewUTF8(s) : 0;
+        ret = s ? stringToAddress(s) : 0;
         break;
 
       case 0x1F02 /* GL_VERSION */:
@@ -888,7 +882,7 @@ var _glGetString = (name_) => {
         {
           glVersion = `OpenGL ES 2.0 (${glVersion})`;
         }
-        ret = stringToNewUTF8(glVersion);
+        ret = stringToAddress(glVersion);
         break;
       case 0x8B8C /* GL_SHADING_LANGUAGE_VERSION */:
         var glslVersion = GLctx.getParameter(0x8B8C /*GL_SHADING_LANGUAGE_VERSION*/);
@@ -899,7 +893,7 @@ var _glGetString = (name_) => {
           if (ver_num[1].length == 3) ver_num[1] = ver_num[1] + '0'; // ensure minor version has 2 digits
           glslVersion = `OpenGL ES GLSL ES ${ver_num[1]} (${glslVersion})`;
         }
-        ret = stringToNewUTF8(glslVersion);
+        ret = stringToAddress(glslVersion);
         break;
       default:
         GL.recordError(0x500/*GL_INVALID_ENUM*/);
@@ -2176,7 +2170,7 @@ init() {
       if (GL.stringCache[name_]) return GL.stringCache[name_];
       switch (name_) {
         case 0x1F03 /* GL_EXTENSIONS */: // Add various extensions that we can support
-          var ret = stringToNewUTF8(getEmscriptenSupportedExtensions(GLctx).join(' ') +
+          var ret = stringToAddress(getEmscriptenSupportedExtensions(GLctx).join(' ') +
                  ' GL_EXT_texture_env_combine GL_ARB_texture_env_crossbar GL_ATI_texture_env_combine3 GL_NV_texture_env_combine4 GL_EXT_texture_env_dot3 GL_ARB_multitexture GL_ARB_vertex_buffer_object GL_EXT_framebuffer_object GL_ARB_vertex_program GL_ARB_fragment_program GL_ARB_shading_language_100 GL_ARB_shader_objects GL_ARB_vertex_shader GL_ARB_fragment_shader GL_ARB_texture_cube_map GL_EXT_draw_range_elements' +
                  (GL.currentContext.compressionExt ? ' GL_ARB_texture_compression GL_EXT_texture_compression_s3tc' : '') +
                  (GL.currentContext.anisotropicExt ? ' GL_EXT_texture_filter_anisotropic' : '')
@@ -6740,7 +6734,9 @@ let EMGL = window.EMGL = {
   /** @export */
   glDrawArrays: _glDrawArrays,
   /** @export */
-  glDrawBuffer: _glDrawBuffer,
+  glDrawBuffer: function _glDrawBuffer(buf) {
+    GLctx["drawBuffers"]([buf]);
+  },
   /** @export */
   glDrawElements: _glDrawElements,
   /** @export */

@@ -1,4 +1,6 @@
 
+const MAX_IMAGE_SIZE = 20 * 1024 * 1024
+
 function GLimp_StartDriverAndSetMode(mode, modeFS, fullscreen, fallback) {
   // TODO: multiple windows like a DVR?
   //   what kind of game needs two screens for one player to switch back and forth?
@@ -28,6 +30,12 @@ function GLimp_StartDriverAndSetMode(mode, modeFS, fullscreen, fallback) {
   if (typeof GL != 'undefined') {
     INPUT.handle = GL.registerContext(GL.context, webGLContextAttributes)
     GL.makeContextCurrent(INPUT.handle)
+    if(!EMGL.location) {
+      // this causes the engine to crash, it doesn't like a random allocs
+      //EMGL.location = Z_Malloc(rgba.length)
+      EMGL.location = malloc(MAX_IMAGE_SIZE)
+      EMGL.locationBuffer = malloc(8)
+    }
   }
 
   // set the window to do the grabbing, when ungrabbing this doesn't really matter
@@ -842,6 +850,135 @@ function GL_GetDrawableSize(width, height) {
   HEAP32[height >> 2] = GL.canvas.height
 }
 
+function createImageFromBuffer(filenameStr, imageView, mimeType) {
+  let thisImage = document.createElement('IMG')
+  let utfEncoded = imageView.map(function (c) {
+    return String.fromCharCode(c)
+  }).join('')
+  thisImage.src = 'data:image/' + mimeType + ';base64,' + btoa(utfEncoded)
+  thisImage.name = filenameStr
+  thisImage.setAttribute('title', filenameStr)
+  //RENDER_IMAGES.push(thisImage)
+  //document.body.appendChild(thisImage)
+  return thisImage
+}
+
+
+async function R_LoadRemote(filename, widthAddress, heightAddress, imageAddress) {
+  let gamedir = addressToString(FS_GetCurrentGameDir())
+  let filenameStr = addressToString(filename)
+  let filenameStripped = filenameStr.replace(/\.[^\/\\]*?$/, '')
+
+  /*
+  let localName = filenameStr
+  if (localName[0] == '/')
+    localName = localName.substring(1)
+  if (localName.startsWith(gamedir + '/'))
+    localName = localName.substring(gamedir.length  +1)
+  */
+  if(!EMGL.locationBuffer) {
+    throw new Error('EMGL.locationBuffer not initialized')
+  }
+  HEAPU32[EMGL.locationBuffer >> 2] = 0
+
+
+  let thisImage
+  //for (let i = 0; i < RENDER_IMAGES.length; i++) {
+  //  if (RENDER_IMAGES[i].name == filenameStr) {
+  //    thisImage = RENDER_IMAGES[i]
+  //    break
+  //  }
+  //}
+
+  
+
+  if (!thisImage) {
+    let length = FS_ReadFile(stringToAddress(filenameStripped + '.png'), EMGL.locationBuffer)
+    let mime = 'png'
+    if(!HEAPU32[EMGL.locationBuffer >> 2]) {
+      length = FS_ReadFile(stringToAddress(filenameStripped + '.jpg'), EMGL.locationBuffer)
+      mime = 'jpg'
+    }
+    if(!HEAPU32[EMGL.locationBuffer >> 2]) {
+      length = FS_ReadFile(stringToAddress(filenameStripped + '.jpeg'), EMGL.locationBuffer)
+      mime = 'jpg'
+    }
+    /*
+    if(!HEAPU32[EMGL.locationBuffer >> 2]) {
+      length = FS_ReadFile(filename.replace(/\..*?$/, '.bmp'), EMGL.locationBuffer)
+    }
+    if(!HEAPU32[EMGL.locationBuffer >> 2]) {
+      length = FS_ReadFile(filename.replace(/\..*?$/, '.pcx'), EMGL.locationBuffer)
+    }
+    */
+    if(HEAPU32[EMGL.locationBuffer >> 2]) {
+      imageView = Array.from(HEAPU8.slice(HEAPU32[EMGL.locationBuffer >> 2],
+        HEAPU32[EMGL.locationBuffer >> 2] + length))
+      thisImage = createImageFromBuffer(filenameStr, imageView, mime)
+      FS_FreeFile(HEAPU32[EMGL.locationBuffer >> 2])
+    }
+  }
+
+
+  if (!thisImage) {
+    let remoteFile = gamedir + '/pak0.pk3dir/' + filenameStripped
+
+    let mimes = []
+    let responseData = (await Promise.all([
+      Com_DL_Begin(remoteFile, '/' + remoteFile + '.jpg?alt')
+        .then(responseData => {
+          if(!responseData) {
+            return
+          }
+          mimes[0] = 'jpg'
+          Com_DL_Perform(remoteFile + '.jpg', remoteFile, responseData)
+          return responseData
+        }),
+      Com_DL_Begin(remoteFile, '/' + remoteFile + '.png?alt')
+        .then(responseData => {
+          if(!responseData) {
+            return
+          }
+          mimes[1] = 'png'
+          Com_DL_Perform(remoteFile + '.png', remoteFile, responseData)
+          return responseData
+    })]))
+
+    if(responseData[0]) {
+      thisImage = createImageFromBuffer(filenameStr, Array.from(new Uint8Array(responseData[0])), mimes[0])
+    } else
+    if(responseData[1]) {
+      thisImage = createImageFromBuffer(filenameStr, Array.from(new Uint8Array(responseData[1])), mimes[1])
+    }
+
+  }
+
+  if(!thisImage) {
+    return
+  }
+
+  thisImage.addEventListener('load', function () {
+    GL.canvas2D.width = thisImage.width
+    GL.canvas2D.height = thisImage.height
+    GL.context2D.drawImage(thisImage, 0, 0)
+    const rgba = GL.context2D.getImageData( 
+      0, 0, thisImage.width, thisImage.height 
+    ).data;
+    HEAPU8.set(rgba.slice(0, MAX_IMAGE_SIZE), EMGL.location)
+
+    HEAP32[widthAddress >> 2] = thisImage.width
+    if(rgba.length > MAX_IMAGE_SIZE) {
+      // truncate image because what else can we do?
+      thisImage.height = HEAP32[heightAddress >> 2] = floor(MAX_IMAGE_SIZE / 4 / thisImage.width) 
+    } else
+      HEAP32[heightAddress >> 2] = thisImage.height
+    // notify engine that pixel data is ready
+    CL_R_FinishImage3(imageAddress, EMGL.location, 0x1908 /* GL_RGBA */, 0)
+
+  }, false)
+
+}
+
 var INPUT = {
   editorActive: false,
   touchhats: [[0, 0], [0, 0], [0, 0], [0, 0]], // x/y values for nipples
@@ -858,5 +995,6 @@ var INPUT = {
   SDL_SetWindowGrab: SDL_SetWindowGrab,
   Com_MaxFPSChanged: Com_MaxFPSChanged,
   Sys_ConsoleInput: Sys_ConsoleInput,
+  R_LoadRemote: R_LoadRemote,
 }
 

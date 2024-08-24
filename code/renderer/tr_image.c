@@ -1011,7 +1011,11 @@ image_t *R_CreateImage( const char *name, const char *name2, byte *pic, int widt
 	if ( flags & IMGFLAG_RGB )
 		image->internalFormat = GL_RGB;
 	else
+#ifdef __WASM__
+		image->internalFormat = GL_RGBA; // autodetect
+#else
 		image->internalFormat = 0; // autodetect
+#endif
 
 	if ( flags & IMGFLAG_CLAMPTOBORDER )
 		glWrapClampMode = GL_CLAMP_TO_BORDER;

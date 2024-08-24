@@ -373,6 +373,7 @@ CLIENT_EXTRA_FILES=
 #############################################################################
 
 ifdef WASM
+#ARCHEXT = .js
 ARCHEXT = .wasm
 
 ifeq ($(COMPILE_PLATFORM),mingw)
@@ -392,6 +393,7 @@ WASISDK        := $(lastword $(wildcard code/wasm/$(COMPILE_PLATFORM)/wasi-sdk-*
 WASI-BUILTINS  := $(lastword $(wildcard $(WASISDK)/lib/clang/*))
 WASM-OPT       ?= $(lastword $(wildcard code/wasm/$(COMPILE_PLATFORM)/binaryen-version_*/bin/wasm-opt))
 #LD             := $(WASISDK)/bin/wasm-ld
+#CC             := emcc
 CC             := $(WASISDK)/bin/clang 
 LD             := $(CC)
 
@@ -438,18 +440,23 @@ SHLIBLDFLAGS = -Wl,--no-entry $(LDFLAGS) \
 #  -fno-builtin -nostdlib 
 # -shared not supported
 #  -Wl,--export=CL_Try_LoadJPG,--export=CL_Fail_LoadJPG \
+#  -Wl,--export=stackRestore,--export=stackSave,--export=stackAlloc \
 
-# -s LEGACY_GL_EMULATION=1 \
-# -s ALLOW_MEMORY_GROWTH=1 \
-# -s INITIAL_MEMORY=256MB \
-# --js-library $(MOUNT_DIR)/wasm/sys_in.js \
-# --js-library $(MOUNT_DIR)/wasm/sys_wasm.js \
-# --js-library $(MOUNT_DIR)/wasm/sys_snd.js \
-# --js-library $(MOUNT_DIR)/wasm/sys_net.js \
-# --js-library $(MOUNT_DIR)/wasm/sys_web.js \
-# --js-library $(MOUNT_DIR)/wasm/sys_fs.js \
-# --js-library $(MOUNT_DIR)/wasm/sys_std.js \
-# --js-library $(MOUNT_DIR)/wasm/sys_emjs.js 
+  # -s MIN_WEBGL_VERSION=1 \
+  # -s MAX_WEBGL_VERSION=3 \
+  # -s USE_WEBGL2=1 \
+  # -s FULL_ES2=1 \
+  # -s FULL_ES3=1 \
+  # -s ALLOW_MEMORY_GROWTH=1 \
+  # -s INITIAL_MEMORY=256MB \
+  # --js-library $(MOUNT_DIR)/wasm/sys_in.js \
+  # --js-library $(MOUNT_DIR)/wasm/sys_wasm.js \
+  # --js-library $(MOUNT_DIR)/wasm/sys_snd.js \
+  # --js-library $(MOUNT_DIR)/wasm/sys_net.js \
+  # --js-library $(MOUNT_DIR)/wasm/sys_web.js \
+  # --js-library $(MOUNT_DIR)/wasm/sys_fs.js \
+  # --js-library $(MOUNT_DIR)/wasm/sys_std.js \
+  # --js-library $(MOUNT_DIR)/wasm/sys_emjs.js \
 
 
 CLIENT_LDFLAGS  = $(LDFLAGS) code/wasm/stack_ops.S \
