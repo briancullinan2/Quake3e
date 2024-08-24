@@ -34,6 +34,11 @@ cvar_t *s_muteWhenUnfocused;
 
 static soundInterface_t si;
 
+#ifdef __WASM__
+#define MAX_SFX 4096
+extern sfx_t s_knownSfx[MAX_SFX];
+#endif
+
 /*
 =================
 S_ValidateInterface
@@ -74,7 +79,11 @@ S_StartSound
 void S_StartSound( vec3_t origin, int entnum, int entchannel, sfxHandle_t sfx )
 {
 	if( si.StartSound ) {
+#ifdef __WASM__
+		si.StartSound( origin, entnum, entchannel, s_knownSfx[sfx].soundName );
+#else
 		si.StartSound( origin, entnum, entchannel, sfx );
+#endif
 	}
 }
 
@@ -87,7 +96,11 @@ S_StartLocalSound
 void S_StartLocalSound( sfxHandle_t sfx, int channelNum )
 {
 	if( si.StartLocalSound ) {
+#ifdef __WASM__
+		si.StartLocalSound( s_knownSfx[sfx].soundName, channelNum );
+#else
 		si.StartLocalSound( sfx, channelNum );
+#endif
 	}
 }
 
@@ -354,7 +367,11 @@ static void S_Play_f( void ) {
 		h = si.RegisterSound( Cmd_Argv(i), qfalse );
 
 		if( h ) {
+#ifdef __WASM__
+			si.StartLocalSound( s_knownSfx[h].soundName, CHAN_LOCAL_SOUND );
+#else
 			si.StartLocalSound( h, CHAN_LOCAL_SOUND );
+#endif
 		}
 	}
 }

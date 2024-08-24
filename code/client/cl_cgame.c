@@ -25,6 +25,12 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "../botlib/botlib.h"
 
+#ifdef __WASM__
+#include "./snd_local.h"
+#define MAX_SFX			4096
+extern sfx_t s_knownSfx[MAX_SFX];
+#endif
+
 extern	botlib_export_t	*botlib_export;
 
 extern qboolean loadCamera(const char *name);

@@ -305,7 +305,7 @@ function S_Base_StartSound(origin, entityNum, entchannel, sfx) {
   if(HEAPU32[first_click >> 2]) {
     return
   }
-  let name = addressToString(s_knownSfx + sfx * 100 + 28).replace(/\..*?$/, '.ogg')
+  let name = addressToString(sfx).replace(/\..*?$/, '.ogg')
   //let name = sfx-72
 
   /*

@@ -32,8 +32,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "snd_local.h"
 #include "snd_codec.h"
 
-#ifndef __WASM__
-
 #define DEF_COMSOUNDMEGS "8"
 
 /*
@@ -350,5 +348,3 @@ qboolean S_LoadSound( sfx_t *sfx )
 void S_DisplayFreeMemory(void) {
 	Com_Printf("%d bytes free sound buffer memory, %d total used\n", inUse, totalInUse);
 }
-
-#endif

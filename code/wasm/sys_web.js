@@ -938,8 +938,10 @@ const SYS = {
   /** @export */
   fd_seek: _fd_seek,
   /** @export */
-  fd_write: _fd_write
+  fd_write: _fd_write,
 
+	emscripten_cancel_main_loop: function () {debugger},
+	emscripten_force_exit: function () {debugger},
 }
 
 

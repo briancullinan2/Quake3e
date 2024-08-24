@@ -34,8 +34,6 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include "snd_local.h"
 
 
-#ifndef __WASM__
-
 /* Intel ADPCM step variation table */
 static int indexTable[16] = {
     -1, -1, -1, -1, 2, 4, 6, 8,
@@ -330,6 +328,3 @@ void S_AdpcmEncodeSound( sfx_t *sfx, short *samples ) {
 		count -= n;
 	}
 }
-
-#endif
-

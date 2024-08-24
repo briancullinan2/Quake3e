@@ -127,8 +127,13 @@ typedef struct {
 typedef struct
 {
 	void (*Shutdown)(void);
+#ifdef __WASM__
+	void (*StartSound)( const vec3_t origin, int entnum, int entchannel, char * sfx );
+	void (*StartLocalSound)( char * sfx, int channelNum );
+#else
 	void (*StartSound)( const vec3_t origin, int entnum, int entchannel, sfxHandle_t sfx );
 	void (*StartLocalSound)( sfxHandle_t sfx, int channelNum );
+#endif
 	void (*StartBackgroundTrack)( const char *intro, const char *loop );
 	void (*StopBackgroundTrack)( void );
 	void (*RawSamples)(int samples, int rate, int width, int channels, const byte *data, float volume);

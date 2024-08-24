@@ -22,8 +22,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "snd_local.h"
 
-#ifndef __WASM__
-
 #define C0 0.4829629131445341
 #define C1 0.8365163037378079
 #define C2 0.2241438680420134
@@ -250,8 +248,5 @@ void decodeMuLaw(sndBuffer *chunk, short *to) {
 		to[i] = mulawToShort[out[i]];
 	}
 }
-
-
-#endif
 
 
