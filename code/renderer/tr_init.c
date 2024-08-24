@@ -227,6 +227,8 @@ static char gl_extensions[ 32768 ];
 	QGL_FBO_OPT_PROCS;
 #undef GLE
 
+#ifndef __WASM__
+
 typedef struct {
 	void **symbol;
 	const char *name;
@@ -240,7 +242,6 @@ static sym_t vbo_procs[] = { QGL_VBO_PROCS };
 static sym_t fbo_procs[] = { QGL_FBO_PROCS };
 static sym_t fbo_opt_procs[] = { QGL_FBO_OPT_PROCS };
 #undef GLE
-
 
 /*
 ==================
@@ -284,6 +285,8 @@ static void R_ClearSymTables( void )
 	R_ClearSymbols( fbo_opt_procs, ARRAY_LEN( fbo_opt_procs ) );
 }
 
+
+#endif
 
 // for modular renderer
 #ifdef USE_RENDERER_DLOPEN
@@ -331,12 +334,24 @@ static void R_InitExtensions( void )
 	GLint max_texture_size = 0;
 	float version;
 	size_t len;
+#ifndef __WASM__
 	const char *err;
+#endif
+
+	//qglScissor = glScissor;
+#ifdef __WASM__
+	#define GLE( ret, name, ... ) q##name = name;
+	QGL_Core_PROCS;
+	QGL_VBO_PROCS;
+	QGL_FBO_PROCS;
+	QGL_FBO_OPT_PROCS;
+#endif
 
 	if ( !qglGetString( GL_EXTENSIONS ) )
 	{
 		ri.Error( ERR_FATAL, "OpenGL installation is broken. Please fix video drivers and/or restart your system" );
 	}
+
 
 	// get our config strings
 	Q_strncpyz( glConfig.vendor_string, (char *)qglGetString (GL_VENDOR), sizeof( glConfig.vendor_string ) );
@@ -361,6 +376,7 @@ static void R_InitExtensions( void )
 
 	nonPowerOfTwoTextures = qfalse;
 
+#ifndef __WASM__
 	qglLockArraysEXT = NULL;
 	qglUnlockArraysEXT = NULL;
 
@@ -368,6 +384,7 @@ static void R_InitExtensions( void )
 	qglMultiTexCoord2fARB = NULL;
 	qglActiveTextureARB = NULL;
 	qglClientActiveTextureARB = NULL;
+#endif
 
 	gl_clamp_mode = GL_CLAMP; // by default
 
@@ -444,11 +461,12 @@ static void R_InitExtensions( void )
 	{
 		if ( r_ext_multitexture->integer )
 		{
+#ifndef __WASM__
 			qglMultiTexCoord2fARB = ri.GL_GetProcAddress( "glMultiTexCoord2fARB" );
 			qglActiveTextureARB = ri.GL_GetProcAddress( "glActiveTextureARB" );
 			qglClientActiveTextureARB = ri.GL_GetProcAddress( "glClientActiveTextureARB" );
-
 			if ( qglActiveTextureARB && qglClientActiveTextureARB )
+#endif
 			{
 				GLint textureUnits = 0;
 
@@ -472,9 +490,11 @@ static void R_InitExtensions( void )
 				}
 				else
 				{
+#ifndef __WASM__
 					qglMultiTexCoord2fARB = NULL;
 					qglActiveTextureARB = NULL;
 					qglClientActiveTextureARB = NULL;
+#endif
 					ri.Printf( PRINT_ALL, "...not using GL_ARB_multitexture, < 2 texture units\n" );
 				}
 			}
@@ -495,11 +515,13 @@ static void R_InitExtensions( void )
 		if ( r_ext_compiled_vertex_array->integer )
 		{
 			ri.Printf( PRINT_ALL, "...using GL_EXT_compiled_vertex_array\n" );
+#ifndef __WASM__
 			qglLockArraysEXT = ri.GL_GetProcAddress( "glLockArraysEXT" );
 			qglUnlockArraysEXT = ri.GL_GetProcAddress( "glUnlockArraysEXT" );
 			if ( !qglLockArraysEXT || !qglUnlockArraysEXT ) {
 				ri.Error( ERR_FATAL, "bad getprocaddress" );
 			}
+#endif
 		}
 		else
 		{
@@ -538,6 +560,7 @@ static void R_InitExtensions( void )
 
 	if ( R_HaveExtension( "GL_ARB_vertex_program" ) && R_HaveExtension( "GL_ARB_fragment_program" ) )
 	{
+#ifndef __WASM__
 		err = R_ResolveSymbols( arb_procs, ARRAY_LEN( arb_procs ) );
 		if ( err )
 		{
@@ -545,6 +568,7 @@ static void R_InitExtensions( void )
 			qglGenProgramsARB = NULL; // indicates presence of ARB shaders functionality
 		}
 		else
+#endif
 		{
 			ri.Printf( PRINT_ALL, "...using ARB vertex/fragment programs\n" );
 		}
@@ -553,6 +577,7 @@ static void R_InitExtensions( void )
 #ifdef USE_VBO
 	if ( R_HaveExtension( "ARB_vertex_buffer_object" ) && qglActiveTextureARB )
 	{
+#ifndef __WASM__
 		err = R_ResolveSymbols( vbo_procs, ARRAY_LEN( vbo_procs ) );
 		if ( err )
 		{
@@ -560,6 +585,7 @@ static void R_InitExtensions( void )
 			qglBindBufferARB = NULL; // indicates presence of VBO functionality
 		}
 		else
+#endif
 		{
 			ri.Printf( PRINT_ALL, "...using ARB vertex buffer objects\n" );
 		}
@@ -569,6 +595,7 @@ static void R_InitExtensions( void )
 #ifdef USE_FBO
 	if ( R_HaveExtension( "GL_EXT_framebuffer_object" ) && R_HaveExtension( "GL_EXT_framebuffer_blit" ) )
 	{
+#ifndef __WASM__
 		err = R_ResolveSymbols( fbo_procs, ARRAY_LEN( fbo_procs ) );
 		if ( err )
 		{
@@ -576,9 +603,12 @@ static void R_InitExtensions( void )
 			qglGenFramebuffers = NULL; // indicates presence of FBO functionality
 		}
 		else
+#endif
 		{
 			// resolve optional fbo functions, without any warnings
+#ifndef __WASM__
 			R_ResolveSymbols( fbo_opt_procs, ARRAY_LEN( fbo_opt_procs ) );
+#endif
 		}
 	}
 #endif // USE_FBO
@@ -608,7 +638,9 @@ static void InitOpenGL( void )
 
 	if ( glConfig.vidWidth == 0 )
 	{
+#ifndef __WASM__
 		const char *err;
+#endif
 
 		if ( !ri.GLimp_Init )
 		{
@@ -617,11 +649,14 @@ static void InitOpenGL( void )
 
 		ri.GLimp_Init( &glConfig );
 
+#ifndef __WASM__
 		R_ClearSymTables();
 
 		err = R_ResolveSymbols( core_procs, ARRAY_LEN( core_procs ) );
 		if ( err )
 			ri.Error( ERR_FATAL, "Error resolving core OpenGL function '%s'", err );
+#endif
+
 
 		R_InitExtensions();
 
@@ -656,6 +691,7 @@ static void InitOpenGL( void )
 		}
 #endif
 
+
 		QGL_InitARB();
 
 		glConfig.deviceSupportsGamma = qfalse;
@@ -667,8 +703,10 @@ static void InitOpenGL( void )
 		if ( r_ignorehwgamma->integer )
 			glConfig.deviceSupportsGamma = qfalse;
 
+#ifndef __WASM__
 		// print info
 		GfxInfo();
+#endif
 
 		gls.initTime = ri.Milliseconds();
 	}
@@ -681,16 +719,21 @@ static void InitOpenGL( void )
 
 	if ( !qglViewport ) // might happen after REF_KEEP_WINDOW
 	{
+#ifndef __WASM__
 		const char *err = R_ResolveSymbols( core_procs, ARRAY_LEN( core_procs ) );
 		if ( err )
 			ri.Error( ERR_FATAL, "Error resolving core OpenGL function '%s'", err );
+#endif
+
 
 		R_InitExtensions();
 
 		QGL_InitARB();
 
+#ifndef __WASM__
 		// print info
 		GfxInfo();
+#endif
 
 		gls.initTime = ri.Milliseconds();
 	}
@@ -2027,7 +2070,9 @@ static void RE_Shutdown( refShutdownCode_t code ) {
 		VBO_Cleanup();
 #endif
 
+#ifndef __WASM__
 		R_ClearSymTables();
+#endif
 
 		Com_Memset( &glState, 0, sizeof( glState ) );
 

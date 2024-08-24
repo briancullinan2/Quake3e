@@ -342,7 +342,6 @@ static qboolean CL_GetServerCommand( int serverCommandNumber ) {
 	s = clc.serverCommands[ index ];
 	clc.lastExecutedServerCommand = serverCommandNumber;
 
-
 #if defined(USE_MULTIVM_CLIENT)
 	Com_DPrintf( "serverCommand [%i]: %i : %s\n", cgvmi_ref, serverCommandNumber, s );
 #else

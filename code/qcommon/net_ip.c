@@ -33,11 +33,9 @@ static void	NET_Restart_f( void );
 void Sys_SockaddrToString(char *dest, int destlen, const void *input);
 
 #define FD_SETSIZE 1024
-#ifndef EMSCRIPTEN
 typedef struct {
 	unsigned long fds_bits[FD_SETSIZE / 8 / sizeof(long)];
 } fd_set;
-#endif
 
 #ifdef USE_MULTIVM_SERVER
 int NET_GetPacket( netadr_t *net_from, msg_t *net_message, const fd_set *fdr, int igvm );

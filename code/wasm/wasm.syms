@@ -31,6 +31,7 @@ Sys_gettime
 popen
 pclose
 Sys_clock_gettime
+__secs_to_zone
 
 DebugBreak
 Sys_Microseconds
@@ -294,3 +295,13 @@ glNamedRenderbufferStorageMultisampleEXT
 glCheckNamedFramebufferStatusEXT
 glNamedFramebufferRenderbufferEXT
 glNamedFramebufferTexture2DEXT
+
+
+
+glBindBufferARB
+glBlitFramebuffer
+glBufferDataARB
+glDeleteBuffersARB
+glGenBuffersARB
+glGetInternalformativ
+glRenderbufferStorageMultisample

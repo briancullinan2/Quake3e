@@ -834,12 +834,21 @@ function GLimp_Shutdown(destroy) {
   }
 }
 
+function GL_GetDrawableSize(width, height) {
+  // THIS IS THE NEW VID_RESTART FAST HACK
+  INPUT.updateWidth = width
+  INPUT.updateHeight = height
+  HEAP32[width >> 2] = GL.canvas.width
+  HEAP32[height >> 2] = GL.canvas.height
+}
+
 var INPUT = {
   editorActive: false,
   touchhats: [[0, 0], [0, 0], [0, 0], [0, 0]], // x/y values for nipples
   joysticks: [],
   keystrings: {},
   IN_Init: IN_Init,
+  GL_GetDrawableSize: GL_GetDrawableSize,
   GLimp_Shutdown: GLimp_Shutdown,
   GLimp_StartDriverAndSetMode: GLimp_StartDriverAndSetMode,
   SDL_WasInit: function (device) { return 1; },

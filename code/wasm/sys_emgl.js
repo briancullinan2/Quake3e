@@ -1672,14 +1672,6 @@ function _setTempRet0(val) {
   setTempRet0(val);
 }
 
-function GL_GetDrawableSize(width, height) {
-  // THIS IS THE NEW VID_RESTART FAST HACK
-  INPUT.updateWidth = width
-  INPUT.updateHeight = height
-  HEAP32[width >> 2] = GL.canvas.width
-  HEAP32[height >> 2] = GL.canvas.height
-}
-
 let GLctx;
 
 let EMGL = window.EMGL = {
@@ -1687,7 +1679,6 @@ let EMGL = window.EMGL = {
   previousImage: null,
   previousTex: 0,
   texFiles: [],
-  GL_GetDrawableSize: GL_GetDrawableSize,
   GL_GetProcAddress: function () { },
   R_LoadRemote: R_LoadRemote,
   "getTempRet0": _getTempRet0,
@@ -1842,6 +1833,16 @@ let EMGL = window.EMGL = {
   glCheckNamedFramebufferStatusEXT: function () { },
   glNamedFramebufferRenderbufferEXT: function () { },
   glNamedFramebufferTexture2DEXT: function () { },
+
+
+  glBindBufferARB: function () { },
+  glBlitFramebuffer: function () { },
+  glBufferDataARB: function () { },
+  glDeleteBuffersARB: function () { },
+  glGenBuffersARB: function () { },
+  glGetInternalformativ: function () { },
+  glRenderbufferStorageMultisample: function () { },
+  
 
 }
 

@@ -37,6 +37,12 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #endif
 #include <windows.h>
 #include <GL/gl.h>
+#elif defined(__WASM__)
+#include "../wasm/gl.h"
+#undef GL_RGBA8
+#define GL_RGBA8 GL_RGBA
+#undef GL_RGB8
+#define GL_RGB8 GL_RGB
 #elif defined( __linux__ ) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined( __sun )
 #include <GL/gl.h>
 #include <GL/glx.h>
@@ -282,7 +288,22 @@ typedef char GLchar;
 	GLE( void, glXCopyContext, Display *dpy, GLXContext src, GLXContext dst, GLuint mask ) \
 	GLE( void, glXSwapBuffers, Display *dpy, GLXDrawable drawable )
 
-#ifndef __APPLE__
+
+#ifdef __WASM__
+#define GLE(ret, name, ...) extern ret APIENTRY name(__VA_ARGS__); \
+typedef ret APIENTRY name##proc(__VA_ARGS__); extern name##proc * q##name;
+	QGL_Core_PROCS;
+	QGL_Ext_PROCS;
+	QGL_ARB_PROGRAM_PROCS;
+	QGL_VBO_PROCS;
+	QGL_FBO_PROCS;
+	QGL_FBO_OPT_PROCS;
+#undef GLE
+#endif
+
+
+
+#if !defined(__APPLE__) && !defined(__WASM__)
 
 #define GLE( ret, name, ... ) extern ret ( APIENTRY * q##name )( __VA_ARGS__ );
 	QGL_Swp_PROCS;

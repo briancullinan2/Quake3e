@@ -2532,11 +2532,6 @@ static const imageExtToLoaderMap_t imageLoaders[ ] =
 	{ "pcx",  R_LoadPCX },
 	{ "bmp",  R_LoadBMP }
 #endif
-#if 0 //def __WASM__
-	,{ "png",  R_LoadPNG_Remote },
-	{ "jpg",  R_LoadJPG_Remote },
-	{ "jpeg", R_LoadJPG_Remote }
-#endif
 };
 
 static const int numImageLoaders = ARRAY_LEN( imageLoaders );

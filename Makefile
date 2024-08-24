@@ -439,6 +439,19 @@ SHLIBLDFLAGS = -Wl,--no-entry $(LDFLAGS) \
 # -shared not supported
 #  -Wl,--export=CL_Try_LoadJPG,--export=CL_Fail_LoadJPG \
 
+# -s LEGACY_GL_EMULATION=1 \
+# -s ALLOW_MEMORY_GROWTH=1 \
+# -s INITIAL_MEMORY=256MB \
+# --js-library $(MOUNT_DIR)/wasm/sys_in.js \
+# --js-library $(MOUNT_DIR)/wasm/sys_wasm.js \
+# --js-library $(MOUNT_DIR)/wasm/sys_snd.js \
+# --js-library $(MOUNT_DIR)/wasm/sys_net.js \
+# --js-library $(MOUNT_DIR)/wasm/sys_web.js \
+# --js-library $(MOUNT_DIR)/wasm/sys_fs.js \
+# --js-library $(MOUNT_DIR)/wasm/sys_std.js \
+# --js-library $(MOUNT_DIR)/wasm/sys_emjs.js 
+
+
 CLIENT_LDFLAGS  = $(LDFLAGS) code/wasm/stack_ops.S \
 	-Wl,--export=sprintf       -Wl,--export=malloc  \
 	-Wl,--export=stderr        -Wl,--export=stdout  \
@@ -1381,7 +1394,7 @@ $(B)/$(TARGET_CLIENT): $(Q3OBJ) $(wildcard code/wasm/*.js) code/wasm/index.html 
 	cp code/wasm/*.js docs/
 	cp code/wasm/*.html docs/
 	cp code/wasm/*.css docs/
-	cp $(B)/$(TARGET_CLIENT) docs/
+	cp $(B)/$(CNAME)$(ARCHEXT).* docs/
 
 
 else

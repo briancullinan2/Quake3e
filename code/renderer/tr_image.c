@@ -179,14 +179,18 @@ void R_ImageList_f( void ) {
 				estSize /= 2;
 				break;
 			case GL_RGBA4:
+#ifndef __WASM__
 			case GL_RGBA8:
+#endif
 			case GL_RGBA:
 				format = "RGBA ";
 				// 4 bytes per pixel
 				estSize *= 4;
 				break;
 			case GL_RGB5:
+#ifndef __WASM__
 			case GL_RGB8:
+#endif
 			case GL_RGB:
 				format = "RGB  ";
 				// 3 bytes per pixel?
@@ -1077,12 +1081,14 @@ typedef struct
 // when there are multiple images of different formats available
 static const imageExtToLoaderMap_t imageLoaders[] =
 {
-	{ "png",  R_LoadPNG },
 	{ "tga",  R_LoadTGA },
+#ifndef __WASM__ // because it has these longjmps for error handling I would have to rewrite
+	{ "png",  R_LoadPNG },
 	{ "jpg",  R_LoadJPG },
 	{ "jpeg", R_LoadJPG },
 	{ "pcx",  R_LoadPCX },
 	{ "bmp",  R_LoadBMP }
+#endif
 };
 
 static const int numImageLoaders = ARRAY_LEN( imageLoaders );

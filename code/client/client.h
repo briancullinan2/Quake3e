@@ -478,8 +478,8 @@ extern	vm_t			*uivm;	// interface to ui dll or vm
 
 extern	refexport_t		re;		// interface to refresh .dll
 
-float clientScreens[MAX_NUM_VMS][4];
-int cgvmi_ref;
+extern float clientScreens[MAX_NUM_VMS][4];
+extern int cgvmi_ref;
 
 //
 // cvars

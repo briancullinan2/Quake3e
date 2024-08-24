@@ -2145,6 +2145,7 @@ void RE_VertexLighting( qboolean allowed );
 
 void R_BloomScreen( void );
 
+#ifndef __WASM__
 #define GLE( ret, name, ... ) extern ret ( APIENTRY * q##name )( __VA_ARGS__ );
 	QGL_Core_PROCS;
 	QGL_Ext_PROCS;
@@ -2153,6 +2154,7 @@ void R_BloomScreen( void );
 	QGL_FBO_PROCS;
 	QGL_FBO_OPT_PROCS;
 #undef GLE
+#endif
 
 // VBO functions
 #ifdef USE_VBO
