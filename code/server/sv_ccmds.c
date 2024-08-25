@@ -142,7 +142,10 @@ static client_t *SV_GetPlayerByNum( void ) {
 }
 
 //=========================================================
-
+#ifdef __WASM__
+qboolean	CL_Download( const char *cmd, const char *pakname, qboolean autoDownload );
+static char alreadyTried[MAX_OSPATH];
+#endif
 
 /*
 ==================
@@ -176,14 +179,9 @@ static void SV_Map_f( void ) {
 	// bypass pure check so we can open downloaded map
 	FS_BypassPure();
 	len = FS_FOpenFileRead( expanded, NULL, qfalse );
-#ifdef __WASM__
-	len = len == -1 ? -1 : FS_FOpenFileRead( expanded2, NULL, qfalse );
-#endif
 	FS_RestorePure();
 	if ( len == -1 ) {
 #ifdef __WASM__
-		qboolean	CL_Download( const char *cmd, const char *pakname, qboolean autoDownload );
-		static char alreadyTried[MAX_OSPATH];
 		if(Q_stricmp(alreadyTried, map) != 0 && CL_Download( Cmd_Argv(0), map, qtrue )) {
 			Q_strncpyz(alreadyTried, map, sizeof(alreadyTried));
 		} else
