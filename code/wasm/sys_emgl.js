@@ -1181,15 +1181,6 @@ var _glGetShaderiv = (shader, pname, p) => {
 };
 
 
-
-var stringToAddress = (str) => {
-  var size = lengthBytesUTF8(str) + 1;
-  var ret = _malloc(size);
-  if (ret) stringToUTF8(str, ret, size);
-  return ret;
-};
-
-
 var _glGetString = (name_) => {
   var ret = GL.stringCache[name_];
   if (!ret) {
