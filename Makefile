@@ -491,7 +491,7 @@ CLIENT_LDFLAGS  += $(LDFLAGS) \
 	-Wl,--export=sprintf       -Wl,--export=malloc  \
 	-Wl,--export=stderr        -Wl,--export=stdout  \
   -Wl,--export=FS_CreatePath -Wl,--export=free \
-	-Wl,--export=errno,--export=R_FindPalette \
+	-Wl,--export=errno,--export=R_FindPalette,--export=_start \
   -Wl,--export=Key_ClearStates,--export=Key_GetCatcher \
   -Wl,--export=Key_SetCatcher,--export=CL_PacketEvent \
   -Wl,--export=s_soundStarted,--export=s_soundMuted,--export=s_knownSfx \
@@ -1430,7 +1430,7 @@ $(B)/$(TARGET_CLIENT): $(Q3OBJ) $(wildcard code/wasm/*.js) code/wasm/index.html 
 	cp code/wasm/*.js docs/
 	cp code/wasm/*.html docs/
 	cp code/wasm/*.css docs/
-	cp $(B)/$(CNAME)$(ARCHEXT).* docs/
+	cp $(B)/$(CNAME).* docs/
 
 
 else
