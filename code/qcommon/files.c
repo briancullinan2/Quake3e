@@ -268,9 +268,11 @@ static int getAltChecksum(const char *pakName, int *altChecksum);
 #define USE_PK3_CACHE
 #define USE_PK3_CACHE_FILE
 
+#ifndef __WASM__
 #ifndef USE_PTHREADS
 #define USE_HANDLE_CACHE
 #define MAX_CACHED_HANDLES 384
+#endif
 #endif
 
 #define MAX_ZPATH			256
@@ -5441,6 +5443,13 @@ int FS_GetAsyncFiles(char **files, int max) {
 	int i;
 	for(i = 0; i < max && i < numAsyncFiles; i++) {
 		files[i] = asyncFiles[i];
+	}
+	if(fs_cgameSawAsync
+	|| (!cgvm && fs_uiSawAsync) /*&& fs_uiSawAsync
+		&& (!com_sv_running->integer || fs_gameSawAsync)*/
+	) {
+		numAsyncFiles = 0;
+		asyncFiles[numAsyncFiles][0] = '\0';
 	}
 	return i;
 }
