@@ -485,6 +485,7 @@ static qboolean R_LoadMD3( model_t *mod, int lod, void *buffer, int fileSize, co
 	md3Tag_t			*tag;
 	int					version;
 	int					size;
+	char	strippedName[ MAX_QPATH ];
 	char	dirName[ MAX_QPATH ];
 
 	pinmodel = (md3Header_t *)buffer;
@@ -505,6 +506,9 @@ static qboolean R_LoadMD3( model_t *mod, int lod, void *buffer, int fileSize, co
 	mod->type = MOD_MESH;
 	mod->dataSize += size;
 	mod->md3[lod] = ri.Hunk_Alloc( size, h_low );
+
+	COM_StripExtension(mod->name, strippedName, MAX_QPATH);
+	COM_StripFilename(strippedName, dirName, MAX_QPATH);
 
 	Com_Memcpy( mod->md3[lod], buffer, size );
 
@@ -642,8 +646,6 @@ static qboolean R_LoadMD3( model_t *mod, int lod, void *buffer, int fileSize, co
 			surf->name[j-2] = 0;
 		}
 
-		COM_StripFilename(mod->name, dirName, MAX_QPATH);
-
 		// register the shaders
 		shader = (md3Shader_t *) ( (byte *)surf + surf->ofsShaders );
 		for ( j = 0 ; j < surf->numShaders ; j++, shader++ ) {
@@ -656,20 +658,32 @@ static qboolean R_LoadMD3( model_t *mod, int lod, void *buffer, int fileSize, co
 			if ( sh->defaultShader ) {
 				const char *temp;
 				const char *fname = strrchr(shader->name, '/');
+				char strippedName2[MAX_QPATH];
+				COM_StripExtension(shader->name, strippedName2, MAX_QPATH);
+
+				sh = R_FindShader( strippedName2, LIGHTMAP_NONE, qtrue );
+				Com_Printf("loading: %s, %i\n", strippedName2, sh->defaultShader);
+
 				if(!fname) {
 					fname = strrchr(shader->name, '\\');
 				}
 				if(!fname) {
-					fname = shader->name;
-					temp = va("%s/%s", dirName, fname);
+					temp = va("%s/%s", dirName, strippedName2);
 				} else {
-					temp = va("%s%s", dirName, fname);
+					COM_StripExtension(fname, strippedName2, MAX_QPATH);
+					temp = va("%s%s", dirName, strippedName2);
 				}
-				if(fname) {
+				if(sh->index == 0) {
 					sh = R_FindShader( temp, LIGHTMAP_NONE, qtrue );
 					//Com_Printf("shader found! %s, %s, %s\n", dirName, fname, shader->name);
 				}
-				if ( sh->defaultShader ) {
+
+				if(sh->index == 0) {
+					COM_StripExtension(shader->name, strippedName2, MAX_QPATH);
+					sh = R_FindShader( va("textures/%s", strippedName2), LIGHTMAP_NONE, qtrue );
+				}
+
+				if ( sh->index == 0 ) {
 					shader->shaderIndex = 0;
 				} else {
 					shader->shaderIndex = sh->index;

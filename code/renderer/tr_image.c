@@ -1472,12 +1472,12 @@ COM_StripExtension
 */
 void COM_StripFilename( const char *in, char *out, int destsize )
 {
-	const char *dot = strrchr(in, '\\'), *slash;
+	const char *dot = strrchr(in, '\\'); //, *slash;
 	if(!dot) {
 		dot = strrchr(in, '/');
 	}
 
-	if (dot && ((slash = strchr(in, '/')) == NULL || slash < dot))
+	if (dot)
 		destsize = (destsize < dot-in+1 ? destsize : dot-in+1);
 
 	if ( in == out && destsize > 1 )
