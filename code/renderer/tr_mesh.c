@@ -79,7 +79,8 @@ R_CullModel
 static int R_CullModel( md3Header_t *header, const trRefEntity_t *ent, vec3_t bounds[] ) {
 	//vec3_t bounds[2];
 	md3Frame_t	*oldFrame, *newFrame;
-	int			i;
+	int			i, length;
+	vec3_t temp;
 
 	// compute frame pointers
 	newFrame = ( md3Frame_t * ) ( ( byte * ) header + header->ofsFrames ) + ent->e.frame;
@@ -91,12 +92,16 @@ static int R_CullModel( md3Header_t *header, const trRefEntity_t *ent, vec3_t bo
 		bounds[1][i] = oldFrame->bounds[1][i] > newFrame->bounds[1][i] ? oldFrame->bounds[1][i] : newFrame->bounds[1][i];
 	}
 
+	VectorSubtract(bounds[1], bounds[0], temp);
+	length = fabsf(VectorNormalize(temp));
+
+
 	// cull bounding sphere ONLY if this is not an upscaled entity
 	if ( !ent->e.nonNormalizedAxes )
 	{
 		if ( ent->e.frame == ent->e.oldframe )
 		{
-			switch ( R_CullLocalPointAndRadius( newFrame->localOrigin, newFrame->radius ) )
+			switch ( R_CullLocalPointAndRadius( newFrame->localOrigin, newFrame->radius + length ) )
 			{
 			case CULL_OUT:
 				tr.pc.c_sphere_cull_md3_out++;
@@ -115,11 +120,11 @@ static int R_CullModel( md3Header_t *header, const trRefEntity_t *ent, vec3_t bo
 		{
 			int sphereCull, sphereCullB;
 
-			sphereCull  = R_CullLocalPointAndRadius( newFrame->localOrigin, newFrame->radius );
+			sphereCull  = R_CullLocalPointAndRadius( newFrame->localOrigin, newFrame->radius + length );
 			if ( newFrame == oldFrame ) {
 				sphereCullB = sphereCull;
 			} else {
-				sphereCullB = R_CullLocalPointAndRadius( oldFrame->localOrigin, oldFrame->radius );
+				sphereCullB = R_CullLocalPointAndRadius( oldFrame->localOrigin, oldFrame->radius + length );
 			}
 
 			if ( sphereCull == sphereCullB )
@@ -333,10 +338,10 @@ void R_AddMD3Surfaces( trRefEntity_t *ent ) {
 	// cull the entire model if merged bounding box of both frames
 	// is outside the view frustum.
 	//
-	//cull = R_CullModel( header, ent, bounds );
-	//if ( cull == CULL_OUT ) {
-	//	return;
-	//}
+	cull = R_CullModel( header, ent, bounds );
+	if ( cull == CULL_OUT || cull == CULL_CLIP ) {
+		return;
+	}
 
 	//
 	// set up lighting now that we know we aren't culled

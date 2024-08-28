@@ -62,7 +62,7 @@ int R_CullLocalBox( const vec3_t bounds[2] ) {
 	float	dists[8];
 	vec3_t	v;
 	cplane_t	*frust;
-	int			anyBack;
+	int			anyBack, allOut = 1;
 	int			front, back;
 
 	if ( r_nocull->integer ) {
@@ -83,14 +83,19 @@ int R_CullLocalBox( const vec3_t bounds[2] ) {
 
 	// check against frustum planes
 	anyBack = 0;
+	allOut = 1;
 	for (i = 0 ; i < 4 ; i++) {
 		frust = &tr.viewParms.frustum[i];
 
 		front = back = 0;
 		for (j = 0 ; j < 8 ; j++) {
 			dists[j] = DotProduct(transformed[j], frust->normal);
+			
 			if ( dists[j] > frust->dist ) {
 				front = 1;
+				if(tr.currentFogNum && dists[j] - frust->dist < tr.world->fogs[tr.currentFogNum].parms.depthForOpaque) {
+					allOut = 0;
+				}
 				if ( back ) {
 					break;		// a point is in front
 				}
@@ -105,7 +110,11 @@ int R_CullLocalBox( const vec3_t bounds[2] ) {
 		anyBack |= back;
 	}
 
-	if ( !anyBack ) {
+	if(allOut) {
+		return CULL_CLIP;
+	}
+
+	if ( !allOut || !anyBack ) {
 		return CULL_IN;		// completely inside frustum
 	}
 
@@ -150,15 +159,17 @@ int R_CullPointAndRadius( const vec3_t pt, float radius )
 		{
 			return CULL_OUT;
 		}
-		else if ( dist <= radius ) 
+		else if ( tr.currentFogNum && dist > tr.world->fogs[tr.currentFogNum].parms.depthForOpaque ) // TODO: make this equal to fog distance
 		{
+			return CULL_CLIP;
+		} else if ( dist >= radius) {
 			mightBeClipped = qtrue;
 		}
 	}
 
 	if ( mightBeClipped )
 	{
-		return CULL_CLIP;
+		//return CULL_CLIP;
 	}
 
 	return CULL_IN;		// completely inside frustum
@@ -1614,6 +1625,8 @@ static void R_AddEntitySurfaces( void ) {
 		}
 #endif
 
+		tr.currentFogNum = R_SpriteFogNum( ent );
+
 		// simple generated models, like sprites and beams, are not culled
 		switch ( ent->e.reType ) {
 		case RT_PORTALSURFACE:
@@ -1630,7 +1643,7 @@ static void R_AddEntitySurfaces( void ) {
 				continue;
 			}
 			shader = R_GetShaderByHandle( ent->e.customShader );
-			R_AddDrawSurf( &entitySurface, shader, R_SpriteFogNum( ent ), 0 );
+			R_AddDrawSurf( &entitySurface, shader, tr.currentFogNum, 0 );
 			break;
 
 		case RT_MODEL:

@@ -1238,6 +1238,7 @@ typedef struct {
 	trRefEntity_t			*currentEntity;
 	trRefEntity_t			worldEntity;		// point currentEntity at this when rendering world
 	int						currentEntityNum;
+	int           currentFogNum;
 	int						shiftedEntityNum;	// currentEntityNum << QSORT_REFENTITYNUM_SHIFT
 	model_t					*currentModel;
 
@@ -1500,6 +1501,7 @@ void R_AddLitSurf( surfaceType_t *surface, shader_t *shader, int fogIndex );
 
 #define	CULL_IN		0		// completely unclipped
 #define	CULL_CLIP	1		// clipped by one or more planes
+#define	CULL_MAYBE	3		// clipped by one or more planes
 #define	CULL_OUT	2		// completely outside the clipping planes
 
 void R_LocalPointToWorld( const vec3_t local, vec3_t world );
