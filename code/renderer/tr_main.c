@@ -93,7 +93,7 @@ int R_CullLocalBox( const vec3_t bounds[2] ) {
 			
 			if ( dists[j] > frust->dist ) {
 				front = 1;
-				if(tr.currentFogNum && dists[j] - frust->dist < tr.world->fogs[tr.currentFogNum].parms.depthForOpaque) {
+				if(tr.currentFogNum && dists[j] - frust->dist < tr.world->fogs[tr.currentFogNum].parms.depthForOpaque / 4) {
 					allOut = 0;
 				}
 				if ( back ) {
