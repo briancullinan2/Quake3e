@@ -728,7 +728,7 @@ if(r_autoTerrain->integer) {
 		/* get matching shader and set alpha */
 		parent = surf->shader;
 		numberedShaderName = GetIndexedShader( &s_worldData.terrain, numPoints, shaderIndexes );
-		Com_Printf("%s", numberedShaderName);
+		//Com_Printf("%s", numberedShaderName);
 		surf->shader = R_FindShader(numberedShaderName, LIGHTMAP_NONE, qfalse);
 		if(surf->shader->defaultShader) {
 			surf->shader = parent;
@@ -2494,11 +2494,12 @@ if(!s_worldData.terrain.terrainImage) {
 	s_worldData.terrain.terrainFlip = qtrue;
 }
 
+// if we have an image but no layers default to 3 i guess
+if(!s_worldData.terrain.terrainLayers) {
+	s_worldData.terrain.terrainLayers = 3;
+}
+
 if(s_worldData.terrain.terrainImage) {
-	// if we have an image but no layers default to 3 i guess
-	if(!s_worldData.terrain.terrainLayers) {
-		s_worldData.terrain.terrainLayers = 3;
-	}
 
 	for ( i = 0; i < s_worldData.terrain.terrainHeight * s_worldData.terrain.terrainWidth * 4; i++ )
 	{
