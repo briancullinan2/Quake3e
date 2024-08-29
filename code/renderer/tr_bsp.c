@@ -712,6 +712,7 @@ static void ParseFace( const dsurface_t *ds, const drawVert_t *verts, msurface_t
 if(r_autoTerrain->integer) {
 	shader_t        *parent;
 	byte shaderIndexes[ 256 ];
+	const char *numberedShaderName;
 	float offsets[ 256 ];
 	if((surf->shader->surfaceFlags & SURF_TERRAIN)
 		|| (surf->shader->remappedShader
@@ -726,7 +727,9 @@ if(r_autoTerrain->integer) {
 
 		/* get matching shader and set alpha */
 		parent = surf->shader;
-		surf->shader = R_FindShader(GetIndexedShader( &s_worldData.terrain, numPoints, shaderIndexes ), LIGHTMAP_NONE, qfalse);
+		numberedShaderName = GetIndexedShader( &s_worldData.terrain, numPoints, shaderIndexes );
+		Com_Printf("%s", numberedShaderName);
+		surf->shader = R_FindShader(numberedShaderName, LIGHTMAP_NONE, qfalse);
 		if(surf->shader->defaultShader) {
 			surf->shader = parent;
 		}
@@ -893,6 +896,43 @@ static void ParseTriSurf( const dsurface_t *ds, const drawVert_t *verts, msurfac
 			tri->verts[i].lightmap[1] = tri->verts[i].lightmap[1] * tr.lightmapScale[1] + lightmapY;
 		}
 	}
+
+
+#ifdef USE_AUTO_TERRAIN
+if(r_autoTerrain->integer) {
+	shader_t        *parent;
+	byte shaderIndexes[ 256 ];
+	const char *numberedShaderName;
+	float offsets[ 256 ];
+	if((surf->shader->surfaceFlags & SURF_TERRAIN)
+		|| (surf->shader->remappedShader
+		&& surf->shader->remappedShader->surfaceFlags & SURF_TERRAIN)) {
+
+		for ( i = 0; i < numVerts; i++ )
+		{
+			shaderIndexes[ i ] = GetShaderIndexForPoint( &s_worldData.terrain, s_worldData.bounds, tri->verts[i].xyz, tri->verts[i].st[0], tri->verts[i].st[1] );
+			offsets[ i ] = 0; // b->im->offsets[ shaderIndexes[ i ] ];
+			//%	Sys_Printf( "%f ", offsets[ i ] );
+		}
+
+		/* get matching shader and set alpha */
+		parent = surf->shader;
+		numberedShaderName = GetIndexedShader( &s_worldData.terrain, numVerts, shaderIndexes );
+		surf->shader = R_FindShader(numberedShaderName, LIGHTMAP_NONE, qfalse);
+		if(surf->shader->defaultShader) {
+			surf->shader = parent;
+		}
+
+		for ( i = 0; i < numVerts; i++ )
+		{
+			tri->verts[i].color.rgba[3] = shaderIndexes[ i ];
+		}
+	} else {
+		//Com_Printf("terrain %s\n", surf->shader->name);
+	}
+
+}
+#endif
 
 #if 0 //def USE_AUTO_TERRAIN
 {

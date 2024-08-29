@@ -13,9 +13,9 @@
 
 byte GetShaderIndexForPoint( terrain_t *s_worldData, const vec3_t eMinmax[2], const vec3_t point, const float s, const float t ){
 	/* early out if no indexmap */
-if(!s_worldData->terrainImage) {
-	return 0;
-}
+	//if(!s_worldData->terrainImage) {
+	//	return 0;
+	//}
 
 	/* this code is really broken */
 #if 0
@@ -61,6 +61,26 @@ if(!s_worldData->terrainImage) {
 
 	/* return index */
 	//Com_Printf("found: %i\n", s_worldData->terrainImage[ y * s_worldData->terrainWidth * 4 + x * 4 ]);
+	if(!s_worldData->terrainImage) {
+		trace_t tr;
+		vec3_t start, end;
+		int shaderIndex;
+		start[0] = end[0] = point[ 0 ];
+		start[1] = end[1] = point[ 1 ];
+		start[2] = 65536;
+		end[2] = -65536;
+		ri.CM_BoxTrace(&tr, start, end, NULL, NULL, 0, 1 /*MASK_SOLID*/, qfalse);
+		if((tr.endpos[2] - eMinmax[0][2]) / size[2] > 1.0f) { // hit the skybox
+			start[2] = tr.endpos[2] - 64;
+			ri.CM_BoxTrace(&tr, start, end, NULL, NULL, 0, 1 /*MASK_SOLID*/, qfalse);
+		}
+		shaderIndex = (tr.endpos[2] - eMinmax[0][2]) / size[2] * s_worldData->terrainLayers;
+		if(shaderIndex >= s_worldData->terrainLayers) {
+			shaderIndex = s_worldData->terrainLayers - 1;
+		}
+		//Com_Printf("shader wtf: %f, %i\n", (tr.endpos[2] - eMinmax[0][2]) / size[2], shaderIndex );
+		return shaderIndex;
+	} else
 	if(s_worldData->terrainFlip) {
 		return s_worldData->terrainImage[ (s_worldData->terrainHeight - y) * s_worldData->terrainWidth * 4 + x * 4 ];
 	} else {
@@ -76,7 +96,7 @@ if(!s_worldData->terrainImage) {
 
 const char *GetIndexedShader( terrain_t *s_worldData, int numPoints, byte *shaderIndexes ){
 	/* early out if bad data */
-	if ( s_worldData->terrainImage == NULL || numPoints <= 0 || shaderIndexes == NULL ) {
+	if ( /*s_worldData->terrainImage == NULL ||*/ numPoints <= 0 || shaderIndexes == NULL ) {
 		return  "default";
 	}
 

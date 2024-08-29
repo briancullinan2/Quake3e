@@ -2941,11 +2941,11 @@ if(!s_worldData.terrain.terrainImage) {
 
 #endif
 
+if(!s_worldData.terrain.terrainLayers) {
+	s_worldData.terrain.terrainLayers = 3;
+}
 if(s_worldData.terrain.terrainImage) {
 	// if we have an image but no layers default to 3 i guess
-	if(!s_worldData.terrain.terrainLayers) {
-		s_worldData.terrain.terrainLayers = 3;
-	}
 
 	for ( i = 0; i < s_worldData.terrain.terrainHeight * s_worldData.terrain.terrainWidth * 4; i++ )
 	{

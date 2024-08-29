@@ -216,7 +216,12 @@ typedef struct {
 	byte	*(*CM_ClusterPVS)(int cluster, int cmi);
 #else
 	byte	*(*CM_ClusterPVS)(int cluster);
+	 
 #endif
+	void (*CM_BoxTrace)( trace_t *results, const vec3_t start, const vec3_t end,
+						const vec3_t mins, const vec3_t maxs,
+						clipHandle_t model, int brushmask, qboolean capsule );
+
 
 	// visualization for debugging collision detection
 	void	(*CM_DrawDebugSurface)( void (*drawPoly)(int color, int numPoints, float *points) );
