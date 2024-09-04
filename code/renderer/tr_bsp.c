@@ -36,7 +36,14 @@ void RE_LoadWorldMap( const char *name );
 
 */
 
+#ifdef USE_BSP_MODELS
+#define MAX_WORLD_MODELS 64
+int       rwi = 0;
+static 		world_t		s_worldDatas[MAX_WORLD_MODELS];
+#define s_worldData s_worldDatas[rwi]
+#else
 #ifdef USE_MULTIVM_RENDERER
+#define MAX_WORLD_MODELS MAX_NUM_WORLDS
 static 		world_t		s_worldDatas[MAX_NUM_WORLDS];
 int       rwi = 0; // render world, should match number of loaded clip maps, 
                    //   since they are reusable
@@ -44,6 +51,7 @@ int 			rwi_ref = 0;
 #define s_worldData s_worldDatas[rwi]
 #else
 static	world_t		s_worldData;
+#endif
 #endif
 
 static	byte		*fileBase;
@@ -296,7 +304,7 @@ static float R_ProcessLightmap( byte *image, const byte *buf_p, float maxIntensi
 }
 
 
-#if !defined(__WASM__) && !defined(USE_MULTIVM_SERVER) && !defined(USE_MULTIVM_RENDERER)
+#if !defined(__WASM__) && !defined(USE_MULTIVM_SERVER) && !defined(USE_MULTIVM_RENDERER) && !defined(USE_BSP_MODELS)
 
 static int SetLightmapParams( int numLightmaps, int maxTextureSize )
 {
@@ -342,7 +350,7 @@ int R_GetLightmapCoords( const int lightmapIndex, float *x, float *y )
 	return lightmapNum;
 }
 
-#if !defined(__WASM__) && !defined(USE_MULTIVM_SERVER) && !defined(USE_MULTIVM_RENDERER)
+#if !defined(__WASM__) && !defined(USE_MULTIVM_SERVER) && !defined(USE_MULTIVM_RENDERER) && !defined(USE_BSP_MODELS)
 
 /*
 ===============
@@ -440,7 +448,7 @@ void R_LoadLightmaps( const lump_t *l ) {
 
 	numLightmaps = l->filelen / (LIGHTMAP_SIZE * LIGHTMAP_SIZE * 3);
 
-#if !defined(USE_PTHREADS) && !defined(USE_MULTIVM_SERVER) && !defined(USE_MULTIVM_RENDERER) && !defined(__WASM__)
+#if !defined(USE_PTHREADS) && !defined(USE_MULTIVM_SERVER) && !defined(USE_MULTIVM_RENDERER) && !defined(__WASM__) && !defined(USE_BSP_MODELS)
 	if ( r_mergeLightmaps->integer && numLightmaps > 1 ) {
 		// check for low texture sizes
 		if ( glConfig.maxTextureSize >= LIGHTMAP_LEN*2 ) {
@@ -1788,7 +1796,7 @@ static void R_LoadSurfaces( const lump_t *surfs, const lump_t *verts, const lump
 R_LoadSubmodels
 =================
 */
-static void R_LoadSubmodels( const lump_t *l ) {
+static void R_LoadSubmodels( const lump_t *l, model_t *inModel ) {
 	const dmodel_t *in;
 	bmodel_t	*out;
 	int			i, j, count;
@@ -1803,6 +1811,12 @@ static void R_LoadSubmodels( const lump_t *l ) {
 	for ( i=0 ; i<count ; i++, in++, out++ ) {
 		model_t *model;
 
+#ifdef USE_BSP_MODELS
+		if(i == 0 && inModel) {
+			model = inModel;
+			//tr.models[++tr.numModels] = model;
+		} else
+#endif
 		model = R_AllocModel();
 
 		if ( model == NULL ) {
@@ -1811,7 +1825,11 @@ static void R_LoadSubmodels( const lump_t *l ) {
 
 		model->type = MOD_BRUSH;
 		model->bmodel = out;
+#ifdef USE_BSP_MODELS
+		Com_sprintf( model->name, sizeof( model->name ), "*%d", model->index - 1 );
+#else
 		Com_sprintf( model->name, sizeof( model->name ), "*%d", i );
+#endif
 
 		for (j=0 ; j<3 ; j++) {
 			out->bounds[0][j] = LittleFloat (in->mins[j]) * r_scale->value;
@@ -2354,10 +2372,20 @@ RE_LoadWorldMap
 Called directly from cgame
 =================
 */
+#ifdef USE_BSP_MODELS
+qhandle_t RE_LoadWorldMap_real( const char *name, model_t *model );
+
+qhandle_t RE_LoadWorldMap( const char *name ) {
+	return RE_LoadWorldMap_real(name, NULL);
+}
+
+qhandle_t RE_LoadWorldMap_real( const char *name, model_t *model )
+#else
 #ifdef USE_MULTIVM_RENDERER
 int RE_LoadWorldMap( const char *name )
 #else
 void RE_LoadWorldMap( const char *name )
+#endif
 #endif
 {
 	int			i;
@@ -2385,9 +2413,9 @@ void RE_LoadWorldMap( const char *name )
 
 
 
-#ifdef USE_MULTIVM_RENDERER
+#if defined(USE_MULTIVM_RENDERER) || defined(USE_BSP_MODELS)
 	int j, empty = -1;
-	for(j = 0; j < MAX_NUM_WORLDS; j++) {
+	for(j = 0; j < MAX_WORLD_MODELS; j++) {
 		if ( !Q_stricmp( s_worldDatas[j].name, strippedName2 ) ) {
 			// TODO: PRINT_DEVELOPER
 			rwi = 0;
@@ -2403,7 +2431,7 @@ void RE_LoadWorldMap( const char *name )
 
 #else
 	if ( tr.worldMapLoaded ) {
-#ifdef USE_MULTIVM_RENDERER
+#if defined(USE_MULTIVM_RENDERER) || defined(USE_BSP_MODELS)
   	ri.Printf( PRINT_WARNING, "ERROR: attempted to redundantly load world map\n" );
 #else
 	if ( tr.worldMapLoaded ) {
@@ -2528,11 +2556,12 @@ if(s_worldData.terrain.terrainImage) {
 	R_LoadSurfaces( &header->lumps[LUMP_SURFACES], &header->lumps[LUMP_DRAWVERTS], &header->lumps[LUMP_DRAWINDEXES] );
 	R_LoadMarksurfaces( &header->lumps[LUMP_LEAFSURFACES] );
 	R_LoadNodesAndLeafs( &header->lumps[LUMP_NODES], &header->lumps[LUMP_LEAFS] );
-	R_LoadSubmodels( &header->lumps[LUMP_MODELS] );
+	R_LoadSubmodels( &header->lumps[LUMP_MODELS], model );
 	R_LoadVisibility( &header->lumps[LUMP_VISIBILITY] );
 	R_LoadLightGrid( &header->lumps[LUMP_LIGHTGRID] );
 
 #ifdef USE_VBO
+	if(!rwi)
 	R_BuildWorldVBO( s_worldData.surfaces, s_worldData.numsurfaces );
 #endif
 
@@ -2545,9 +2574,16 @@ if(s_worldData.terrain.terrainImage) {
 
 	ri.FS_FreeFile( buffer.v );
 
+#ifdef USE_BSP_MODELS
+	rwi = 0;
+	if(model) {
+		return model->index;
+	}
+	return empty;
+#else
 #ifdef USE_MULTIVM_RENDERER
 	rwi = 0;
 	return empty;
 #endif
-
+#endif
 }

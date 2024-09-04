@@ -1302,20 +1302,29 @@ typedef struct {
 
 extern backEndState_t	backEnd;
 
-
 #ifdef USE_MULTIVM_RENDERER
-
-#define MAX_NUM_WORLDS MAX_NUM_VMS
-
 extern float dvrXScale;
 extern float dvrYScale;
 extern float dvrXOffset;
 extern float dvrYOffset;
+#endif
+
+#ifdef USE_BSP_MODELS
+#define MAX_WORLD_MODELS 64
+extern int     rwi;
+extern trGlobals_t	trWorlds[MAX_WORLD_MODELS];
+#define tr trWorlds[rwi]
+#else
+#ifdef USE_MULTIVM_RENDERER
+
+#define MAX_NUM_WORLDS MAX_NUM_VMS
+
 extern int     rwi;
 extern trGlobals_t	trWorlds[MAX_NUM_WORLDS];
 #define tr trWorlds[rwi]
 #else
 extern trGlobals_t	tr;
+#endif
 #endif
 
 extern int					gl_clamp_mode;
@@ -1579,11 +1588,17 @@ void		RE_BeginFrame( stereoFrame_t stereoFrame );
 void		RE_BeginRegistration( glconfig_t *glconfig );
 
 #ifdef USE_MULTIVM_RENDERER
-int		RE_LoadWorldMap( const char *mapname );
 void    RE_SetDvrFrame( float x, float y, float width, float height );
+#endif
 
+#ifdef USE_BSP_MODELS
+qhandle_t RE_LoadWorldMap( const char *mapname );
 #else
-void		RE_LoadWorldMap( const char *mapname );
+#ifdef USE_MULTIVM_RENDERER
+int				RE_LoadWorldMap( const char *mapname );
+#else
+void			RE_LoadWorldMap( const char *mapname );
+#endif
 #endif
 
 void		RE_SetWorldVisData( const byte *vis );

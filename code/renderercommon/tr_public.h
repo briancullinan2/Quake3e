@@ -58,10 +58,14 @@ typedef struct {
 	qhandle_t (*RegisterSkin)( const char *name );
 	qhandle_t (*RegisterShader)( const char *name );
 	qhandle_t (*RegisterShaderNoMip)( const char *name );
-#ifdef USE_MULTIVM_RENDERER
-	int	(*LoadWorld)( const char *name );
+#ifdef USE_BSP_MODELS
+	qhandle_t	(*LoadWorld)( const char *name );
 #else
-	void	(*LoadWorld)( const char *name );
+#ifdef USE_MULTIVM_RENDERER
+	int				(*LoadWorld)( const char *name );
+#else
+	void			(*LoadWorld)( const char *name );
+#endif
 #endif
 
 	// the vis data is a large enough block of data that we go to the trouble

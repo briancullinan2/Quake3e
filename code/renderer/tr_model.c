@@ -258,6 +258,16 @@ static qhandle_t R_RegisterOBJ(const char *name, model_t *mod)
 	return mod->index;
 }
 
+
+#ifdef USE_BSP_MODELS
+qhandle_t RE_LoadWorldMap_real( const char *name, model_t *model );
+static qhandle_t R_RegisterBSP(const char *name, model_t *mod)
+{
+	return RE_LoadWorldMap_real( name, mod );
+}
+#endif
+
+
 typedef struct
 {
 	const char *ext;
@@ -271,7 +281,10 @@ static modelExtToLoaderMap_t modelLoaders[ ] =
 	{ "iqm", R_RegisterIQM },
 	{ "mdr", R_RegisterMDR },
 	{ "md3", R_RegisterMD3 },
-	{ "obj", R_RegisterOBJ }
+	{ "obj", R_RegisterOBJ },
+#ifdef USE_BSP_MODELS
+	{ "bsp", R_RegisterBSP }
+#endif
 };
 
 static int numModelLoaders = ARRAY_LEN(modelLoaders);
@@ -310,7 +323,7 @@ model_t *R_AllocModel( void ) {
 	mod->index = tr.numModels;
 	tr.models[tr.numModels] = mod;
 
-#ifdef USE_MULTIVM_RENDERER
+#if defined(USE_MULTIVM_RENDERER) || defined(USE_BSP_MODELS)
 	if(rwi != 0)
 		trWorlds[0].models[trWorlds[0].numModels++] = mod;
 #endif
@@ -406,7 +419,7 @@ qhandle_t RE_RegisterModel( const char *name ) {
 		ClearSurfaces();
 	}
 
-
+Com_Printf("model: %s\n", name);
 	if( *ext )
 	{
 		// Look for the correct loader and use it
@@ -662,7 +675,6 @@ static qboolean R_LoadMD3( model_t *mod, int lod, void *buffer, int fileSize, co
 				COM_StripExtension(shader->name, strippedName2, MAX_QPATH);
 
 				sh = R_FindShader( strippedName2, LIGHTMAP_NONE, qtrue );
-				Com_Printf("loading: %s, %i\n", strippedName2, sh->defaultShader);
 
 				if(!fname) {
 					fname = strrchr(shader->name, '\\');

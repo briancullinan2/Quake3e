@@ -2596,10 +2596,11 @@ static shader_t *GeneratePermanentShader( void ) {
 	newShader->sortedIndex = tr.numShaders;
 
 	tr.numShaders++;
-#ifdef USE_MULTIVM_RENDERER
+#if defined(USE_MULTIVM_RENDERER) || defined(USE_BSP_MODELS)
 	if(rwi != 0) {
 		trWorlds[0].shaders[ trWorlds[0].numShaders ] = newShader;
 		trWorlds[0].sortedShaders[ trWorlds[0].numShaders ] = newShader;
+		newShader->index = trWorlds[0].numShaders;
 		trWorlds[0].numShaders++;
 	}
 #endif
