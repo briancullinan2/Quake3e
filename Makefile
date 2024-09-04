@@ -415,15 +415,13 @@ WASI_INCLUDES  := \
   -Icode/wasm \
 	-I$(WASISDK)/share/wasi-sysroot/include \
   -I$(WASISDK)/share/wasi-sysroot/include/wasm32-wasi \
-  -Icode/wasm/SDL2-2.0.14/include \
   -Icode/libogg/include -Icode/libvorbis/include \
   -I/opt/homebrew/Cellar/emscripten/3.1.64/libexec/system/include/SDL/
 
 BASE_CFLAGS    += -fno-rtti -Wall \
-	-Wimplicit -fstrict-aliasing  -fno-inline \
-  -Wbad-function-cast -Wcast-function-type \
-	-ftree-vectorize -fsigned-char -MMD \
-	-fno-short-enums  -fPIC \
+	 -fstrict-aliasing  -fno-inline \
+	 -MMD \
+	 -fPIC \
   -DNO_VM_COMPILED=1 -fno-common  \
 	-D_XOPEN_SOURCE=700 -D__EMSCRIPTEN__=1 \
 	-D__WASM__=1 -D__wasi__=1 -D__wasm32__=1 \

@@ -2,6 +2,8 @@
 
 ### web assembly
 
+Download and install Node.Js https://nodejs.org/en/download/package-manager/current
+
 Download https://github.com/WebAssembly/wasi-sdk/releases
 
 Also download https://github.com/WebAssembly/binaryen/releases
@@ -31,6 +33,22 @@ Error: ENOENT: no such file or directory, rename '...'
 
 Set the MODNAME const in /code/wasm/repack.js to your mod name
 
+Uncaught (in promise) ReferenceError: malloc is not defined
+
+Make sure engine is exporting symbols with `-Wl,--export=malloc`
+
+wasm-ld: error: symbol exported via --export not found: R_FindPalette
+
+Make sure C++ files wrap public/export/visible functions in:
+```
+#ifdef __cplusplus
+extern "C" {
+#endif // __cplusplus
+```
+
+error: declaration of 'SCR_DebugGraph' has a different language linkage
+
+Same as above but more annoying.
 
 ### windows/msvc
 

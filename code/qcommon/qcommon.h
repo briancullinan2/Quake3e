@@ -1330,7 +1330,8 @@ qboolean Sys_SetAffinityMask( const uint64_t mask );
 
 // Sys_Milliseconds should only be used for profiling purposes,
 // any game related timing information should come from event timestamps
-int		Sys_Milliseconds( void );
+extern int		Sys_Milliseconds( void );
+
 int64_t	Sys_Microseconds( void );
 
 void	Sys_SnapVector( float *vector );
@@ -1349,7 +1350,9 @@ qboolean	Sys_StringToAdr( const char *s, netadr_t *a, netadrtype_t family );
 //Does NOT parse port numbers, only base addresses.
 
 qboolean	Sys_IsLANAddress(const netadr_t *adr);
+#ifndef __WASM__
 void		Sys_ShowIP(void);
+#endif
 
 qboolean	Sys_Mkdir( const char *path );
 FILE	*Sys_FOpen( const char *ospath, const char *mode );

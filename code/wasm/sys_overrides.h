@@ -4,6 +4,10 @@
 #define __SYS_OVERRIDES_H
 #include <stdio.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // I'M BEING DANGEROUS
 int Sys_execv(const char *path, char *const argv[]);
 #define execv(p, a) Sys_execv(p, a)
@@ -84,3 +88,6 @@ int Sys_setjmp(jmp_buf env);
 #endif
 #define Q_setjmp Sys_setjmp
 
+#ifdef __cplusplus
+}
+#endif

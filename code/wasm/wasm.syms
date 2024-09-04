@@ -112,6 +112,10 @@ Sys_Exit
 Sys_Print
 Sys_LoadLibrary
 Sys_LoadFunction
+FS_FOpenFileWriteAsync
+Sys_GetClipboardData
+Sys_DefaultInstallPath
+NET_Restart_f
 
 
 SDL_OpenAudioDevice

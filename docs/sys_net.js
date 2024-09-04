@@ -779,8 +779,13 @@ var NET = {
   CL_Download: CL_Download,
   Com_DL_Cleanup: Com_DL_Cleanup,
   CL_cURL_BeginDownload: CL_cURL_BeginDownload,
+  NET_Restart_f: NET_Restart_f
 }
 
+
+function NET_Restart_f() {
+  
+}
 
 if (typeof module != 'undefined') {
   // SOMETHING SOMETHING fs.writeFile

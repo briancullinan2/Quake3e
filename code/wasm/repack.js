@@ -25,6 +25,7 @@ const SUPPORTED_FORMATS = [
   //'.md5', '.md3', '.iqm', '.mdr',
   '.dat', 
   //'.map', '.aas', '.bsp', 
+  '.glsl', '.vlsl', '.hlsl'
 ]
 
 // include icons because menu uses it to load, not a lazy check unforntunatly

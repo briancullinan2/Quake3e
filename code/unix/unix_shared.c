@@ -493,7 +493,7 @@ void *Sys_LoadLibrary( const char *name )
 		Com_Error( ERR_FATAL, "Sys_LoadLibrary: Unable to load library with '%s' extension", ext );
 	}
 
-	handle = dlopen( name, RTLD_NOW );
+	handle = dlopen( name, RTLD_NOW | RTLD_LOCAL );
 	return handle;
 }
 
