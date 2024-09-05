@@ -179,12 +179,7 @@ typedef struct {
 // and to avoid various numeric issues
 #define	SURFACE_CLIP_EPSILON	(0.125)
 
-#ifdef USE_BSP_MODELS
-#define MAX_NUM_MAPS 64
-#define cm        cmWorlds[cmi]
-extern	clipMap_t	cmWorlds[MAX_NUM_MAPS];
-extern  int       cmi;
-#else
+
 #if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
 #define MAX_NUM_MAPS MAX_NUM_VMS
 #define cm        cmWorlds[cmi]
@@ -192,7 +187,6 @@ extern	clipMap_t	cmWorlds[MAX_NUM_MAPS];
 extern  int       cmi;
 #else
 extern	clipMap_t	cm;
-#endif
 #endif
 
 extern	int			c_pointcontents;
@@ -245,11 +239,7 @@ void CM_StoreBrushes( leafList_t *ll, int nodenum );
 
 void CM_BoxLeafnums_r( leafList_t *ll, int nodenum );
 
-#if 0 //def USE_BSP_MODELS
-cmodel_t *CM_ClipHandleToModel( clipHandle_t handle, int *toCMI );
-#else
 cmodel_t	*CM_ClipHandleToModel( clipHandle_t handle );
-#endif
 qboolean CM_BoundsIntersect( const vec3_t mins, const vec3_t maxs, const vec3_t mins2, const vec3_t maxs2 );
 qboolean CM_BoundsIntersectPoint( const vec3_t mins, const vec3_t maxs, const vec3_t point );
 

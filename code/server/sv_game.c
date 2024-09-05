@@ -135,7 +135,7 @@ static void SV_SetBrushModel( sharedEntity_t *ent, const char *name ) {
 		return;
 	}
 
-#ifdef USE_BSP_MODELS
+#if 0 //def USE_BSP_MODELS
 	if(Q_stristr(name, ".bsp")) {
 		int chechsum, index;
 		// TODO: patch the bsp into the clipmap
@@ -148,7 +148,7 @@ static void SV_SetBrushModel( sharedEntity_t *ent, const char *name ) {
 
 	ent->s.modelindex = atoi( name + 1 );
 
-#ifdef USE_BSP_MODELS
+#if 0 //def USE_BSP_MODELS
 	}
 #endif
 

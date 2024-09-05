@@ -51,8 +51,8 @@ void SetPlaneSignbits( cplane_t *out ) {
 #define	LL(x) x=LittleLong(x)
 
 
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER) || defined(USE_BSP_MODELS)
-clipMap_t cmWorlds[MAX_NUM_MAPS];
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
+clipMap_t cmWorlds[MAX_NUM_VMS];
 int       cmi = 0;
 #else
 clipMap_t	cm;
@@ -75,7 +75,7 @@ cvar_t    *cm_entityString;
 
 cvar_t    *cm_scale;
 
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER) || defined(USE_BSP_MODELS)
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
 static cmodel_t	box_modelWorlds[MAX_NUM_MAPS];
 static cplane_t	*box_planesWorlds[MAX_NUM_MAPS];
 static cbrush_t	*box_brushWorlds[MAX_NUM_MAPS];
@@ -670,9 +670,6 @@ int CM_SwitchMap( int world ) {
 	return prev;
 }
 
-#endif
-
-#if defined(USE_MULTIVM_SERVER) || defined(USE_MULTIVM_CLIENT) || defined(USE_BSP_MODELS)
 
 static void CM_MapList_f(void) {
 	int count = 0;
@@ -720,7 +717,7 @@ CM_LoadMap
 Loads in the map and all submodels
 ==================
 */
-#if defined(USE_MULTIVM_SERVER) || defined(USE_MULTIVM_CLIENT) || defined(USE_BSP_MODELS)
+#if defined(USE_MULTIVM_SERVER) || defined(USE_MULTIVM_CLIENT)
 int CM_LoadMap( const char *name, qboolean clientload, int *checksum ) 
 #else
 void CM_LoadMap( const char *name, qboolean clientload, int *checksum ) 
@@ -730,39 +727,10 @@ void CM_LoadMap( const char *name, qboolean clientload, int *checksum )
 	int				i;
 	dheader_t		header;
 	int				length;
-#ifdef USE_BSP_MODELS
-	int outModel = 0;
-#endif
 
 	if ( !name || !name[0] ) {
 		Com_Error( ERR_DROP, "%s: NULL name", __func__ );
 	}
-
-
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER) || defined(USE_BSP_MODELS)
-	int				j, empty = -1;
-	for(j = 0; j < MAX_NUM_MAPS; j++) {
-		if ( !strcmp( cmWorlds[j].name, name ) /* && clientload */ ) {
-			*checksum = cmWorlds[j].checksum;
-#ifdef USE_BSP_MODELS
-			cmi = 0;
-#else
-			CM_SwitchMap(j);
-#endif
-			Com_DPrintf( "CM_LoadMap( %s, %i ) already loaded\n", name, clientload );
-			return cmi;
-		} else if (cmWorlds[j].name[0] == '\0' && empty == -1) {
-			// fill the next empty clipmap slot
-			empty = j;
-		}
-	}
-	cmi = empty;
-  Com_DPrintf( "%s( '%s', %i )\n", __func__, name, clientload );
-
-	if(cmi == 0) {
-#endif
-
-
 
 #ifndef BSPC
 	cm_noAreas = Cvar_Get( "cm_noAreas", "0", CVAR_CHEAT );
@@ -775,20 +743,31 @@ void CM_LoadMap( const char *name, qboolean clientload, int *checksum )
 	cm_entityString = Cvar_Get ("cm_entityString", "", CVAR_TEMP);
 	Cmd_AddCommand("saveents", CM_SaveEntities);
 #endif
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER) || defined(USE_BSP_MODELS)
+#if defined(USE_MULTIVM_SERVER) || defined(USE_MULTIVM_CLIENT)
 	Cmd_AddCommand("cmlist", CM_MapList_f);
 	//Cmd_SetDescription("cmlist", "List the currently loaded clip maps\nUsage: maplist");
 #endif
 
 	cm_scale = Cvar_Get ("cm_scale", "1.0", CVAR_TEMP);
 
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER) || defined(USE_BSP_MODELS)
+	Com_DPrintf( "%s( '%s', %i )\n", __func__, name, clientload );
+
+#if defined(USE_MULTIVM_SERVER) || defined(USE_MULTIVM_CLIENT)
+	int				j, empty = -1;
+	for(j = 0; j < MAX_NUM_MAPS; j++) {
+		if ( !strcmp( cmWorlds[j].name, name ) /* && clientload */ ) {
+			*checksum = cmWorlds[j].checksum;
+			CM_SwitchMap(j);
+			Com_DPrintf( "CM_LoadMap( %s, %i ) already loaded\n", name, clientload );
+			return cmi;
+		} else if (cmWorlds[j].name[0] == '\0' && empty == -1) {
+			// fill the next empty clipmap slot
+			empty = j;
+		}
 	}
-#endif
-
-	Com_Printf( "%s( '%s', %i )\n", __func__, name, clientload );
-
-#if !defined(USE_MULTIVM_CLIENT) && !defined(USE_MULTIVM_SERVER) && !defined(USE_BSP_MODELS)
+	cmi = empty;
+  Com_DPrintf( "%s( '%s', %i )\n", __func__, name, clientload );
+#else
 
 	if ( !strcmp( cm.name, name ) && clientload ) {
 		*checksum = cm.checksum;
@@ -800,9 +779,6 @@ void CM_LoadMap( const char *name, qboolean clientload, int *checksum )
 
 #endif
 
-#ifdef USE_BSP_MODELS
-	outModel = cmWorlds[0].numSubModels;
-#endif
 #if 0
 	if ( !name[0] ) {
 		cm.numLeafs = 1;
@@ -879,13 +855,8 @@ void CM_LoadMap( const char *name, qboolean clientload, int *checksum )
 		Q_strncpyz( cm.name, name, sizeof( cm.name ) );
 	}
 
-#if defined(USE_BSP_MODELS)
-	cmi = 0;
-	return outModel;
-#else
 #if defined(USE_MULTIVM_SERVER) || defined(USE_MULTIVM_CLIENT)
 	return cmi;
-#endif
 #endif
 }
 
@@ -910,38 +881,13 @@ void CM_ClearMap( void ) {
 CM_ClipHandleToModel
 ==================
 */
-#if 0 //def USE_BSP_MODELS
-cmodel_t *CM_ClipHandleToModel( clipHandle_t handle, int *toCMI ) 
-#else
-cmodel_t *CM_ClipHandleToModel( clipHandle_t handle ) 
-#endif
-{
+cmodel_t *CM_ClipHandleToModel( clipHandle_t handle ) {
 	if ( handle < 0 ) {
 		Com_Error( ERR_DROP, "CM_ClipHandleToModel: bad handle %i", handle );
 	}
-#ifdef USE_BSP_MODELS
-	
-	{
-		int i;
-		int modifiedHandle = (int)handle;
-		for(i = 0; i < MAX_NUM_MAPS; i++) {
-			modifiedHandle -= cmWorlds[i].numSubModels;
-			if ( modifiedHandle < cmWorlds[i].numSubModels ) {
-#if 0
-				if(toCMI) {
-					*toCMI = i;
-				}
-#endif
-				return &cmWorlds[i].cmodels[modifiedHandle];
-			}
-		}
-	}
-
-#else
 	if ( handle < cm.numSubModels ) {
 		return &cm.cmodels[handle];
 	}
-#endif
 	if ( handle == BOX_MODEL_HANDLE ) {
 		return &box_model;
 	}
@@ -960,27 +906,10 @@ cmodel_t *CM_ClipHandleToModel( clipHandle_t handle )
 CM_InlineModel
 ==================
 */
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER) || defined(USE_BSP_MODELS)
-#if defined(USE_BSP_MODELS)
-clipHandle_t CM_InlineModel( int index ) 
-#else
-clipHandle_t CM_InlineModel( int index, int client, int world ) 
-#endif
-{
-	int i;
-	int modifiedIndex = index;
-	for(i = 0; i < MAX_NUM_MAPS; i++) {
-		if ( modifiedIndex >= 0 && modifiedIndex < cmWorlds[i].numSubModels ) {
-			return index;
-		}
-		modifiedIndex -= cmWorlds[i].numSubModels;
-	}
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
+clipHandle_t CM_InlineModel( int index, int client, int world ) {
 	if ( index < 0 || index >= cm.numSubModels ) {
-#if defined(USE_BSP_MODELS)
-		Com_Error (ERR_DROP, "CM_InlineModel: bad number %i >= %i", index, cm.numSubModels);
-#else
 		Com_Error (ERR_DROP, "CM_InlineModel: bad number %i in %i (client: %i, world: %i)", index, cmi, client, world);
-#endif
 	}
 	return index;
 }
@@ -1127,11 +1056,7 @@ CM_ModelBounds
 void CM_ModelBounds( clipHandle_t model, vec3_t mins, vec3_t maxs ) {
 	cmodel_t *cmod;
 
-#if 0 //def USE_BSP_MODELS
-	cmod = CM_ClipHandleToModel( model, NULL );
-#else
 	cmod = CM_ClipHandleToModel( model );
-#endif
 	VectorCopy( cmod->mins, mins );
 	VectorCopy( cmod->maxs, maxs );
 }
