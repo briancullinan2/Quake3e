@@ -2456,6 +2456,11 @@ void RE_LoadWorldMap( const char *name )
 
 	// load it
 	size = ri.FS_ReadFile( strippedName2, &buffer.v );
+#ifdef USE_BSP_MODELS
+	if(!buffer.b && trWorlds[0].world) {
+		return 0;
+	}
+#endif
 	if ( !buffer.b ) {
 		ri.Error( ERR_DROP, "%s: couldn't load %s", __func__, name );
 	}
