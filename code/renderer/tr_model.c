@@ -323,9 +323,12 @@ model_t *R_AllocModel( void ) {
 	mod->index = tr.numModels;
 	tr.models[tr.numModels] = mod;
 
-#if defined(USE_MULTIVM_RENDERER) || defined(USE_BSP_MODELS)
-	if(rwi != 0)
-		trWorlds[0].models[trWorlds[0].numModels++] = mod;
+#if 0 // defined(USE_MULTIVM_RENDERER) || defined(USE_BSP_MODELS)
+	if(rwi != 0) {
+		trWorlds[0].models[trWorlds[0].numModels] = mod;
+		mod->index = trWorlds[0].numModels;
+		trWorlds[0].numModels++;
+	}
 #endif
 
 	tr.numModels++;
@@ -419,7 +422,7 @@ qhandle_t RE_RegisterModel( const char *name ) {
 		ClearSurfaces();
 	}
 
-Com_Printf("model: %s\n", name);
+
 	if( *ext )
 	{
 		// Look for the correct loader and use it
@@ -675,6 +678,7 @@ static qboolean R_LoadMD3( model_t *mod, int lod, void *buffer, int fileSize, co
 				COM_StripExtension(shader->name, strippedName2, MAX_QPATH);
 
 				sh = R_FindShader( strippedName2, LIGHTMAP_NONE, qtrue );
+				Com_Printf("loading: %s, %i\n", strippedName2, sh->defaultShader);
 
 				if(!fname) {
 					fname = strrchr(shader->name, '\\');

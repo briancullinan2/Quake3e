@@ -2533,7 +2533,7 @@ static void SortNewShader( void ) {
 	float	sort;
 	shader_t	*newShader;
 
-#if defined(USE_MULTIVM_RENDERER) || defined(USE_BSP_MODELS)
+#if 0 //defined(USE_MULTIVM_RENDERER) || defined(USE_BSP_MODELS)
 	newShader = trWorlds[0].shaders[ trWorlds[0].numShaders - 1 ];
 	sort = newShader->sort;
 	for ( i = trWorlds[0].numShaders - 2 ; i >= 0 ; i-- ) {
@@ -2596,7 +2596,7 @@ static shader_t *GeneratePermanentShader( void ) {
 	newShader->sortedIndex = tr.numShaders;
 
 	tr.numShaders++;
-#if defined(USE_MULTIVM_RENDERER) || defined(USE_BSP_MODELS)
+#if 0 //defined(USE_MULTIVM_RENDERER) || defined(USE_BSP_MODELS)
 	if(rwi != 0) {
 		trWorlds[0].shaders[ trWorlds[0].numShaders ] = newShader;
 		trWorlds[0].sortedShaders[ trWorlds[0].numShaders ] = newShader;

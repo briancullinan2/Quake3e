@@ -41,6 +41,10 @@ void RE_LoadWorldMap( const char *name );
 int       rwi = 0;
 static 		world_t		s_worldDatas[MAX_WORLD_MODELS];
 #define s_worldData s_worldDatas[rwi]
+#ifdef tr
+#undef tr
+#endif
+#define tr trWorlds[rwi]
 #else
 #ifdef USE_MULTIVM_RENDERER
 #define MAX_WORLD_MODELS MAX_NUM_WORLDS
@@ -1814,7 +1818,7 @@ static void R_LoadSubmodels( const lump_t *l, model_t *inModel ) {
 #ifdef USE_BSP_MODELS
 		if(i == 0 && inModel) {
 			model = inModel;
-			tr.models[++tr.numModels] = model;
+			tr.models[tr.numModels++] = model;
 		} else
 #endif
 		model = R_AllocModel();
