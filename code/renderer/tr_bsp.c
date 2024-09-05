@@ -1814,7 +1814,7 @@ static void R_LoadSubmodels( const lump_t *l, model_t *inModel ) {
 #ifdef USE_BSP_MODELS
 		if(i == 0 && inModel) {
 			model = inModel;
-			//tr.models[++tr.numModels] = model;
+			tr.models[++tr.numModels] = model;
 		} else
 #endif
 		model = R_AllocModel();
