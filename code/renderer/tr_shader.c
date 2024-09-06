@@ -3915,9 +3915,9 @@ R_InitShaders
 ==================
 */
 void R_InitShaders( void ) {
-#if defined(USE_MULTIVM_RENDERER)
+#if defined(USE_MULTIVM_RENDERER) || defined(USE_BSP_MODELS)
 	int i;
-	ri.Printf( PRINT_ALL, "\nInitializing Shaders (%i)\n", rwi );
+	ri.Printf( PRINT_ALL, "\nInitializing Shaders\n" );
   tr.lastRegistrationTime = ri.Milliseconds();
 
 	if(tr.numShaders == 0) {
@@ -3925,8 +3925,8 @@ void R_InitShaders( void ) {
 
 		CreateInternalShaders();
 
-#if defined(USE_MULTIVM_RENDERER)
-for(i = 1; i < MAX_NUM_WORLDS; i++) {
+#if defined(USE_MULTIVM_RENDERER) || defined(USE_BSP_MODELS)
+for(i = 1; i < MAX_WORLD_MODELS; i++) {
 	trWorlds[i].defaultShader = tr.defaultShader;
 	trWorlds[i].cinematicShader = tr.cinematicShader;
 	trWorlds[i].whiteShader = tr.whiteShader;

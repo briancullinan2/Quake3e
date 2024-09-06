@@ -656,6 +656,9 @@ static void ParseFace( const dsurface_t *ds, const drawVert_t *verts, msurface_t
 		numPoints = MAX_FACE_POINTS;
 		surf->shader = tr.defaultShader;
 	}
+	if(!surf->shader) {
+		surf->shader = tr.defaultShader;
+	}
 
 	numIndexes = LittleLong( ds->numIndexes );
 
