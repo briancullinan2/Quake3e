@@ -550,15 +550,18 @@ static void SV_ClipMoveToEntities( moveclip_t *clip ) {
 		passOwnerNum = -1;
 	}
 
-	for ( i=0 ; i<num ; i++ ) {
+	for ( i=0 ; i<sv.num_entities ; i++ ) {
 		if ( clip->trace.allsolid ) {
 			return;
 		}
-		touch = SV_GentityNum( touchlist[i] );
+		touch = SV_GentityNum( i /*touchlist[i]*/ );
+		if(!touch->r.bmodel) {
+			continue;
+		}
 
 		// see if we should ignore this entity
 		if ( clip->passEntityNum != ENTITYNUM_NONE ) {
-			if ( touchlist[i] == clip->passEntityNum ) {
+			if ( i == clip->passEntityNum ) {
 				continue;	// don't clip against the pass entity
 			}
 			if ( touch->r.ownerNum == clip->passEntityNum ) {

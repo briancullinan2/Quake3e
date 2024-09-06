@@ -1688,6 +1688,14 @@ void SV_AddOperatorCommands( void ) {
 	//Cmd_SetDescription( "teleport", "Teleport into the game as if you just connected\nUsage: teleport <client> [xcoord zcoord ycoord]" );
 #endif
 
+//#ifdef USE_MEMORY_MAPS
+	Cmd_AddCommand ("minimap", SV_MakeMinimap);
+	//Cmd_SetDescription( "minimap", "Map minimap files for greater efficiency and atmospheric effects\nUsage: export" );
+	//Cmd_AddCommand ("export", SV_ExportMap);
+	//Cmd_SetDescription( "export", "Export visible map geometry to a .map file\nUsage: export" );
+	//Cmd_AddCommand ("light", SV_LightMap);
+	//Cmd_SetDescription( "light", "Generate lighting for a BSP file.\nUsage: light (fast)" );
+//#endif
 }
 
 
