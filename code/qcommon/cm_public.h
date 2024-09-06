@@ -30,8 +30,11 @@ void		CM_LoadMap( const char *name, qboolean clientload, int *checksum);
 #endif
 void		CM_ClearMap( void );
 
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
+#if defined(USE_MULTIVM_SERVER) || defined(USE_MULTIVM_CLIENT) || defined(USE_BSP_MODELS)
 int		CM_SwitchMap( int world );
+#endif
+
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
 clipHandle_t CM_InlineModel( int index, int client, int world );
 #else
 clipHandle_t CM_InlineModel( int index );		// 0 = world, 1 + are bmodels

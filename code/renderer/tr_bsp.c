@@ -475,8 +475,13 @@ void R_LoadLightmaps( const lump_t *l ) {
 	for ( i = 0 ; i < tr.numLightmaps ; i++ ) {
 		maxIntensity = R_ProcessLightmap( image, buf + i * LIGHTMAP_SIZE * LIGHTMAP_SIZE * 3, maxIntensity );
 		byte *altImage = R_LoadAlternateImage(image, LIGHTMAP_SIZE, LIGHTMAP_SIZE);
+#ifdef USE_BSP_MODELS
+		tr.lightmaps[i] = R_CreateImage( va( "*lightmap%d%i", i, rwi ), NULL, image, LIGHTMAP_SIZE, LIGHTMAP_SIZE,
+			lightmapFlags | IMGFLAG_CLAMPTOEDGE );
+#else
 		tr.lightmaps[i] = R_CreateImage( va( "*lightmap%d", i ), NULL, image, LIGHTMAP_SIZE, LIGHTMAP_SIZE,
 			lightmapFlags | IMGFLAG_CLAMPTOEDGE );
+#endif
 
 		if(altImage && altImage != image) {
 			tr.lightmaps[i]->alternate = R_CreateImage( va( "*lightmapalt%d", i ), NULL, altImage, LIGHTMAP_SIZE, LIGHTMAP_SIZE,

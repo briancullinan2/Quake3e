@@ -1363,33 +1363,7 @@ CM_BoxTrace
 void CM_BoxTrace( trace_t *results, const vec3_t start, const vec3_t end,
 						const vec3_t mins, const vec3_t maxs,
 						clipHandle_t model, int brushmask, qboolean capsule ) {
-#if 1 //ndef USE_BSP_MODELS
 	CM_Trace( results, start, end, mins, maxs, model, vec3_origin, brushmask, capsule, NULL );
-#else
-	trace_t testTrace;
-	float fraction = MAX_QINT;
-	int i = 0; int adjustedModel = model;
-	for(i = 0; i < MAX_NUM_MAPS; i++) {
-		if(!cmWorlds[i].numSubModels) {
-			continue;
-		}
-		cmi = i;
-		//Com_Printf("sub: %i: %i / %i\n", cmi, adjustedModel, cmWorlds[i].numSubModels);
-		CM_Trace( &testTrace, start, end, mins, maxs, adjustedModel, vec3_origin, brushmask, capsule, NULL );
-		if(i == 0 || (/*testTrace.fraction > 0 &&*/ testTrace.fraction < fraction)) {
-			*results = testTrace;
-			fraction = testTrace.fraction;
-		}
-		if(model == 0) {
-			//adjustedModel += cmWorlds[i].numSubModels;
-		} else if (model > cmWorlds[i].numSubModels) {
-			adjustedModel -= cmWorlds[i].numSubModels;
-		} else {
-			break;
-		}
-	}
-	cmi = 0;
-#endif
 }
 
 
@@ -1475,24 +1449,6 @@ void CM_TransformedBoxTrace( trace_t *results, const vec3_t start, const vec3_t 
 	}
 
 	// sweep the box through the model
-#if 1 // ndef USE_BSP_MODELS
-
-#ifdef USE_BSP_MODELS
-	int adjustedModel = model;
-	for(i = 0; i < MAX_NUM_MAPS; i++) {
-		if(!cmWorlds[i].numSubModels) {
-			continue;
-		}
-		cmi = i;
-		if (adjustedModel >= cmWorlds[i].numSubModels) {
-			adjustedModel -= cmWorlds[i].numSubModels;
-		} else {
-			break;
-		}
-	}
-#endif
-Com_Printf("sub: %i, %i\n", model, cmi);
-
 	CM_Trace( &trace, start_l, end_l, symetricSize[0], symetricSize[1], model, origin, brushmask, capsule, &sphere );
 
 	// if the bmodel was rotated and there was a collision
@@ -1509,47 +1465,4 @@ Com_Printf("sub: %i, %i\n", model, cmi);
 	trace.endpos[2] = start[2] + trace.fraction * (end[2] - start[2]);
 
 	*results = trace;
-#else
-	trace_t testTrace;
-	float fraction = MAX_QINT;
-	int adjustedModel = model;
-	for(i = 0; i < MAX_NUM_MAPS; i++) {
-		if(!cmWorlds[i].numSubModels) {
-			continue;
-		}
-		cmi = i;
-		CM_Trace( &trace, start_l, end_l, symetricSize[0], symetricSize[1], adjustedModel, origin, brushmask, capsule, &sphere );
-		if(i == 0 || (/*testTrace.fraction > 0 &&*/ trace.fraction < fraction)) {
-			testTrace = trace;
-			fraction = trace.fraction;
-		}
-		if(model == 0) {
-			//adjustedModel += cmWorlds[i].numSubModels;
-		} else if (model > cmWorlds[i].numSubModels) {
-			adjustedModel -= cmWorlds[i].numSubModels;
-		} else {
-			break;
-		}
-
-	}
-	cmi = 0;
-
-	// if the bmodel was rotated and there was a collision
-	if ( rotated && testTrace.fraction != 1.0 ) {
-		// rotation of bmodel collision plane
-		TransposeMatrix(matrix, transpose);
-		RotatePoint(testTrace.plane.normal, transpose);
-	}
-
-	// re-calculate the end position of the trace because the trace.endpos
-	// calculated by CM_Trace could be rotated and have an offset
-	testTrace.endpos[0] = start[0] + testTrace.fraction * (end[0] - start[0]);
-	testTrace.endpos[1] = start[1] + testTrace.fraction * (end[1] - start[1]);
-	testTrace.endpos[2] = start[2] + testTrace.fraction * (end[2] - start[2]);
-
-	*results = testTrace;
-#endif
-#ifdef USE_BSP_MODELS
-	cmi = 0;
-#endif
 }

@@ -2631,6 +2631,7 @@ static shader_t *GeneratePermanentShader( void ) {
 	return newShader;
 }
 
+#ifndef USE_BSP_MODELS
 
 /*
 =================
@@ -2732,6 +2733,7 @@ static void VertexLightingCollapse( void ) {
 	}
 }
 
+#endif
 
 /*
 ===============
@@ -2972,6 +2974,7 @@ static shader_t *FinishShader( void ) {
 			pStage->alphaGen = AGEN_SKIP;
 	}
 
+#ifndef USE_BSP_MODELS
 	//
 	// if we are in r_vertexLight mode, never use a lightmap texture
 	//
@@ -2980,6 +2983,7 @@ static shader_t *FinishShader( void ) {
 		stage = 1;
 		hasLightmapStage = qfalse;
 	}
+#endif
 
 	// whiteimage + "filter" texture == texture
 	if ( stage > 1 && stages[0].bundle[0].image[0] == tr.whiteImage && stages[0].bundle[0].numImageAnimations <= 1 && stages[0].rgbGen == CGEN_IDENTITY && stages[0].alphaGen == AGEN_SKIP ) {

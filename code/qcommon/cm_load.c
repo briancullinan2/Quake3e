@@ -652,7 +652,7 @@ static void CMod_LoadPatches( const lump_t *surfs, const lump_t *verts ) {
 
 
 
-#if defined(USE_MULTIVM_SERVER) || defined(USE_MULTIVM_CLIENT)
+#if defined(USE_MULTIVM_SERVER) || defined(USE_MULTIVM_CLIENT) || defined(USE_BSP_MODELS)
 /*
 ==================
 CM_SwitchMap
