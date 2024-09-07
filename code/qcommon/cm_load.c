@@ -928,10 +928,10 @@ cmodel_t *CM_ClipHandleToModel( clipHandle_t handle )
 		int i;
 		int modifiedHandle = (int)handle;
 		for(i = 0; i < MAX_NUM_MAPS; i++) {
-			modifiedHandle -= cmWorlds[i].numSubModels;
 			if ( modifiedHandle < cmWorlds[i].numSubModels ) {
 				return &cmWorlds[i].cmodels[modifiedHandle];
 			}
+			modifiedHandle -= cmWorlds[i].numSubModels;
 		}
 	}
 
