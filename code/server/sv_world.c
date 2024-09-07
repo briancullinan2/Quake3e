@@ -578,28 +578,6 @@ static void SV_ClipMoveToEntities( moveclip_t *clip ) {
 		// might intersect, so do an exact clip
 		clipHandle = SV_ClipHandleForEntity (touch);
 
-#ifdef USE_BSP_MODELS
-		int j, numInlines, indexAdjusted = clipHandle;
-
-		// set the right map before entering trace
-		CM_SwitchMap(0);
-		if(indexAdjusted < CM_NumInlineModels()) {
-			continue;
-		} else {
-			for(j = 0; j < 64; j++) {
-				CM_SwitchMap(j);
-				numInlines = CM_NumInlineModels();
-				if(indexAdjusted >= numInlines) {
-					indexAdjusted -= numInlines;
-				} else {
-					break;
-				}
-			}
-		}
-
-#endif
-
-
 		origin = touch->r.currentOrigin;
 		angles = touch->r.currentAngles;
 
@@ -607,10 +585,10 @@ static void SV_ClipMoveToEntities( moveclip_t *clip ) {
 		if ( !touch->r.bmodel ) {
 			angles = vec3_origin;	// boxes don't rotate
 		}
-
-#ifdef USE_BSP_MODELS
+	
+#if 0 //def USE_BSP_MODELS
 		CM_TransformedBoxTrace ( &trace, (float *)clip->start, (float *)clip->end,
-			(float *)clip->mins, (float *)clip->maxs, indexAdjusted,  clip->contentmask,
+			(float *)clip->mins, (float *)clip->maxs, clipHandle,  clip->contentmask,
 			origin, angles, clip->capsule);
 #else
 		CM_TransformedBoxTrace ( &trace, (float *)clip->start, (float *)clip->end,
@@ -637,7 +615,7 @@ static void SV_ClipMoveToEntities( moveclip_t *clip ) {
 			clip->trace.startsolid |= oldStart;
 		}
 	}
-#ifdef USE_BSP_MODELS
+#if 0 //def USE_BSP_MODELS
 	CM_SwitchMap(0);
 #endif
 }
