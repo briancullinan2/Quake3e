@@ -2587,7 +2587,7 @@ if(s_worldData.terrain.terrainImage) {
 	R_LoadLightGrid( &header->lumps[LUMP_LIGHTGRID] );
 
 #ifdef USE_VBO
-//	if(!rwi)
+if(!rwi)
 	R_BuildWorldVBO( s_worldData.surfaces, s_worldData.numsurfaces );
 #endif
 

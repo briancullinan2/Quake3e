@@ -75,13 +75,15 @@ cvar_t    *cm_entityString;
 
 cvar_t    *cm_scale;
 
-static cmodel_t box_model;
 #if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER) || defined(USE_BSP_MODELS)
+static cmodel_t	box_modelWorlds[MAX_NUM_MAPS];
 static cplane_t	*box_planesWorlds[MAX_NUM_MAPS];
 static cbrush_t	*box_brushWorlds[MAX_NUM_MAPS];
+#define box_model box_modelWorlds[cmi]
 #define box_planes box_planesWorlds[cmi]
 #define box_brush box_brushWorlds[cmi]
 #else
+static cmodel_t box_model;
 static cplane_t *box_planes;
 static cbrush_t *box_brush;
 #endif
@@ -826,6 +828,11 @@ void CM_LoadMap( const char *name, qboolean clientload, int *checksum )
 	length = LoadQuakeFile( (quakefile_t *) name, &buf );
 #endif
 
+#if defined(USE_BSP_MODELS)
+	if( !buf && empty > 0 ) {
+		return 0;
+	} else
+#endif
 	if ( !buf ) {
 		Com_Error( ERR_DROP, "%s: couldn't load %s", __func__, name );
 	}
@@ -954,7 +961,7 @@ cmodel_t *CM_ClipHandleToModel( clipHandle_t handle )
 CM_InlineModel
 ==================
 */
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
+#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER) || defined(USE_BSP_MODELS)
 clipHandle_t CM_InlineModel( int index ) 
 {
 	int i;
