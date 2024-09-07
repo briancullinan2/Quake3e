@@ -721,6 +721,7 @@ static intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 		S_StartBackgroundTrack( VMA(1), VMA(2) );
 		return 0;
 	case CG_R_LOADWORLDMAP:
+		// TODO: trigger client clipmap load from bsp load, for inline bsps
 #if defined(USE_MULTIVM_RENDERER)
 		worldMaps[cgvmi_ref] = re.LoadWorld( (char *)VMA(1) );
 #else
