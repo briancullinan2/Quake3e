@@ -1808,12 +1808,7 @@ static void R_LoadSurfaces( const lump_t *surfs, const lump_t *verts, const lump
 R_LoadSubmodels
 =================
 */
-#ifdef USE_BSP_MODELS
-static void R_LoadSubmodels( const lump_t *l, model_t *inModel )
-#else
-static void R_LoadSubmodels( const lump_t *l )
-#endif
-{
+static void R_LoadSubmodels( const lump_t *l, model_t *inModel ) {
 	const dmodel_t *in;
 	bmodel_t	*out;
 	int			i, j, count;
@@ -2578,16 +2573,12 @@ if(s_worldData.terrain.terrainImage) {
 	R_LoadSurfaces( &header->lumps[LUMP_SURFACES], &header->lumps[LUMP_DRAWVERTS], &header->lumps[LUMP_DRAWINDEXES] );
 	R_LoadMarksurfaces( &header->lumps[LUMP_LEAFSURFACES] );
 	R_LoadNodesAndLeafs( &header->lumps[LUMP_NODES], &header->lumps[LUMP_LEAFS] );
-#ifdef USE_BSP_MODELS
 	R_LoadSubmodels( &header->lumps[LUMP_MODELS], model );
-#else
-	R_LoadSubmodels( &header->lumps[LUMP_MODELS] );
-#endif
 	R_LoadVisibility( &header->lumps[LUMP_VISIBILITY] );
 	R_LoadLightGrid( &header->lumps[LUMP_LIGHTGRID] );
 
 #ifdef USE_VBO
-if(!rwi)
+	if(!rwi)
 	R_BuildWorldVBO( s_worldData.surfaces, s_worldData.numsurfaces );
 #endif
 

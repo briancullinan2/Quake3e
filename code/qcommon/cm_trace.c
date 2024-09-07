@@ -1402,8 +1402,7 @@ void CM_TransformedBoxTrace( trace_t *results, const vec3_t start, const vec3_t 
 		int j, numInlines, indexAdjusted;
 
 		// might intersect, so do an exact clip
-		int clipHandle = indexAdjusted = CM_InlineModel (model);
-
+		indexAdjusted = CM_InlineModel (model);
 
 		// set the right map before entering trace
 		cmi = 0;
@@ -1480,7 +1479,7 @@ void CM_TransformedBoxTrace( trace_t *results, const vec3_t start, const vec3_t 
 
 	// sweep the box through the model
 #ifdef USE_BSP_MODELS
-	CM_Trace( &trace, start_l, end_l, symetricSize[0], symetricSize[1], clipHandle, origin, brushmask, capsule, &sphere );
+	CM_Trace( &trace, start_l, end_l, symetricSize[0], symetricSize[1], indexAdjusted, origin, brushmask, capsule, &sphere );
 #else
 	CM_Trace( &trace, start_l, end_l, symetricSize[0], symetricSize[1], model, origin, brushmask, capsule, &sphere );
 #endif

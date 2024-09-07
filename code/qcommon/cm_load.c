@@ -652,7 +652,7 @@ static void CMod_LoadPatches( const lump_t *surfs, const lump_t *verts ) {
 
 
 
-#if defined(USE_MULTIVM_SERVER) || defined(USE_MULTIVM_CLIENT)
+#if defined(USE_MULTIVM_SERVER) || defined(USE_MULTIVM_CLIENT) || defined(USE_BSP_MODELS)
 /*
 ==================
 CM_SwitchMap
@@ -762,11 +762,7 @@ void CM_LoadMap( const char *name, qboolean clientload, int *checksum )
 	if(cmi == 0) {
 #endif
 
-#ifdef USE_BSP_MODELS
-	for(i = 0; i < MAX_NUM_MAPS && i < empty && i < empty; i++) {
-		outModel += cmWorlds[i].numSubModels;
-	}
-#endif
+
 
 #ifndef BSPC
 	cm_noAreas = Cvar_Get( "cm_noAreas", "0", CVAR_CHEAT );
@@ -787,27 +783,28 @@ void CM_LoadMap( const char *name, qboolean clientload, int *checksum )
 	cm_scale = Cvar_Get ("cm_scale", "1.0", CVAR_TEMP);
 
 #if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER) || defined(USE_BSP_MODELS)
+	}
+#endif
 
 	Com_Printf( "%s( '%s', %i )\n", __func__, name, clientload );
 
+#if !defined(USE_MULTIVM_CLIENT) && !defined(USE_MULTIVM_SERVER) && !defined(USE_BSP_MODELS)
+
 	if ( !strcmp( cm.name, name ) && clientload ) {
-		cmi = 0;
 		*checksum = cm.checksum;
-		return outModel;
+		return;
 	}
 
 	// free old stuff
 	CM_ClearMap();
 
-	} else {
-
-		Com_Printf( "%s( '%s', %i )\n", __func__, name, clientload );
-
-	}
 #endif
 
-
-
+#ifdef USE_BSP_MODELS
+	for(i = 0; i < MAX_NUM_MAPS && i < empty; i++) {
+		outModel += cmWorlds[i].numSubModels;
+	}
+#endif
 #if 0
 	if ( !name[0] ) {
 		cm.numLeafs = 1;
@@ -931,10 +928,10 @@ cmodel_t *CM_ClipHandleToModel( clipHandle_t handle )
 		int i;
 		int modifiedHandle = (int)handle;
 		for(i = 0; i < MAX_NUM_MAPS; i++) {
+			modifiedHandle -= cmWorlds[i].numSubModels;
 			if ( modifiedHandle < cmWorlds[i].numSubModels ) {
 				return &cmWorlds[i].cmodels[modifiedHandle];
 			}
-			modifiedHandle -= cmWorlds[i].numSubModels;
 		}
 	}
 
@@ -962,7 +959,11 @@ CM_InlineModel
 ==================
 */
 #if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER) || defined(USE_BSP_MODELS)
+#if defined(USE_BSP_MODELS)
 clipHandle_t CM_InlineModel( int index ) 
+#else
+clipHandle_t CM_InlineModel( int index, int client, int world ) 
+#endif
 {
 	int i;
 	int modifiedIndex = index;
@@ -1125,6 +1126,7 @@ void CM_ModelBounds( clipHandle_t model, vec3_t mins, vec3_t maxs ) {
 	cmodel_t *cmod;
 
 	cmod = CM_ClipHandleToModel( model );
+
 	VectorCopy( cmod->mins, mins );
 	VectorCopy( cmod->maxs, maxs );
 }
