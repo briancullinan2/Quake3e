@@ -257,13 +257,7 @@ typedef struct terrain_s {
 	int terrainHeight;
 	int terrainWidth;
 	qboolean terrainFlip;
-#ifdef USE_BSP_MODELS
-	vec3_t origin; // for CM_TransformedBoxTrace
-	vec3_t angles;
-	vec3_t mins;
-	vec3_t maxs;
-	int clipIndex;
-#endif
+
 } terrain_t;
 
 const char *GetIndexedShader( terrain_t *s_worldData, int numPoints, byte *shaderIndexes );

@@ -2245,22 +2245,6 @@ static void R_LoadLightGrid( const lump_t *l ) {
 }
 
 
-#ifdef USE_BSP_MODELS
-qboolean ParseVector( const char **text, int count, float *v );
-
-
-typedef struct {
-	vec3_t origin;
-	vec3_t angles;
-	char name[MAX_QPATH];
-} expectedModel_t;
-
-expectedModel_t expectedMapModels[MAX_WORLD_MODELS];
-int expectedMapModelCount = 0;
-#endif
-
-
-
 /*
 ================
 R_LoadEntities
@@ -2271,12 +2255,6 @@ static void R_LoadEntities( const lump_t *l ) {
 	char keyname[MAX_TOKEN_CHARS];
 	char value[MAX_TOKEN_CHARS], *v[3];
 	world_t	*w;
-#ifdef USE_BSP_MODELS
-	qboolean inModel = qfalse;
-	qboolean hasValid = qfalse;
-	expectedModel_t expectedModel;
-	memset(&expectedModel, 0, sizeof(expectedModel));
-#endif
 
 	w = &s_worldData;
 	w->lightGridSize[0] = 64;
@@ -2305,16 +2283,6 @@ static void R_LoadEntities( const lump_t *l ) {
 		}
 		Q_strncpyz(keyname, token, sizeof(keyname));
 
-#ifdef USE_BSP_MODELS
-		s = "angles";
-		if (inModel && !Q_strncmp(keyname, s, (int)strlen(s)) ) {
-			ParseVector(&p, 3, expectedModel.angles);
-		} else
-		s = "origin";
-		if (inModel && !Q_strncmp(keyname, s, (int)strlen(s)) ) {
-			ParseVector(&p, 3, expectedModel.origin);
-		} else
-#endif
 		// parse value
 		token = COM_ParseExt( &p, qtrue );
 
@@ -2350,37 +2318,7 @@ static void R_LoadEntities( const lump_t *l ) {
 			continue;
 		}
 
-#ifdef USE_BSP_MODELS
-		s = "model";
-		if (!Q_strncmp(keyname, s, (int)strlen(s)) ) {
-			if(!Q_stristr(value, ".bsp")) {
-				hasValid = qtrue;
-				Q_strncpyz(expectedModel.name, value, MAX_QPATH);
-			}
-		}
-		s = "classname";
-		if (!Q_strncmp(keyname, s, (int)strlen(s)) ) {
-			if(hasValid) {
-				// store before the next model is started so it has time to parse, but doesn't overwrite
-				expectedMapModels[expectedMapModelCount] = expectedModel;
-				expectedMapModelCount++;
-				hasValid = qfalse;
-				memset(&expectedModel, 0, sizeof(expectedModel));
-			}
-			inModel = qfalse;
-			s = "misc_model";
-			if (!Q_strncmp(value, s, (int)strlen(s)) ) {
-				inModel = qtrue;
-			}
-			s = "func_";
-			if (!Q_strncmp(value, s, (int)strlen(s)) ) {
-				inModel = qtrue;
-			}
-		}
-#endif
-
 #ifdef USE_AUTO_TERRAIN
-
 if(r_autoTerrain->integer) {
 		s = "_shader";
 		if (!Q_strncmp(keyname, s, (int)strlen(s)) ) {
@@ -2410,13 +2348,6 @@ if(r_autoTerrain->integer) {
 			w->lightGridSize[2] = Q_atof( v[2] );
 			continue;
 		}
-	}
-	if(hasValid) {
-		// store before the next model is started so it has time to parse, but doesn't overwrite
-		expectedMapModels[expectedMapModelCount] = expectedModel;
-		expectedMapModelCount++;
-		hasValid = qfalse;
-		memset(&expectedModel, 0, sizeof(expectedModel));
 	}
 }
 
@@ -2454,13 +2385,13 @@ Called directly from cgame
 =================
 */
 #ifdef USE_BSP_MODELS
-qhandle_t RE_LoadWorldMap_real( const char *name, model_t *model, int clipIndex );
+qhandle_t RE_LoadWorldMap_real( const char *name, model_t *model );
 
 qhandle_t RE_LoadWorldMap( const char *name ) {
-	return RE_LoadWorldMap_real(name, NULL, 0);
+	return RE_LoadWorldMap_real(name, NULL);
 }
 
-qhandle_t RE_LoadWorldMap_real( const char *name, model_t *model, int clipIndex )
+qhandle_t RE_LoadWorldMap_real( const char *name, model_t *model )
 #else
 #ifdef USE_MULTIVM_RENDERER
 int RE_LoadWorldMap( const char *name )
@@ -2590,21 +2521,6 @@ void RE_LoadWorldMap( const char *name )
 	R_LoadEntities( &header->lumps[LUMP_ENTITIES] );
 
 #ifdef USE_AUTO_TERRAIN
-
-// TODO: try to find this models orientation from the preview world load's entity strings
-#ifdef USE_BSP_MODELS
-	VectorClear(s_worldData.terrain.origin);
-	VectorClear(s_worldData.terrain.angles);
-	for(i = 0; i < MAX_MAP_MODELS && i < expectedMapModelCount; i++) {
-		if(!Q_strncmp(expectedMapModels[i].name, s_worldData.baseName, strlen(s_worldData.baseName))) {
-			VectorCopy(expectedMapModels[i].origin, s_worldData.terrain.origin);
-			VectorCopy(expectedMapModels[i].angles, s_worldData.terrain.angles);
-		}
-	}
-
-	s_worldData.terrain.clipIndex = clipIndex;
-#endif
-
 if(r_autoTerrain->integer) {
 		int j;
 		lump_t *subs = &header->lumps[LUMP_MODELS];
@@ -2643,8 +2559,8 @@ if(s_worldData.terrain.terrainImage) {
 
 		// read the map bounds out of the first submodel (world mesh)
 		for (j=0 ; j<3 ; j++) {
-			s_worldData.terrain.mins[j] = s_worldData.bounds[0][j] = LittleFloat (in->mins[j]);
-			s_worldData.terrain.maxs[j] = s_worldData.bounds[1][j] = LittleFloat (in->maxs[j]);
+			s_worldData.bounds[0][j] = LittleFloat (in->mins[j]);
+			s_worldData.bounds[1][j] = LittleFloat (in->maxs[j]);
 		}
 
 		// as the map loads, check the plane normals and update the shader for the various surfaces
