@@ -746,11 +746,12 @@ void CM_LoadMap( const char *name, qboolean clientload, int *checksum )
 			*checksum = cmWorlds[j].checksum;
 #ifdef USE_BSP_MODELS
 			cmi = 0;
+			return cmWorlds[j].brushIndex;
 #else
 			CM_SwitchMap(j);
-#endif
 			Com_DPrintf( "CM_LoadMap( %s, %i ) already loaded\n", name, clientload );
 			return cmi;
+#endif
 		} else if (cmWorlds[j].name[0] == '\0' && empty == -1) {
 			// fill the next empty clipmap slot
 			empty = j;
@@ -887,6 +888,7 @@ void CM_LoadMap( const char *name, qboolean clientload, int *checksum )
 	}
 
 #if defined(USE_BSP_MODELS)
+	cm.brushIndex = outModel;
 	cmi = 0;
 	return outModel;
 #else
@@ -924,7 +926,7 @@ cmodel_t *CM_ClipHandleToModel( clipHandle_t handle )
 	}
 #ifdef USE_BSP_MODELS
 	
-	{
+	if(handle >= cm.numSubModels) {
 		int i;
 		int modifiedHandle = (int)handle;
 		for(i = 0; i < MAX_NUM_MAPS; i++) {
@@ -934,12 +936,12 @@ cmodel_t *CM_ClipHandleToModel( clipHandle_t handle )
 			modifiedHandle -= cmWorlds[i].numSubModels;
 		}
 	}
-
-#else
+#endif
+//#else
 	if ( handle < cm.numSubModels ) {
 		return &cm.cmodels[handle];
 	}
-#endif
+//#endif
 	if ( handle == BOX_MODEL_HANDLE ) {
 		return &box_model;
 	}

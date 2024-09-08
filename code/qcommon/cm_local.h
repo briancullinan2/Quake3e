@@ -172,6 +172,9 @@ typedef struct {
 	int			checkcount;					// incremented on each trace
 
 	unsigned int checksum;
+#ifdef USE_BSP_MODELS
+	int brushIndex;
+#endif
 } clipMap_t;
 
 

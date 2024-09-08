@@ -3951,6 +3951,8 @@ static void CL_InitRef( void ) {
 	rimp.Hunk_FreeTempMemory = Hunk_FreeTempMemory;
 
 	rimp.CM_BoxTrace = CM_BoxTrace;
+	rimp.CM_TransformedBoxTrace = CM_TransformedBoxTrace;
+	rimp.CM_LoadMap = CM_LoadMap;
 	rimp.CM_ClusterPVS = CM_ClusterPVS;
 	rimp.CM_DrawDebugSurface = CM_DrawDebugSurface;
 
