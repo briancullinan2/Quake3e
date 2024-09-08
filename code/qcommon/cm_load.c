@@ -652,7 +652,7 @@ static void CMod_LoadPatches( const lump_t *surfs, const lump_t *verts ) {
 
 
 
-#if defined(USE_MULTIVM_SERVER) || defined(USE_MULTIVM_CLIENT) || defined(USE_BSP_MODELS)
+#if defined(USE_MULTIVM_SERVER) || defined(USE_MULTIVM_CLIENT)
 /*
 ==================
 CM_SwitchMap
@@ -828,6 +828,7 @@ void CM_LoadMap( const char *name, qboolean clientload, int *checksum )
 
 #if defined(USE_BSP_MODELS)
 	if( !buf && empty > 0 ) {
+		cmi = 0;
 		return 0;
 	} else
 #endif
