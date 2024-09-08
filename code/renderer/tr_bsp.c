@@ -626,6 +626,12 @@ static void GenerateNormals( srfSurfaceFace_t *face )
 
 
 
+#ifdef USE_THE_GRID
+qboolean gridMode;
+drawVert_t *theGrid[64 * 64 * 8];
+#endif
+
+
 
 /*
 ===============
@@ -684,6 +690,16 @@ static void ParseFace( const dsurface_t *ds, const drawVert_t *verts, msurface_t
 		for ( j = 0 ; j < 3 ; j++ ) {
 			cv->points[i][j] = LittleFloat( verts[i].xyz[j] ) * r_scale->value;
 		}
+#ifdef USE_THE_GRID
+		if(gridMode) { // save the tops of every brush in grid mode
+			if(cv->points[i][2] == s_worldData.terrain.mins[2]) {
+
+			} else {
+				//theGrid[(int)round(verts[i].xyz[1] / 256) * 64 + (int)round(verts[i].xyz[0] / 256) * 8] = &tri->verts[i];
+				cv->points[i][2] = s_worldData.terrain.mins[2] + 256;
+			}
+		}
+#endif
 		AddPointToBounds( cv->points[i], cv->bounds[0], cv->bounds[1] );
 		for ( j = 0 ; j < 2 ; j++ ) {
 			cv->points[i][3+j] = LittleFloat( verts[i].st[j] );
@@ -898,6 +914,20 @@ static void ParseTriSurf( const dsurface_t *ds, const drawVert_t *verts, msurfac
 			tri->verts[i].xyz[j] = LittleFloat( verts[i].xyz[j] ) * r_scale->value;
 			tri->verts[i].normal[j] = LittleFloat( verts[i].normal[j] );
 		}
+#ifdef USE_THE_GRID
+		if(gridMode) { // save the tops of every brush in grid mode
+			if(verts[i].xyz[2] == s_worldData.terrain.mins[2]) {
+
+			} else {
+				theGrid[(int)round(verts[i].xyz[1] / 256) * 64 + (int)round(verts[i].xyz[0] / 256) * 8] = &tri->verts[i];
+				tri->verts[i].xyz[2] = s_worldData.terrain.mins[2] + 256;
+			}
+		}
+#endif
+
+#ifdef USE_THE_GRID
+		if(!gridMode) // save the tops of every brush in grid mode
+#endif
 		AddPointToBounds( tri->verts[i].xyz, tri->bounds[0], tri->bounds[1] );
 		for ( j = 0 ; j < 2 ; j++ ) {
 			tri->verts[i].st[j] = LittleFloat( verts[i].st[j] );
@@ -954,37 +984,6 @@ if(r_autoTerrain->integer) {
 }
 #endif
 
-#if 0 //def USE_AUTO_TERRAIN
-{
-	float oneFifth = (s_worldData.bounds[1][2] - s_worldData.bounds[0][2]) / 8;
-	float center = (tri->bounds[1][2] + (tri->bounds[1][2] - tri->bounds[0][2]) / 2) - s_worldData.bounds[0][2]; // + cv->plane.normal[2] * (cv->plane.dist / 2) - s_worldData.bounds[0][2];
-	Com_Printf("oneFifth: %s\n", surf->shader->name);
-
-	//Com_Printf("plane: %f\n", center);
-	if((surf->shader->surfaceFlags & SURF_TERRAIN)
-		|| surf->shader == s_worldData.terrainShader[0]
-		|| surf->shader == s_worldData.terrainShader[1]) {
-		//Com_Printf("normal: %f > %f\n", cv->points[0][2], oneFifth + s_worldData.bounds[0][2]);
-		if(center > (oneFifth * 7) ) {
-			surf->shader = s_worldData.terrainShader[7];
-		} else 
-		if(center > (oneFifth * 6) && tri->verts[0].normal[2] > 1) {
-			surf->shader = s_worldData.terrainShader[6];
-		} else
-		if(center > (oneFifth * 5)) {
-			surf->shader = s_worldData.terrainShader[5];
-		} else
-		if(center > (oneFifth * 4)) {
-			surf->shader = s_worldData.terrainShader[4];
-		} else 
-		if(center > (oneFifth * 3)) {
-			surf->shader = s_worldData.terrainShader[3];
-		} else {
-			surf->shader = s_worldData.terrainShader[2];
-		} 
-	}
-}
-#endif
 
 
 	// copy indexes
@@ -2549,6 +2548,13 @@ void RE_LoadWorldMap( const char *name )
 	if ( size < sizeof( dheader_t ) ) {
 		ri.Error( ERR_DROP, "%s: %s has truncated header", __func__, name );
 	}
+
+#ifdef USE_THE_GRID
+	gridMode = qfalse;
+	if(Q_stristr(name, "terrain/thegrid")) {
+		gridMode = qtrue;
+	}
+#endif
 
 	tr.mapLoading = qtrue;
 

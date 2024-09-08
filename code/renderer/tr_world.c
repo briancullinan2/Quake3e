@@ -99,6 +99,9 @@ static qboolean	R_CullGrid( srfGridMesh_t *cv ) {
 	return qfalse;
 }
 
+#ifdef USE_THE_GRID
+extern qboolean gridMode;
+#endif
 
 /*
 ================
@@ -113,6 +116,12 @@ This will also allow mirrors on both sides of a model without recursion.
 static qboolean	R_CullSurface( const surfaceType_t *surface, shader_t *shader ) {
 	srfSurfaceFace_t *sface;
 	float			d;
+
+#ifdef USE_THE_GRID
+	if(gridMode) {
+		return qfalse;
+	}
+#endif
 
 	if ( r_nocull->integer ) {
 		return qfalse;
@@ -611,6 +620,9 @@ static void R_RecursiveWorldNode( mnode_t *node, unsigned int planeBits, unsigne
 		// if the bounding volume is outside the frustum, nothing
 		// inside can be visible OPTIMIZE: don't do this all the way to leafs?
 
+#ifdef USE_THE_GRID
+	if(!gridMode)
+#endif
 		if ( !r_nocull->integer ) {
 			int		r;
 
@@ -788,6 +800,10 @@ static const byte *R_ClusterPVS (int cluster) {
 	return tr.world->vis + cluster * tr.world->clusterBytes;
 }
 
+#ifdef USE_THE_GRID
+extern qboolean gridMode;
+#endif
+
 /*
 =================
 R_inPVS
@@ -798,6 +814,11 @@ qboolean R_inPVS( const vec3_t p1, const vec3_t p2 ) {
 	const byte	*vis;
 
 	leaf = R_PointInLeaf( p1 );
+#ifdef USE_THE_GRID
+	if(gridMode) {
+		return qtrue;
+	}
+#endif
 #ifdef USE_MULTIVM_RENDERER
 	vis = ri.CM_ClusterPVS( leaf->cluster, tr.viewParms.newWorld );
 #else
@@ -814,6 +835,10 @@ qboolean R_inPVS( const vec3_t p1, const vec3_t p2 ) {
 	}
 	return qtrue;
 }
+
+#ifdef USE_THE_GRID
+extern qboolean gridMode;
+#endif
 
 /*
 ===============
@@ -841,6 +866,17 @@ static void R_MarkLeaves (void) {
 
 	// if the cluster is the same and the area visibility matrix
 	// hasn't changed, we don't need to mark everything again
+
+#ifdef USE_THE_GRID
+	if(gridMode) {
+		//for (i=0 ; i<tr.world->numnodes ; i++) {
+			//if (tr.world->nodes[i].contents != CONTENTS_SOLID) {
+		//		tr.world->nodes[i].visframe = tr.visCount;
+			//}
+		//}
+		return;
+	}
+#endif
 
 	// if r_showcluster was just turned on, remark everything 
 	if ( tr.viewCluster == cluster && !tr.refdef.areamaskModified 

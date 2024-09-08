@@ -175,6 +175,9 @@ typedef struct {
 #ifdef USE_BSP_MODELS
 	int brushIndex;
 #endif
+#ifdef USE_THE_GRID
+	qboolean gridMode;
+#endif
 } clipMap_t;
 
 

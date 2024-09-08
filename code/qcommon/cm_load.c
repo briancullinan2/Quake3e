@@ -90,6 +90,9 @@ static cbrush_t *box_brush;
 
 
 
+
+
+
 static void	CM_InitBoxHull (void);
 void	CM_FloodAreaConnections (void);
 
@@ -364,6 +367,17 @@ static void CMod_LoadPlanes( const lump_t *l )
 		}
 
 		out->dist = LittleFloat( in->dist ) * cm_scale->value;
+
+#if 0 //def USE_THE_GRID
+		if(cm.gridMode) { // save the tops of every brush in grid mode
+			out->normal[j] = 1.0;
+			out->normal[j] = 0.0;
+			out->normal[j] = 0.0;
+			out->dist =  256;
+			bits = 0;
+		}
+#endif
+
 		out->type = PlaneTypeForNormal( out->normal );
 		out->signbits = bits;
 	}
@@ -639,6 +653,18 @@ static void CMod_LoadPatches( const lump_t *surfs, const lump_t *verts ) {
 			points[j][2] = LittleFloat( dv_p->xyz[2] ) * cm_scale->value;
 		}
 
+#ifdef USE_THE_GRID
+		if(cm.gridMode) { // save the tops of every brush in grid mode
+			if(points[j][2] == cm.cmodels[0].mins[2]) {
+
+			} else {
+				//theGrid[(int)round(points[j][1] / 256) * 64 + (int)round(points[j][0] / 256) * 8] = &points[j];
+				points[j][2] = cm.cmodels[0].mins[2] + 256;
+			}
+		}
+#endif
+
+
 		shaderNum = LittleLong( in->shaderNum );
 		patch->contents = cm.shaders[shaderNum].contentFlags;
 		patch->surfaceFlags = cm.shaders[shaderNum].surfaceFlags;
@@ -806,6 +832,15 @@ void CM_LoadMap( const char *name, qboolean clientload, int *checksum )
 		outModel += cmWorlds[i].numSubModels;
 	}
 #endif
+
+#ifdef USE_THE_GRID
+	cm.gridMode = qfalse;
+	if(Q_stristr(name, "terrain/thegrid")) {
+		cm.gridMode = qtrue;
+	}
+#endif
+
+
 #if 0
 	if ( !name[0] ) {
 		cm.numLeafs = 1;

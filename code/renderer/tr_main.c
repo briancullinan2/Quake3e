@@ -55,6 +55,10 @@ refimport_t	ri;
 // point at this for their sorting surface
 static surfaceType_t entitySurface = SF_ENTITY;
 
+#ifdef USE_THE_GRID
+extern qboolean gridMode;
+#endif
+
 /*
 =================
 R_CullLocalBox
@@ -70,6 +74,12 @@ int R_CullLocalBox( const vec3_t bounds[2] ) {
 	cplane_t	*frust;
 	int			anyBack, allOut = 1;
 	int			front, back;
+
+#ifdef USE_THE_GRID
+	if(gridMode) {
+		return CULL_CLIP;
+	}
+#endif
 
 	if ( r_nocull->integer ) {
 		return CULL_CLIP;
@@ -141,6 +151,7 @@ int R_CullLocalPointAndRadius( const vec3_t pt, float radius )
 }
 
 
+
 /*
 ** R_CullPointAndRadius
 */
@@ -150,6 +161,12 @@ int R_CullPointAndRadius( const vec3_t pt, float radius )
 	float	dist;
 	const cplane_t	*frust;
 	qboolean mightBeClipped = qfalse;
+
+#ifdef USE_THE_GRID
+	if(gridMode) {
+		return CULL_CLIP;
+	}
+#endif
 
 	if ( r_nocull->integer ) {
 		return CULL_CLIP;
@@ -191,6 +208,12 @@ int R_CullDlight( const dlight_t* dl )
 	float	dist, dist2;
 	cplane_t	*frust;
 	qboolean mightBeClipped = qfalse;
+
+#ifdef USE_THE_GRID
+	if(gridMode) {
+		return CULL_CLIP;
+	}
+#endif
 
 	if ( r_nocull->integer )
 		return CULL_CLIP;

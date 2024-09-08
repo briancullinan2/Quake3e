@@ -24,9 +24,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define __Q_SHARED_H
 
 
-#define USE_AUTO_TERRAIN 1
-
-
 // q_shared.h -- included first by ALL program modules.
 // A user mod should never modify this file
 
@@ -60,6 +57,11 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define USE_DIDYOUMEAN 1
 
 #define USE_BSP_MODELS 1
+
+#define USE_AUTO_TERRAIN 1
+
+#define USE_THE_GRID 1
+
 //#define USE_MULTIVM_CLIENT 1
 //#ifndef __WASM__
 //#define USE_MULTIVM_SERVER 1
