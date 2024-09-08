@@ -72,7 +72,7 @@ byte GetShaderIndexForPoint( terrain_t *s_worldData, const vec3_t eMinmax[2], co
 
 
 		ri.CM_BoxTrace(&tr, start, end, NULL, NULL, 0, 1 /*MASK_SOLID*/, qfalse);
-		if((tr.endpos[2] - eMinmax[0][2]) / size[2] > 1.0f) { // hit the skybox
+		if((tr.endpos[2] - eMinmax[0][2]) / size[2] > 0.95f) { // hit the skybox
 			start[2] = tr.endpos[2] - 128;
 			ri.CM_BoxTrace(&tr, start, end, NULL, NULL, 0, 1 /*MASK_SOLID*/, qfalse);
 		}
