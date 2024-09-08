@@ -2831,7 +2831,7 @@ void RE_LoadWorldMap( const char *name )
 
 #else
 	if ( tr.worldMapLoaded ) {
-#if defined(__WASM__) || defined(USE_MULTIVM_RENDERER) || defined(USE_LAZY_MEMORY)
+#if defined(__WASM__) || defined(USE_MULTIVM_RENDERER)
   	ri.Printf( PRINT_WARNING, "ERROR: attempted to redundantly load world map\n" );
 #else
 		ri.Error( ERR_DROP, "ERROR: attempted to redundantly load world map" );
@@ -2941,11 +2941,11 @@ if(!s_worldData.terrain.terrainImage) {
 
 #endif
 
+if(!s_worldData.terrain.terrainLayers) {
+	s_worldData.terrain.terrainLayers = 3;
+}
 if(s_worldData.terrain.terrainImage) {
 	// if we have an image but no layers default to 3 i guess
-	if(!s_worldData.terrain.terrainLayers) {
-		s_worldData.terrain.terrainLayers = 3;
-	}
 
 	for ( i = 0; i < s_worldData.terrain.terrainHeight * s_worldData.terrain.terrainWidth * 4; i++ )
 	{

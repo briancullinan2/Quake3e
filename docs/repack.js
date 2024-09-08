@@ -4,10 +4,14 @@ const path = require('path')
 const {glob} = require('glob')
 const {spawnSync} = require('child_process')
 
+const MODNAME = 'demoq3'
+const DEFAULT_MODEL = 'sarge'
+const SOURCE_PATH = path.join(__dirname, '../../docs/')
+const OUTPUT_PATH = path.join(__dirname, '../../docs/maps/')
 
 const SUPPORTED_FORMATS = [
   '.cfg', '.qvm', '.jts', '.bot',
-  '.txt', '.hit',
+  '.txt', '.hit', '.dat', // for fonts
   '.shader', '.shaderx',
   '.crosshair', '.skin', '.font',
   '.config', '.menu',
@@ -21,10 +25,11 @@ const SUPPORTED_FORMATS = [
   //'.md5', '.md3', '.iqm', '.mdr',
   '.dat', 
   //'.map', '.aas', '.bsp', 
+  '.glsl', '.vlsl', '.hlsl'
 ]
 
 // include icons because menu uses it to load, not a lazy check unforntunatly
-const FILE_TYPES = new RegExp('menu\/|gfx\/2d\/|players\/[^\/]*?\/icon.*\.tga|players\/sarge\/|_tracemap\.tga', 'ig')
+const FILE_TYPES = new RegExp('menu\/|fonts\/|gfx\/2d\/|players\/[^\/]*?\/icon.*\.tga|players\/' + DEFAULT_MODEL + '\/|_tracemap\.tga', 'ig')
 
 let lockFunc = false
 let lockPromise
@@ -35,9 +40,9 @@ async function compareZip(pk3File) {
     await lockPromise
   }
   // compare corresponding zip and mtime
-  let sourcePath = path.join(__dirname, '../../docs/', pk3File + 'dir')
-  // form a docs/demoq3/pak0.pk3dir style path
-  let finishedPath = path.join(__dirname, '../../docs/maps/', pk3File)
+  let sourcePath = path.join(SOURCE_PATH, pk3File + 'dir')
+  // form a docs/MODNAME/pak0.pk3dir style path
+  let finishedPath = path.join(OUTPUT_PATH, pk3File)
   if(!finishedPath.includes('.pk3'))
     throw new Error('abort')
 
@@ -81,22 +86,22 @@ async function compareZip(pk3File) {
 
 
 async function convertImage(pk3File) {
-  let sourcePath = path.join(__dirname, '../../docs/')
   let altName = pk3File.replace(path.extname(pk3File), '.tga')
-  let altPath = path.join(sourcePath, altName)
-  let pk3Path = path.join(sourcePath, pk3File)
-  if(fs.existsSync(pk3Path)) {
+  let altPath = path.join(SOURCE_PATH, altName)
+  let pk3Path = path.join(SOURCE_PATH, pk3File)
+  let force = false
+  if((!force && fs.existsSync(pk3Path))) {
     return pk3Path
   }
   // restrict file access for existing files
-  if(pk3File.indexOf('.pk3dir') > -1) {
-    let altFile = path.join(sourcePath, 'demoq3', pk3File.split('/').slice(2).join('/'))
-    if(fs.existsSync(altFile)) {
-      return altFile
-    }
-  }
+  //if(pk3File.indexOf('.pk3dir') > -1) {
+  //  let altFile = path.join(SOURCE_PATH, MODNAME, pk3File.split('/').slice(2).join('/'))
+  //  if(fs.existsSync(altFile)) {
+  //    return altFile
+  //  }
+  //}
   if(!fs.existsSync(altPath)) {
-    altPath = path.join(sourcePath, 'demoq3', pk3File.split('/').slice(2).join('/').replace(path.extname(pk3File), '.tga'))
+    altPath = path.join(SOURCE_PATH, MODNAME, pk3File.split('/').slice(2).join('/').replace(path.extname(pk3File), '.tga'))
     if(fs.existsSync(altPath)) {
       try {
         fs.mkdirSync(path.dirname(pk3Path), { recursive: true });
@@ -105,38 +110,48 @@ async function convertImage(pk3File) {
       }
     }
   }
-  if(!fs.existsSync(pk3Path)
-    && fs.existsSync(altPath)) {
+
+  if( (force || !fs.existsSync(pk3Path)) && fs.existsSync(altPath)) {
 
     let alphaCmd
     try {
-      let alphaProcess = await spawnSync('identify', ['-format', "'%[opaque]'", altPath], {
-        cwd: sourcePath,
+      let alphaProcess = await spawnSync('magick', [altPath, '-scale', '1x1!', '-format', "'%[fx:int(255*a+.5)]'", 'info:-'], {
+        cwd: SOURCE_PATH,
         timeout: 3000,
       })
       alphaCmd = alphaProcess.stdout.toString('utf-8')
+      //console.log(alphaCmd)
+      //console.log(alphaProcess.stderr.toString('utf-8'))
     } catch (e) {
       console.error(e.message, (e.output || '').toString('utf-8').substr(0, 1000))
     }
 
-    if(/* true || TODO: allAlpha? */ alphaCmd.match(/false/ig) && pk3File.indexOf('.png') == -1
-      || !alphaCmd.match(/false/ig) && pk3File.indexOf('.jpg') == -1) {
-        return
+    //const MATCH = /false/ig
+    const MATCH = /'0'|'255'/ig
+    if(/* true || TODO: allAlpha? */ !alphaCmd.match(MATCH) && pk3File.indexOf('.png') == -1
+      || alphaCmd.match(MATCH) && pk3File.indexOf('.jpg') == -1) {
+      if(fs.existsSync(pk3Path)) {
+        fs.unlinkSync(pk3Path)
+      }
+      return
     }
-  
+
+// make all white with correct opacity
+// magick docs/MODNAME/pak0.pk3dir/gfx/misc/smokepuff3.tga -compose CopyOpacity -layers merge docs/MODNAME/pak0.pk3dir/gfx/misc/smokepuff3.png
+
     let imageProcess
     if(pk3File.indexOf('.png') != -1) {
-      imageProcess = await spawnSync('magick', [altPath, altPath, '-alpha', 'off', '-compose', 'copy_opacity', '-composite', '-strip', '-interlace', 'Plane', '-sampling-factor', '4:2:0', '-quality', '50%', '-auto-orient', pk3Path], {
-        cwd: sourcePath,
+      imageProcess = await spawnSync('magick', [altPath, '-auto-orient', '-quality', '50%', pk3Path], {
+        cwd: SOURCE_PATH,
         timeout: 3000,
       })
   
     } else
     imageProcess = await spawnSync('magick', [altPath, '-quality', '50%', pk3Path], {
-      cwd: sourcePath,
+      cwd: SOURCE_PATH,
       timeout: 3000,
     })
-    console.log('magick', [altPath, '-quality', '50%', pk3Path], imageProcess.stdout.toString('utf-8'))
+    //console.log('magick', [altPath, '-quality', '50%', pk3Path], imageProcess.stdout.toString('utf-8'))
     
     await new Promise((resolve) => setTimeout(resolve, 100))
 
@@ -153,13 +168,13 @@ async function checkForRepack(request, response, next) {
   if(isPk3Path) {
     let mapPath = request.originalUrl.substr(request.originalUrl.indexOf('maps/') + 5)
     .replace(/\?.*$/gi, '')
-      // form a docs/demoq3/pak0.pk3dir style path
-    if(fs.existsSync(path.join(__dirname, '../../docs/', mapPath + 'dir'))) {
+      // form a docs/MODNAME/pak0.pk3dir style path
+    if(fs.existsSync(path.join(SOURCE_PATH, mapPath + 'dir'))) {
       // compare contents of folder with contents of corresponding zip and mtime
       await compareZip(mapPath) 
 
       // return pk3 file guarunteed fresh
-      let outputPath = path.join(__dirname, '../../docs/maps/', mapPath)
+      let outputPath = path.join(OUTPUT_PATH, mapPath)
       fs.createReadStream(outputPath).pipe(response);
       return response
     }
@@ -196,8 +211,7 @@ const IMAGE_TYPES = new RegExp('(' + [
 const MATCH_PALETTE = /palette\s"(.*?)"\s([0-9]+(,[0-9]+)*)/ig
 
 async function generatePalette(pk3File) {
-  let sourcePath = path.join(__dirname, '../../docs/')
-  let pk3Path = path.join(sourcePath, pk3File, 'pak0.pk3dir')
+  let pk3Path = path.join(SOURCE_PATH, pk3File, 'pak0.pk3dir')
   if(!fs.existsSync(pk3Path)) {
     return
   }
@@ -266,9 +280,8 @@ async function generatePalette(pk3File) {
 
 
 async function convertAudio(pk3File) {
-  let sourcePath = path.join(__dirname, '../../docs/')
-  let pk3Path = path.join(sourcePath, pk3File)
-  let altPath = path.join(sourcePath, pk3File).replace(path.extname(pk3File), '.ogg')
+  let pk3Path = path.join(SOURCE_PATH, pk3File)
+  let altPath = path.join(SOURCE_PATH, pk3File).replace(path.extname(pk3File), '.ogg')
   if(fs.existsSync(altPath)) {
     console.log('file already exists ' + pk3Path)
     return altPath
@@ -280,7 +293,7 @@ async function convertAudio(pk3File) {
   }
 
   let audioProcess = await spawnSync('oggenc', ['-q', '7', '--quiet', pk3Path, '-n', altPath], {
-    cwd: sourcePath,
+    cwd: SOURCE_PATH,
     timeout: 3000,
   })
 
@@ -300,8 +313,7 @@ const AUDIO_TYPES = new RegExp('(' + [
 
 
 async function convertSounds(pk3File) {
-  let sourcePath = path.join(__dirname, '../../docs/')
-  let pk3Path = path.join(sourcePath, pk3File, 'pak0.pk3dir')
+  let pk3Path = path.join(SOURCE_PATH, pk3File, 'pak0.pk3dir')
   if(!fs.existsSync(pk3Path)) {
     return
   }
@@ -329,9 +341,9 @@ module.exports = checkForRepack
 
 
 if(require.main === module && process.argv[1] == __filename) {
-  generatePalette('demoq3')
-  .then(() => convertSounds('demoq3'))
-  .then(() => compareZip('demoq3/pak0.pk3'))
+  generatePalette(MODNAME)
+  .then(() => convertSounds(MODNAME))
+  .then(() => compareZip(path.join(MODNAME, 'pak0.pk3')))
   .then(result => {
     console.log(result)
   })

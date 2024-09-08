@@ -209,51 +209,61 @@ function clock_gettime(clk_id, tp) {
   return 0
 }
 
+function mktime(tm) {
+  return new Date(
+    HEAP32[(tm >> 2) + 5] + 1900,
+    HEAP32[(tm >> 2) + 4] /* month is already subtracted for mtime */,
+    HEAP32[(tm >> 2) + 3],
+    HEAP32[(tm >> 2) + 2],
+    HEAP32[(tm >> 2) + 1],
+    HEAP32[(tm >> 2) + 0]).getTime() / 1000
+}
+
+function asctime() {
+  // Don't really care what time it is because this is what the engine does
+  //   right above this call
+  return stringToAddress(new Date().toLocaleString())
+}
+
+
+function localtime(t) {
+  // TODO: only uses this for like file names, so doesn't have to be fast
+  debugger
+  let s = STD.sharedMemory + STD.sharedCounter
+  HEAP32[(s + 4 * 1) >> 2] = floor(t / 60)
+  HEAP32[(s + 4 * 1) >> 2] = floor(t / 60 / 60)
+  HEAP32[(s + 4 * 1) >> 2] = floor(t / 60 / 60)
+  /*
+typedef struct qtime_s {
+int tm_sec;     /* seconds after the minute - [0,59]
+int tm_min;     /* minutes after the hour - [0,59]
+int tm_hour;    /* hours since midnight - [0,23]
+int tm_mday;    /* day of the month - [1,31]
+int tm_mon;     /* months since January - [0,11]
+int tm_year;    /* years since 1900
+int tm_wday;    /* days since Sunday - [0,6]
+int tm_yday;    /* days since January 1 - [0,365]
+int tm_isdst;   /* daylight savings time flag 
+} qtime_t;
+*/
+
+}
+
+function ctime(t) {
+  return stringToAddress(new Date(t).toString())
+}
+
+
 var DATE = {
-  mktime: function (tm) {
-    return new Date(
-      HEAP32[(tm >> 2) + 5] + 1900,
-      HEAP32[(tm >> 2) + 4] /* month is already subtracted for mtime */,
-      HEAP32[(tm >> 2) + 3],
-      HEAP32[(tm >> 2) + 2],
-      HEAP32[(tm >> 2) + 1],
-      HEAP32[(tm >> 2) + 0]).getTime() / 1000
-  },
-  asctime: function () {
-    // Don't really care what time it is because this is what the engine does
-    //   right above this call
-    return stringToAddress(new Date().toLocaleString())
-  },
+  mktime: mktime,
+  asctime: asctime,
   time: function () {
     // The pointer returned by localtime (and some other functions) are actually pointers to statically allocated memory.
     // perfect.
     debugger
   },
-  localtime: function (t) {
-    // TODO: only uses this for like file names, so doesn't have to be fast
-    debugger
-    let s = STD.sharedMemory + STD.sharedCounter
-    HEAP32[(s + 4 * 1) >> 2] = floor(t / 60)
-    HEAP32[(s + 4 * 1) >> 2] = floor(t / 60 / 60)
-    HEAP32[(s + 4 * 1) >> 2] = floor(t / 60 / 60)
-    /*
-typedef struct qtime_s {
-  int tm_sec;     /* seconds after the minute - [0,59]
-  int tm_min;     /* minutes after the hour - [0,59]
-  int tm_hour;    /* hours since midnight - [0,23]
-  int tm_mday;    /* day of the month - [1,31]
-  int tm_mon;     /* months since January - [0,11]
-  int tm_year;    /* years since 1900
-  int tm_wday;    /* days since Sunday - [0,6]
-  int tm_yday;    /* days since January 1 - [0,365]
-  int tm_isdst;   /* daylight savings time flag 
-} qtime_t;
-*/
-
-  },
-  ctime: function (t) {
-    return stringToAddress(new Date(t).toString())
-  },
+  localtime: localtime,
+  ctime: ctime,
   Com_RealTime: Com_RealTime,
   // locale time is really complicated
   //   use simple Q3 time structure
@@ -264,6 +274,7 @@ typedef struct qtime_s {
   Sys_gettime: clock_gettime,
   clock_time_get: clock_gettime,
   clock_res_get: function () { debugger },
+  __secs_to_zone: function () { return 0 },
 }
 
 var _emscripten_get_now_is_monotonic = true;
@@ -360,7 +371,9 @@ function updateGlobalBufferAndViews() {
         console.error(exports[i] + 'Location missing')
         continue;
       }
-      window[exports[i]] = window.Module.table.get(funcI)
+      if(window.Module.table.get(funcI)) {
+        window[exports[i]] = window.Module.table.get(funcI)
+      }
     }
   }
 
@@ -468,6 +481,26 @@ function _emscripten_resize_heap(requestedSize) {
   return false
 }
 
+function Sys_longjmp(id, code) {
+  let error = new Error('longjmp', id, code)
+  error.stackPointer = id
+  error.stackCode = code
+  throw error
+}
+
+function Sys_setjmp(id) {
+  try {
+    STD.longjumps[id] = 0 // stackSave()
+  } catch (e) {
+    if (e.message == 'longjmp') {
+      stackRestore(STD.longjumps[jumps[jumps.length - 1]])
+      //Sys_longjmp(STD.longjumps[jumps[jumps.length - 1]], e.stackCode)
+      return
+    }
+    throw e
+  }
+}
+
 
 var STD = {
   longjumps: {},
@@ -478,24 +511,8 @@ var STD = {
   addressToString,
   stringsToMemory,
   __assert_fail: console.assert, // TODO: convert to variadic fmt for help messages
-  Sys_longjmp: function (id, code) {
-    let error = new Error('longjmp', id, code)
-    error.stackPointer = id
-    error.stackCode = code
-    throw error
-  },
-  Sys_setjmp: function (id) {
-    try {
-      STD.longjumps[id] = stackSave()
-    } catch (e) {
-      if (e.message == 'longjmp') {
-        stackRestore(STD.longjumps[jumps[jumps.length - 1]])
-        //Sys_longjmp(STD.longjumps[jumps[jumps.length - 1]], e.stackCode)
-        return
-      }
-      throw e
-    }
-  },
+  Sys_longjmp: Sys_longjmp,
+  Sys_setjmp: Sys_setjmp,
   Sys_fork: Sys_fork,
   Sys_wait: Sys_wait,
   Sys_exec: Sys_exec,

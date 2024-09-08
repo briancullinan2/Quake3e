@@ -451,6 +451,10 @@ void RE_BeginFrame( stereoFrame_t stereoFrame ) {
 
 //void R_LoadLightmaps( const lump_t *l );
 void R_UpdateAlternateImages( void );
+#ifdef USE_PTHREADS
+void CheckAsyncImages( int msec );
+#endif
+
 
 /*
 =============
@@ -486,6 +490,11 @@ void RE_EndFrame( int *frontEndMsec, int *backEndMsec ) {
 	if ( backEndMsec ) {
 		*backEndMsec = backEnd.pc.msec;
 	}
+
+#ifdef USE_PTHREADS
+	CheckAsyncImages( backEnd.refdef.time );
+#endif
+
 	backEnd.pc.msec = 0;
 	backEnd.throttle = qfalse;
 
@@ -513,6 +522,7 @@ void RE_EndFrame( int *frontEndMsec, int *backEndMsec ) {
 
 		ri.Cvar_ResetGroup( CVG_RENDERER, qtrue );
 	}
+
 }
 
 

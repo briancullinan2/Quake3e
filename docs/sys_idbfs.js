@@ -212,7 +212,7 @@ async function readPreFS() {
   // TODO: replace with Com_StartupVariable
   // TODO: CL_Game_f() to switch games with a command, SV_GameRestart_f?
   // TODO: safe to get from query like Com_StartupVariable
-  let basegame = 'demoq3'
+  let basegame = MODNAME
   let argsI = SYS.startArgs.indexOf('fs_game')
   if(argsI == -1) {
     argsI = SYS.startArgs.indexOf('fs_basegame')
@@ -230,4 +230,27 @@ async function readPreFS() {
       '/maps/' + basegame + '/pak1.pk3')
   Com_DL_Perform(basegame + '/pak1.pk3', 
       basegame + '/pak1.pk3', responseData2)
+
+  // write description to pk3dir so that it loads as a pak when the engine starts
+  //   this is key to making async work on fresh loads
+  let nameStr = '/base/' + MODNAME + '/pak0.pk3dir/description.txt'
+  FS_CreatePath(stringToAddress(nameStr))
+  FS.virtual[nameStr] = {
+    timestamp: new Date(),
+    mode: FS_FILE,
+    contents: new Uint8Array('Multiworld\n')
   }
+  writeStore(FS.virtual[nameStr], nameStr)
+
+  // write it in multiple places because of async startup
+  nameStr = '/base/' + MODNAME + '/pak2.pk3dir/description.txt'
+  FS_CreatePath(stringToAddress(nameStr))
+  FS.virtual[nameStr] = {
+    timestamp: new Date(),
+    mode: FS_FILE,
+    contents: new Uint8Array('Multiworld\n')
+  }
+  writeStore(FS.virtual[nameStr], nameStr)
+
+    
+}

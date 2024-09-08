@@ -2533,7 +2533,7 @@ static void SortNewShader( void ) {
 	float	sort;
 	shader_t	*newShader;
 
-#ifdef USE_MULTIVM_RENDERER
+#if 0 //defined(USE_MULTIVM_RENDERER) || defined(USE_BSP_MODELS)
 	newShader = trWorlds[0].shaders[ trWorlds[0].numShaders - 1 ];
 	sort = newShader->sort;
 	for ( i = trWorlds[0].numShaders - 2 ; i >= 0 ; i-- ) {
@@ -2596,10 +2596,12 @@ static shader_t *GeneratePermanentShader( void ) {
 	newShader->sortedIndex = tr.numShaders;
 
 	tr.numShaders++;
-#ifdef USE_MULTIVM_RENDERER
+#if 0 //defined(USE_MULTIVM_RENDERER) || defined(USE_BSP_MODELS)
 	if(rwi != 0) {
 		trWorlds[0].shaders[ trWorlds[0].numShaders ] = newShader;
 		trWorlds[0].sortedShaders[ trWorlds[0].numShaders ] = newShader;
+		newShader->index = trWorlds[0].numShaders;
+		newShader->sortedIndex = trWorlds[0].numShaders;
 		trWorlds[0].numShaders++;
 	}
 #endif
@@ -2629,6 +2631,7 @@ static shader_t *GeneratePermanentShader( void ) {
 	return newShader;
 }
 
+#ifndef USE_BSP_MODELS
 
 /*
 =================
@@ -2730,6 +2733,7 @@ static void VertexLightingCollapse( void ) {
 	}
 }
 
+#endif
 
 /*
 ===============
@@ -2970,6 +2974,7 @@ static shader_t *FinishShader( void ) {
 			pStage->alphaGen = AGEN_SKIP;
 	}
 
+#ifndef USE_BSP_MODELS
 	//
 	// if we are in r_vertexLight mode, never use a lightmap texture
 	//
@@ -2978,6 +2983,7 @@ static shader_t *FinishShader( void ) {
 		stage = 1;
 		hasLightmapStage = qfalse;
 	}
+#endif
 
 	// whiteimage + "filter" texture == texture
 	if ( stage > 1 && stages[0].bundle[0].image[0] == tr.whiteImage && stages[0].bundle[0].numImageAnimations <= 1 && stages[0].rgbGen == CGEN_IDENTITY && stages[0].alphaGen == AGEN_SKIP ) {
@@ -3913,9 +3919,9 @@ R_InitShaders
 ==================
 */
 void R_InitShaders( void ) {
-#if defined(USE_MULTIVM_RENDERER) || defined(USE_MULTIVM_SERVER)
+#if defined(USE_MULTIVM_RENDERER) || defined(USE_BSP_MODELS)
 	int i;
-	ri.Printf( PRINT_ALL, "\nInitializing Shaders (%i)\n", rwi );
+	ri.Printf( PRINT_ALL, "\nInitializing Shaders\n" );
   tr.lastRegistrationTime = ri.Milliseconds();
 
 	if(tr.numShaders == 0) {
@@ -3923,8 +3929,8 @@ void R_InitShaders( void ) {
 
 		CreateInternalShaders();
 
-#if defined(USE_MULTIVM_RENDERER)
-for(i = 1; i < MAX_NUM_WORLDS; i++) {
+#if defined(USE_MULTIVM_RENDERER) || defined(USE_BSP_MODELS)
+for(i = 1; i < MAX_WORLD_MODELS; i++) {
 	trWorlds[i].defaultShader = tr.defaultShader;
 	trWorlds[i].cinematicShader = tr.cinematicShader;
 	trWorlds[i].whiteShader = tr.whiteShader;

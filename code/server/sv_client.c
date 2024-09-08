@@ -2658,9 +2658,7 @@ void SV_ExecuteClientMessage( client_t *cl, msg_t *msg ) {
 
 	cl->messageAcknowledge = MSG_ReadLong( msg );
 
-#ifdef __WASM__
-	if ( cl->messageAcknowledge < 0 ) // {
-#endif
+	// if ( cl->messageAcknowledge < 0 ) {
 	if ( cl->netchan.outgoingSequence - cl->messageAcknowledge <= 0 ) {
 		// usually only hackers create messages like this
 		// it is more annoying for them to let them hanging

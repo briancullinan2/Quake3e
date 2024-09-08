@@ -1200,7 +1200,9 @@ static const char *glDefToStr( GLint define )
 		CASE_STR(GL_RGB);
 		CASE_STR(GL_RGBA);
 		CASE_STR(GL_RGBA4);
+#ifndef __WASM__
 		CASE_STR(GL_RGBA8);
+#endif
 		CASE_STR(GL_RGBA12);
 		CASE_STR(GL_RGBA16);
 		CASE_STR(GL_RGB10_A2);

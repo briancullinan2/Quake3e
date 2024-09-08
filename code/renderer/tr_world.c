@@ -543,6 +543,9 @@ void R_AddBrushModelSurfaces ( trRefEntity_t *ent ) {
 		int s;
 
 		for ( s = 0; s < bmodel->numSurfaces; s++ ) {
+			if((bmodel->firstSurface + s)->shader->surfaceFlags & SURF_SKY) {
+				continue;
+			}
 			R_AddWorldSurface( bmodel->firstSurface + s, 0 );
 		}
 
@@ -556,6 +559,9 @@ void R_AddBrushModelSurfaces ( trRefEntity_t *ent ) {
 				tr.lightCount++;
 				tr.light = dl;
 				for ( s = 0; s < bmodel->numSurfaces; s++ ) {
+					if((bmodel->firstSurface + s)->shader->surfaceFlags & SURF_SKY) {
+						continue;
+					}
 					R_AddLitSurface( bmodel->firstSurface + s, dl );
 				}
 			}
@@ -569,6 +575,9 @@ void R_AddBrushModelSurfaces ( trRefEntity_t *ent ) {
 	R_DlightBmodel( bmodel );
 
 	for ( i = 0 ; i < bmodel->numSurfaces ; i++ ) {
+		if((bmodel->firstSurface + i)->shader->surfaceFlags & SURF_SKY) {
+			continue;
+		}
 		R_AddWorldSurface( bmodel->firstSurface + i, tr.currentEntity->needDlights );
 	}
 #endif

@@ -32,6 +32,15 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include <winsock.h>
 #endif
 
+#if defined(_DEBUG)
+#if defined(__linux__) || defined (__FreeBSD__) || defined (__NetBSD__) || defined (__OpenBSD__) || defined(__APPLE__)
+#include <execinfo.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#endif
+#endif
+
 #include "../client/keys.h"
 
 const int demo_protocols[] = { 66, 67, OLD_PROTOCOL_VERSION, NEW_PROTOCOL_VERSION, 0 };
@@ -308,6 +317,16 @@ void NORETURN FORMAT_PRINTF(2, 3) QDECL Com_Error( errorParm_t code, const char 
 			DebugBreak();
 		}
 	}
+#else
+#if defined(_DEBUG)
+#if defined(__linux__) || defined (__FreeBSD__) || defined (__NetBSD__) || defined (__OpenBSD__) || defined(__APPLE__)
+	{
+		void *syms[10];
+		const size_t size = backtrace( syms, ARRAY_LEN( syms ) );
+		backtrace_symbols_fd( syms, size, STDERR_FILENO );
+	}
+#endif
+#endif
 #endif
 
 	if ( com_errorEntered ) {
@@ -1612,9 +1631,9 @@ qboolean FS_CreatePath( const char *OSPath );
 byte *R_FindPalette(const char *name);
 int Key_GetCatcher( void );
 void Key_SetCatcher( int catcher );
-void stackRestore( void * );
-void *stackSave( void );
-void *stackAlloc(int);
+//void stackRestore( void * );
+//void *stackSave( void );
+//void *stackAlloc(int);
 void S_SoundInfo( void );
 void CL_NextDownload( void );
 void CL_R_FinishImage3( void *img, byte *pic, int picFormat, int numMips );
@@ -1629,9 +1648,9 @@ Q_EXPORT intptr_t Key_ClearStatesLocation = (intptr_t)Key_ClearStates;
 Q_EXPORT intptr_t Key_GetCatcherLocation = (intptr_t)Key_GetCatcher;
 Q_EXPORT intptr_t Key_SetCatcherLocation = (intptr_t)Key_SetCatcher;
 Q_EXPORT intptr_t CL_PacketEventLocation = (intptr_t)CL_PacketEvent;
-Q_EXPORT intptr_t stackRestoreLocation = (intptr_t)stackRestore;
-Q_EXPORT intptr_t stackSaveLocation = (intptr_t)stackSave;
-Q_EXPORT intptr_t stackAllocLocation = (intptr_t)stackAlloc;
+//Q_EXPORT intptr_t stackRestoreLocation = (intptr_t)stackRestore;
+//Q_EXPORT intptr_t stackSaveLocation = (intptr_t)stackSave;
+//Q_EXPORT intptr_t stackAllocLocation = (intptr_t)stackAlloc;
 Q_EXPORT intptr_t S_SoundInfoLocation = (intptr_t)S_SoundInfo;
 Q_EXPORT intptr_t Cbuf_ExecuteTextLocation = (intptr_t)Cbuf_ExecuteText;
 Q_EXPORT intptr_t Cbuf_AddTextLocation = (intptr_t)Cbuf_AddText;
@@ -3157,7 +3176,7 @@ void Com_GameRestart( int checksumFeed, qboolean clientRestart )
 #ifndef DEDICATED
 		// Reparse pure paks and update cvars before FS startup
 		if ( CL_GameSwitch() )
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+#if defined(USE_MULTIVM_CLIENT)
 			CL_SystemInfoChanged( qfalse, 0 );
 #else
 			CL_SystemInfoChanged( qfalse );
@@ -5106,3 +5125,48 @@ void Com_SortFileList( char **list, int nfiles, int fastSort )
 		} while( flag );
 	}
 }
+
+
+#ifdef USE_DIDYOUMEAN
+// source: https://rosettacode.org/wiki/Levenshtein_distance#C
+int levenshtein(const char *s, const char *t)
+{
+  int n = strlen(s);
+  int m = strlen(t);
+  int d[n + 1][m + 1];
+ 
+  if (n == 0) {
+    return m;
+  }
+
+  if (m == 0) {
+    return n;
+  }
+
+  for (int i = 0; i <= n; i++)
+    d[i][0] = i;
+  for (int j = 0; j <= m; j++)
+    d[0][j] = j;
+
+  for (int j = 1; j <= m; j++)
+    for (int i = 1; i <= n; i++)
+      if (s[i - 1] == t[j - 1])
+        d[i][j] = d[i - 1][j - 1];  //no operation
+      else {
+        int min;
+        if(d[i - 1][j] + 1 < d[i][j - 1] + 1) {
+          min = d[i - 1][j] + 1; //a deletion
+        } else {
+          min = d[i - 1][j] + 1; //an insertion
+        }
+        if(min < d[i - 1][j - 1] + 1) {
+          d[i][j] = min;
+        } else {
+          d[i][j] = d[i - 1][j - 1] + 1; //a substitution
+        }
+      }
+
+  return d[n][m];
+}
+#endif
+

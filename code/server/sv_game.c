@@ -70,7 +70,7 @@ playerState_t *SV_GameClientNum( int num ) {
 
 svEntity_t	*SV_SvEntityForGentity( sharedEntity_t *gEnt ) {
 	if ( !gEnt || gEnt->s.number < 0 || gEnt->s.number >= MAX_GENTITIES ) {
-		Com_Error( ERR_DROP, "SV_SvEntityForGentity: bad gEnt" );
+		Com_Error( ERR_DROP, "SV_SvEntityForGentity: bad gEnt: %i", gEnt->s.number );
 		return NULL;
 	}
 	return &sv.svEntities[ gEnt->s.number ];
@@ -135,12 +135,23 @@ static void SV_SetBrushModel( sharedEntity_t *ent, const char *name ) {
 		return;
 	}
 
-	if ( name[0] != '*' ) {
-		Com_Error( ERR_DROP, "SV_SetBrushModel: %s isn't a brush model", name );
+#ifdef USE_BSP_MODELS
+	if(Q_stristr(name, ".bsp")) {
+		int chechsum, index;
+		// TODO: patch the bsp into the clipmap
+		index = CM_LoadMap(name, qfalse, &chechsum);
+//Com_Printf("sub: %i\n", index);
+		ent->s.modelindex = index;
+	} else {
+#endif
+		if ( name[0] != '*' ) {
+			Com_Error( ERR_DROP, "SV_SetBrushModel: %s isn't a brush model", name );
+		}
+
+		ent->s.modelindex = atoi( name + 1 );
+#ifdef USE_BSP_MODELS
 	}
-
-	ent->s.modelindex = atoi( name + 1 );
-
+#endif
 
 #ifdef USE_MULTIVM_SERVER
 	h = CM_InlineModel( ent->s.modelindex, 4, gvmi );

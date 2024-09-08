@@ -142,7 +142,10 @@ static client_t *SV_GetPlayerByNum( void ) {
 }
 
 //=========================================================
-
+#ifdef __WASM__
+qboolean	CL_Download( const char *cmd, const char *pakname, qboolean autoDownload );
+static char alreadyTried[MAX_OSPATH];
+#endif
 
 /*
 ==================
@@ -176,19 +179,33 @@ static void SV_Map_f( void ) {
 	// bypass pure check so we can open downloaded map
 	FS_BypassPure();
 	len = FS_FOpenFileRead( expanded, NULL, qfalse );
-#ifdef __WASM__
-	len = len == -1 ? -1 : FS_FOpenFileRead( expanded2, NULL, qfalse );
-#endif
 	FS_RestorePure();
 	if ( len == -1 ) {
 #ifdef __WASM__
-		qboolean	CL_Download( const char *cmd, const char *pakname, qboolean autoDownload );
-		static char alreadyTried[MAX_OSPATH];
 		if(Q_stricmp(alreadyTried, map) != 0 && CL_Download( Cmd_Argv(0), map, qtrue )) {
 			Q_strncpyz(alreadyTried, map, sizeof(alreadyTried));
 		} else
 #endif
 		Com_Printf( "Can't find map %s\n", expanded );
+#ifdef USE_DIDYOUMEAN
+    char	**dirnames = NULL;
+    int		ndirs = 0;
+    qboolean atLeast1Map = qfalse;
+    dirnames = FS_ListNearestFiles( map, map, &ndirs, 0.5, FS_MATCH_STRIP | FS_MATCH_STICK | FS_MATCH_EXTERN | FS_MATCH_PK3s | FS_MATCH_UNPURE | FS_MATCH_EITHER );
+    for ( int i = 0; i < ndirs; i++ ) {
+      if(Q_stristr(dirnames[i], ".bsp")) {
+        atLeast1Map = qtrue;
+        break;
+      }
+    }
+    if(atLeast1Map) {
+      Com_Printf( "Did you mean?\n" );
+      for ( int i = 0; i < ndirs; i++ ) {
+        if(Q_stristr(dirnames[i], ".bsp"))
+          Com_Printf( "%s\n", dirnames[i] );
+      }
+    }
+#endif
 		return;
 	}
 
@@ -1671,6 +1688,14 @@ void SV_AddOperatorCommands( void ) {
 	//Cmd_SetDescription( "teleport", "Teleport into the game as if you just connected\nUsage: teleport <client> [xcoord zcoord ycoord]" );
 #endif
 
+//#ifdef USE_MEMORY_MAPS
+	Cmd_AddCommand ("minimap", SV_MakeMinimap);
+	//Cmd_SetDescription( "minimap", "Map minimap files for greater efficiency and atmospheric effects\nUsage: export" );
+	//Cmd_AddCommand ("export", SV_ExportMap);
+	//Cmd_SetDescription( "export", "Export visible map geometry to a .map file\nUsage: export" );
+	//Cmd_AddCommand ("light", SV_LightMap);
+	//Cmd_SetDescription( "light", "Generate lighting for a BSP file.\nUsage: light (fast)" );
+//#endif
 }
 
 

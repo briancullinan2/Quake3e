@@ -69,7 +69,6 @@ static void SV_EmitPacketEntities( const clientSnapshot_t *from, const clientSna
 	oldent = NULL;
 	newindex = 0;
 	oldindex = 0;
-	//Com_Printf("world ents: %i -> %i\n", gvmi, to->num_entities);
 	while ( newindex < to->num_entities || oldindex < from_num_entities ) {
 		if ( newindex >= to->num_entities ) {
 			newnum = MAX_GENTITIES+1;
@@ -130,7 +129,7 @@ static void SV_WriteSnapshotToClient( const client_t *client, msg_t *msg ) {
 #ifdef USE_MULTIVM_SERVER
   frame = &client->frames[gvmi][ client->netchan.outgoingSequence & PACKET_MASK ];
 #else
-  frame = &client->frames[ client->netchan.outgoingSequence & PACKET_MASK ];
+	frame = &client->frames[ client->netchan.outgoingSequence & PACKET_MASK ];
 #endif
 
 	// try to use a previous frame as the source for delta compressing the snapshot
@@ -154,7 +153,7 @@ static void SV_WriteSnapshotToClient( const client_t *client, msg_t *msg ) {
 #ifdef USE_MULTIVM_SERVER
 		oldframe = &client->frames[gvmi][ client->deltaMessage & PACKET_MASK ];
 #else
-    oldframe = &client->frames[ client->deltaMessage & PACKET_MASK ];
+		oldframe = &client->frames[ client->deltaMessage & PACKET_MASK ];
 #endif
 		lastframe = client->netchan.outgoingSequence - client->deltaMessage;
 		// we may refer on outdated frame
@@ -673,7 +672,7 @@ static void SV_BuildCommonSnapshot( void )
 #ifdef USE_MULTIVM_SERVER
 		for ( num = 0 ; num < sv.num_entitiesWorlds[gvmi] ; num++ ) {
 #else
-    for ( num = 0 ; num < sv.num_entities ; num++ ) {
+		for ( num = 0 ; num < sv.num_entities ; num++ ) {
 #endif
 			ent = SV_GentityNum( num );
 
@@ -704,7 +703,7 @@ static void SV_BuildCommonSnapshot( void )
 #else
 	sf = &svs.snapFrames[ svs.snapshotFrame % NUM_SNAPSHOT_FRAMES ];
 #endif
-
+	
 	// track last valid frame
 	if ( svs.snapshotFrame - svs.lastValidFrame > (NUM_SNAPSHOT_FRAMES-1) ) {
 		svs.lastValidFrame = svs.snapshotFrame - (NUM_SNAPSHOT_FRAMES-1);
@@ -779,7 +778,7 @@ static void SV_BuildClientSnapshot( client_t *client ) {
 #ifdef USE_MULTIVM_SERVER
 	frame = &client->frames[gvmi][ client->netchan.outgoingSequence & PACKET_MASK ];
 #else
-  frame = &client->frames[ client->netchan.outgoingSequence & PACKET_MASK ];
+	frame = &client->frames[ client->netchan.outgoingSequence & PACKET_MASK ];
 #endif
 	cl = client - svs.clients;
 
@@ -790,7 +789,7 @@ static void SV_BuildClientSnapshot( client_t *client ) {
 	// https://zerowing.idsoftware.com/bugzilla/show_bug.cgi?id=62
 	frame->num_entities = 0;
 	frame->frameNum = svs.currentSnapshotFrame;
-
+	
 	if ( client->state == CS_ZOMBIE )
 		return;
 
@@ -806,14 +805,10 @@ static void SV_BuildClientSnapshot( client_t *client ) {
 	// we set client->gentity only after sending gamestate
 	// so don't send any packetentities changes until CS_PRIMED
 	// because new gamestate will invalidate them anyway
-#ifndef USE_MULTIVM_SERVER
 	if ( !client->gentity ) {
 		return;
 	}
 
-#endif
-
-	//	Com_Printf("common ents: %i -> %i\n", gvmi, svs.currFrame);
 	if ( svs.currFrame == NULL ) {
 		// this will always success and setup current frame
 		SV_BuildCommonSnapshot();
@@ -874,7 +869,6 @@ static void SV_BuildClientSnapshot( client_t *client ) {
 	}
 
 	frame->num_entities = entityNumbers.numSnapshotEntities;
-	//Com_Printf("frame: %i -> %i\n", gvmi, frame->num_entities);
 	// get pointers from common snapshot
 	for ( i = 0 ; i < entityNumbers.numSnapshotEntities ; i++ )	{
 		frame->ents[ i ] = svs.currFrame->ents[ entityNumbers.snapshotEntities[ i ] ];
@@ -897,9 +891,9 @@ void SV_SendMessageToClient( msg_t *msg, client_t *client )
 	client->frames[gvmi][client->netchan.outgoingSequence & PACKET_MASK].messageSent = svs.msgTime;
 	client->frames[gvmi][client->netchan.outgoingSequence & PACKET_MASK].messageAcked = 0;
 #else
-  client->frames[client->netchan.outgoingSequence & PACKET_MASK].messageSize = msg->cursize;
-  client->frames[client->netchan.outgoingSequence & PACKET_MASK].messageSent = svs.msgTime;
-  client->frames[client->netchan.outgoingSequence & PACKET_MASK].messageAcked = 0;
+	client->frames[client->netchan.outgoingSequence & PACKET_MASK].messageSize = msg->cursize;
+	client->frames[client->netchan.outgoingSequence & PACKET_MASK].messageSent = svs.msgTime;
+	client->frames[client->netchan.outgoingSequence & PACKET_MASK].messageAcked = 0;
 #endif
 
 	// send the datagram

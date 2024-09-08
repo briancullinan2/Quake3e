@@ -74,7 +74,7 @@ function Sys_FOpen(filename, mode) {
   let fileStr = addressToString(filename)
 	let extName
 	if(fileStr.includes('.')) {
-		extName = fileStr.substring(fileStr.indexOf('.')).toLowerCase()
+		extName = fileStr.substring(fileStr.lastIndexOf('.')).toLowerCase()
 	}
   let modeStr = addressToString(mode)
   let localName = fileStr

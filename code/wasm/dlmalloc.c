@@ -6081,7 +6081,7 @@ int mspace_mallopt(int param_number, int value) {
 // in their code, and make those replacements refer to the original dlmalloc
 // and dlfree from this file.
 // This allows an easy mechanism for hooking into memory allocation.
-#if (defined(__EMSCRIPTEN__) || defined(__WASM__)) && !ONLY_MSPACES
+#if (defined(__EMSCRIPTEN__) || defined(__WASM__))
 extern __typeof(malloc) emscripten_builtin_malloc __attribute__((alias("dlmalloc")));
 extern __typeof(free) emscripten_builtin_free __attribute__((alias("dlfree")));
 extern __typeof(memalign) emscripten_builtin_memalign __attribute__((alias("dlmemalign")));

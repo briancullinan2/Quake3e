@@ -1,7 +1,7 @@
 // Launcher program for web browser and .wasm builds
 let isStreaming = false
 
-var ENV = window.ENV = {}
+const ENV = {}
 ENV.ENV = ENV
 
 

@@ -1098,6 +1098,7 @@ void Cmd_CompleteWriteCfgName( const char *args, int argNum ) {
 	}
 }
 
+static void Cmd_Help_f( void );
 
 /*
 ============
@@ -1114,4 +1115,90 @@ void Cmd_Init( void ) {
 	Cmd_SetCommandCompletionFunc( "vstr", Cvar_CompleteCvarName );
 	Cmd_AddCommand ("echo",Cmd_Echo_f);
 	Cmd_AddCommand ("wait", Cmd_Wait_f);
+	Cmd_AddCommand ("help", Cmd_Help_f);
+}
+
+
+/*
+============
+Cmd_Help
+
+Prints the value, default, and latched string of the given variable
+============
+*/
+static void Cmd_Help( const cmd_function_t *cmd ) {	
+	Com_Printf ("\"%s\" " S_COLOR_WHITE "",
+		cmd->name );
+
+	Com_Printf (" autocomplete:\"%s" S_COLOR_WHITE "\"",
+		cmd->complete ? "yes" : "no" );
+
+	Com_Printf ("\n");
+
+	//if ( cmd->description ) {
+	//	Com_Printf( "%s\n", cmd->description );
+	//}
+}
+
+
+/*
+============
+Cmd_Help_f
+
+Prints the contents of a cvar 
+(preferred over Cvar_Command where cvar names and commands conflict)
+============
+*/
+static void Cmd_Help_f( void )
+{
+	char *name;
+	cmd_function_t *cmd;
+
+	if(Cmd_Argc() != 2)
+	{
+		Com_Printf ("List all commands using \\cmdlist\nUsage: help <command>\n");
+		return;
+	}
+
+	name = CopyString(Cmd_Argv(1));
+
+	if(!Q_stricmp("all", name)) {
+		for( cmd = cmd_functions; cmd; cmd = cmd->next ) {
+			Cmd_Help(cmd);
+		}
+		return;
+	}
+
+	Cmd_TokenizeString(name);
+	if(Cvar_Command()) {
+		Z_Free(name);
+		return;
+	}
+	
+	cmd = Cmd_FindCommand( name );
+	
+	if(cmd)
+		Cmd_Help(cmd);
+	else {
+		Com_Printf ("Command %s does not exist.\n", name);
+#ifdef USE_DIDYOUMEAN
+    int matchCount = 0;
+    qboolean cmdMatch;
+    for(cmd_function_t *cmd = cmd_functions; cmd; cmd = cmd->next)
+  	{
+      if(!cmd->name) continue;
+      int length = strlen(cmd->name);
+      cmdMatch = (float)levenshtein( name, cmd->name ) / length <= 0.25;
+      if(cmdMatch) {
+        if(matchCount == 0) {
+          Com_Printf("Did you mean?\n");
+        }
+        matchCount++;
+        Com_Printf( "%s\n", cmd->name );
+      }
+    }
+#endif
+  }
+
+	Z_Free(name);
 }

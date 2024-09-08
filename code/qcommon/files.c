@@ -38,6 +38,13 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //#define USE_MULTIFS 1
 #endif
 
+#ifdef USE_PTHREADS
+
+#include <pthread.h>
+pthread_mutex_t read_file_sync;
+#endif
+
+
 /*
 =============================================================================
 
@@ -261,8 +268,12 @@ static int getAltChecksum(const char *pakName, int *altChecksum);
 #define USE_PK3_CACHE
 #define USE_PK3_CACHE_FILE
 
+#ifndef __WASM__
+#ifndef USE_PTHREADS
 #define USE_HANDLE_CACHE
 #define MAX_CACHED_HANDLES 384
+#endif
+#endif
 
 #define MAX_ZPATH			256
 #define MAX_FILEHASH_SIZE	4096
@@ -2156,7 +2167,22 @@ Filename are relative to the quake search path
 a null buffer will just return the file length without loading
 ============
 */
+#ifdef USE_PTHREADS
+int FS_ReadFile2( const char *qpath, void **buffer );
+
 int FS_ReadFile( const char *qpath, void **buffer ) {
+	int result;
+	pthread_mutex_lock(&read_file_sync);
+	result = FS_ReadFile2(qpath, buffer);
+	pthread_mutex_unlock(&read_file_sync);
+	return result;
+}
+
+int FS_ReadFile2( const char *qpath, void **buffer ) 
+#else
+int FS_ReadFile( const char *qpath, void **buffer ) 
+#endif
+{
 	fileHandle_t	h;
 	byte*			buf;
 	qboolean		isConfig;
@@ -2197,7 +2223,11 @@ int FS_ReadFile( const char *qpath, void **buffer ) {
 				return len;
 			}
 
+#ifdef USE_PTHREADS
+			buf = malloc( len + 1 );
+#else
 			buf = Hunk_AllocateTempMemory(len+1);
+#endif
 			*buffer = buf;
 
 			r = FS_Read( buf, len, com_journalDataFile );
@@ -2243,7 +2273,11 @@ int FS_ReadFile( const char *qpath, void **buffer ) {
 		return len;
 	}
 
+#ifdef USE_PTHREADS
+	buf = malloc( len + 1 );
+#else
 	buf = Hunk_AllocateTempMemory( len + 1 );
+#endif
 	*buffer = buf;
 
 	FS_Read( buf, len, h );
@@ -2272,6 +2306,10 @@ FS_FreeFile
 =============
 */
 void FS_FreeFile( void *buffer ) {
+#ifdef USE_PTHREADS
+	pthread_mutex_lock(&read_file_sync);
+#endif
+
 	if ( !fs_searchpaths ) {
 		Com_Error( ERR_FATAL, "Filesystem call made without initialization" );
 	}
@@ -2280,12 +2318,20 @@ void FS_FreeFile( void *buffer ) {
 	}
 	fs_loadStack--;
 
+#ifdef USE_PTHREADS
+	free(buffer);
+#else
 	Hunk_FreeTempMemory( buffer );
+#endif
 
 	// if all of our temp files are free, clear all of our space
 	if ( fs_loadStack == 0 ) {
 		Hunk_ClearTempMemory();
 	}
+
+#ifdef USE_PTHREADS
+	pthread_mutex_unlock(&read_file_sync);
+#endif
 }
 
 
@@ -3378,6 +3424,142 @@ void FS_SetFilenameCallback( fnamecallback_f func )
 }
 
 
+#ifdef USE_DIDYOUMEAN
+/*
+===============
+FS_ListNearestFiles
+
+Returns a uniqued list of files that partial match the given criteria
+from all or filtered search paths using a levenshtein 
+divisor strlen(x) / n differences < allowed percent
+===============
+*/
+char **FS_ListNearestFiles( const char *pathFilter, const char *filter, int *numfiles, float matchDivisor, int flags ) {
+  static char normalName[MAX_OSPATH];
+	int				nfiles;
+	char			**listCopy;
+	char			*list[MAX_FOUND_FILES];
+	searchpath_t	*search;
+	int				i;
+	int				length;
+	fileInPack_t	*buildBuffer;
+
+	if ( !fs_searchpaths )
+	{
+		Com_Error( ERR_FATAL, "Filesystem call made without initialization" );
+	}
+
+	if  ( fs_numServerPaks && !( flags & FS_MATCH_STICK ) ) {
+		flags &= ~FS_MATCH_UNPURE;
+	}
+
+	nfiles = 0;
+
+	for (search = fs_searchpaths ; search ; search = search->next) {
+		if ( search->pack && ( flags & FS_MATCH_PK3s ) ) {
+      qboolean pathMatches;
+
+			if ( !FS_PakIsPure( search->pack ) && !( flags & FS_MATCH_UNPURE ) ) {
+				continue;
+			}
+
+      length = strlen(search->pack->pakBasename);
+      pathMatches = pathFilter && pathFilter[0] != '\0' 
+        && matchDivisor > 0 
+        && (float)levenshtein( pathFilter, search->pack->pakBasename ) / length < matchDivisor;
+
+			// look through all the pak file elements
+			buildBuffer = search->pack->buildBuffer;
+			for (i = 0; i < search->pack->numfiles; i++) {
+				const char *name;
+        qboolean matches;
+
+				name = buildBuffer[i].name;
+        length = strlen( name );
+
+				matches = filter && filter[0] != '\0' 
+          && matchDivisor > 0 
+          && (float)levenshtein( filter, name ) / length < matchDivisor;
+
+        if((!(flags & FS_MATCH_EITHER) && pathMatches && matches)
+          || ((flags & FS_MATCH_EITHER) && (pathMatches || matches)))
+          nfiles = FS_AddFileToList( buildBuffer[i].name, list, nfiles );
+        else if (flags & FS_MATCH_STRIP) {
+          name = FS_SimpleFilename(buildBuffer[i].name);
+          COM_StripExtension(name, normalName, MAX_QPATH);
+          length = strlen( normalName );
+
+          matches = filter && filter[0] != '\0' 
+            && matchDivisor > 0 
+            && (float)levenshtein( filter, normalName ) / length < matchDivisor;
+
+          if((!(flags & FS_MATCH_EITHER) && pathMatches && matches)
+            || ((flags & FS_MATCH_EITHER) && (pathMatches || matches)))
+            nfiles = FS_AddFileToList( buildBuffer[i].name, list, nfiles );
+        }
+			}
+		} else if ( search->dir && ( flags & FS_MATCH_EXTERN ) && search->policy != DIR_DENY ) { // scan for files in the filesystem
+			const char *netpath;
+			int		numSysFiles;
+			char	**sysFiles;
+			const char *name;
+      qboolean pathMatches;
+
+      length = strlen(search->dir->gamedir);
+      pathMatches = pathFilter && pathFilter[0] != '\0' 
+        && matchDivisor > 0 
+        && (float)levenshtein( pathFilter, search->dir->gamedir ) / length < matchDivisor;
+
+			netpath = FS_BuildOSPath( search->dir->path, search->dir->gamedir, "" );
+			sysFiles = Sys_ListFiles( netpath, "", "", &numSysFiles, qtrue );
+			for ( i = 0 ; i < numSysFiles ; i++ ) {
+        qboolean matches;
+
+				name = sysFiles[ i ];
+				length = strlen( name );
+
+        matches = filter && filter[0] != '\0' 
+          && matchDivisor > 0 
+          && (float)levenshtein( filter, name ) / length < matchDivisor;
+
+        if((!(flags & FS_MATCH_EITHER) && pathMatches && matches)
+          || ((flags & FS_MATCH_EITHER) && (pathMatches || matches)))
+  				nfiles = FS_AddFileToList( sysFiles[ i ], list, nfiles );
+        else if (flags & FS_MATCH_STRIP) {
+          name = FS_SimpleFilename(sysFiles[ i ]);
+          COM_StripExtension(name, normalName, MAX_QPATH);
+          length = strlen( normalName );
+          
+          matches = filter && filter[0] != '\0' 
+            && matchDivisor > 0 
+            && (float)levenshtein( filter, normalName ) / length < matchDivisor;
+
+          if((!(flags & FS_MATCH_EITHER) && pathMatches && matches)
+            || ((flags & FS_MATCH_EITHER) && (pathMatches || matches)))
+            nfiles = FS_AddFileToList( sysFiles[ i ], list, nfiles );
+        }
+			}
+			Sys_FreeFileList( sysFiles );
+		}		
+	}
+
+	*numfiles = nfiles;
+
+	if ( !nfiles ) {
+		return NULL;
+	}
+
+	listCopy = Z_Malloc( ( nfiles + 1 ) * sizeof( listCopy[0] ) );
+	for ( i = 0 ; i < nfiles ; i++ ) {
+		listCopy[i] = list[i];
+	}
+	listCopy[i] = NULL;
+
+	return listCopy;
+}
+#endif
+
+
 /*
 ===============
 FS_ListFilteredFiles
@@ -3477,7 +3659,11 @@ static char **FS_ListFilteredFiles( const char *path, const char *extension, con
 					}
 
 					// check for extension match
-					length = (int)strlen( name );
+					if(extLen == 1 && extension[0] == '/') {
+						length = (int)strlen( zpath );
+					} else {
+						length = (int)strlen( name );
+					}
 
 					if ( fnamecallback ) {
 						// use custom filter
@@ -3493,8 +3679,14 @@ static char **FS_ListFilteredFiles( const char *path, const char *extension, con
 									continue;
 								}
 							} else {
-								if ( Q_stricmp( name + length - extLen, extension ) ) {
-									continue;
+								if(extLen == 1 && extension[0] == '/') {
+									if ( Q_stricmpn( name + length, extension, extLen ) ) {
+										continue;
+									}
+								} else {
+									if ( Q_stricmp( name + length - extLen, extension ) ) {
+										continue;
+									}
 								}
 							}
 						}
@@ -3505,7 +3697,11 @@ static char **FS_ListFilteredFiles( const char *path, const char *extension, con
 					if (pathLength) {
 						temp++;		// include the '/'
 					}
-					nfiles = FS_AddFileToList( name + temp, list, nfiles );
+					if(extLen == 1 && extension[0] == '/') {
+						nfiles = FS_AddFileToList( zpath + temp, list, nfiles );
+					} else {
+						nfiles = FS_AddFileToList( name + temp, list, nfiles );
+					}
 				}
 			}
 		} else if ( search->dir 
@@ -4759,6 +4955,10 @@ static void FS_Startup( void ) {
 	const char *homePath;
 	int i, start, end;
 
+#ifdef USE_PTHREADS
+	pthread_mutex_init(&read_file_sync, NULL);
+#endif
+
 	Com_Printf( "----- FS_Startup -----\n" );
 
 	fs_debug = Cvar_Get( "fs_debug", "0", 0 );
@@ -5231,6 +5431,7 @@ const char *FS_ReferencedPakChecksums( void ) {
 
 #ifdef __WASM__
 
+extern vm_t *cgvm;
 qboolean fs_cgameSawAsync = qfalse;
 qboolean fs_uiSawAsync = qfalse;
 qboolean fs_gameSawAsync = qfalse;
@@ -5243,13 +5444,21 @@ int FS_GetAsyncFiles(char **files, int max) {
 	for(i = 0; i < max && i < numAsyncFiles; i++) {
 		files[i] = asyncFiles[i];
 	}
+	if(fs_cgameSawAsync
+	|| (!cgvm && fs_uiSawAsync) /*&& fs_uiSawAsync
+		&& (!com_sv_running->integer || fs_gameSawAsync)*/
+	) {
+		numAsyncFiles = 0;
+		asyncFiles[numAsyncFiles][0] = '\0';
+	}
 	return i;
 }
 
 
 Q_EXPORT void FS_RecordFile(const char *file) {
 
-	if(fs_cgameSawAsync /*&& fs_uiSawAsync
+	if(fs_cgameSawAsync
+	|| (!cgvm && fs_uiSawAsync) /*&& fs_uiSawAsync
 		&& (!com_sv_running->integer || fs_gameSawAsync)*/
 	) {
 		numAsyncFiles = 0;
@@ -5841,6 +6050,15 @@ int FS_FTell( fileHandle_t f ) {
 void FS_Flush( fileHandle_t f ) 
 {
 	fflush( fsh[f].handleFiles.file.o );
+}
+
+
+const char *FS_SimpleFilename(const char *filename) {
+  static char normalName[MAX_OSPATH];
+  const char *basename = strrchr( filename, PATH_SEP );
+  basename = basename == NULL ? filename : (basename + 1);
+  COM_StripExtension(basename, normalName, MAX_QPATH);
+  return normalName;
 }
 
 

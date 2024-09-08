@@ -28,12 +28,12 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
 // surface geometry should not exceed these limits
-#define	SHADER_MAX_VERTEXES	8000
+#define	SHADER_MAX_VERTEXES	50000
 #define	SHADER_MAX_INDEXES	(6*SHADER_MAX_VERTEXES)
 
 
 // the maximum size of game relative pathnames
-#define	MAX_QPATH		64
+#define	MAX_QPATH		128
 
 /*
 ========================================================================
@@ -93,7 +93,7 @@ typedef struct md3Frame_s {
 } md3Frame_t;
 
 typedef struct md3Tag_s {
-	char		name[MAX_QPATH];	// tag name
+	char		name[64];	// tag name
 	vec3_t		origin;
 	vec3_t		axis[3];
 } md3Tag_t;
@@ -111,7 +111,7 @@ typedef struct md3Tag_s {
 typedef struct {
 	int32_t ident;				//
 
-	char	name[MAX_QPATH];	// polyset name
+	char	name[64];	// polyset name
 
 	int32_t flags;
 	int32_t numFrames;			// all surfaces in a model should have the same
@@ -130,7 +130,7 @@ typedef struct {
 } md3Surface_t;
 
 typedef struct {
-	char			name[MAX_QPATH];
+	char			name[64];
 	int				shaderIndex;	// for in-game use
 } md3Shader_t;
 
@@ -151,7 +151,7 @@ typedef struct {
 	int32_t		ident;
 	int32_t		version;
 
-	char		name[MAX_QPATH];	// model name
+	char		name[64];	// model name
 
 	uint32_t	flags;
 
@@ -215,8 +215,8 @@ typedef struct {
 typedef struct {
 	int			ident;
 
-	char		name[MAX_QPATH];	// polyset name
-	char		shader[MAX_QPATH];
+	char		name[64];	// polyset name
+	char		shader[64];
 	int			shaderIndex;	// for in-game use
 
 	int			ofsHeader;	// this will be a negative number
@@ -276,7 +276,7 @@ typedef struct {
 	int			ident;
 	int			version;
 
-	char		name[MAX_QPATH];	// model name
+	char		name[64];	// model name
 
 	// frames and bones are shared by all levels of detail
 	int			numFrames;
@@ -391,7 +391,7 @@ typedef struct {
 } dmodel_t;
 
 typedef struct {
-	char		shader[MAX_QPATH];
+	char		shader[64];
 	int			surfaceFlags;
 	int			contentFlags;
 } dshader_t;
@@ -436,7 +436,7 @@ typedef struct {
 } dbrush_t;
 
 typedef struct {
-	char		shader[MAX_QPATH];
+	char		shader[64];
 	int			brushNum;
 	int			visibleSide;	// the brush side that ray tests need to clip against (-1 == none)
 } dfog_t;

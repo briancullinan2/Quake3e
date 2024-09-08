@@ -209,10 +209,15 @@ Q_EXPORT int _start( int argc, char* argv[] )
 	Sys_SetStatus("Starting up...\n");
 
 	Com_Init( cmdline );
+
+	Sys_SetStatus("Starting network...\n");
+
 	NET_Init();
 
 	// JavaScript console doesn't report input
   Cvar_Set( "ttycon", "0" );
+
+	Sys_SetStatus("Startup complete...\n");
 
   //Browser.requestAnimationFrame(_Sys_Frame);
   //var timeUntilNextTick = Math.max(0, Browser.mainLoop.tickStartTime + value - Sys_Milliseconds)|0;
@@ -287,7 +292,7 @@ glconfig_t *glw_config;
 
 void WindowResize(int width, int height) {
 	if ( !gw_minimized /*&& !glw_state.isFullscreen*/ ) {
-		glconfig_t *glConfig = (glconfig_t *)re.GetConfig();
+		glconfig_t *glConfig = re.GetConfig();
 		cvar_t *aspect = Cvar_Get("r_customAspect", "", 0);
 		glw_config->vidHeight = height;
 		glw_config->vidWidth = width;
@@ -306,7 +311,7 @@ void WindowResize(int width, int height) {
 		aspect->modificationCount++;
 	}
 }
-						
+
 
 
 /*

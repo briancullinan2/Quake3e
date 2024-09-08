@@ -1,8 +1,8 @@
 const fs = require('fs');
 const path = require('path');
-const GAME_DIRECTORY = 'multigame'
+const GAME_DIRECTORY = 'demoq3'
 const WEB_DIRECTORY = path.resolve(__dirname + '/../../../docs')
-const ASSETS_DIRECTORY = path.resolve(__dirname + '/../../../docs/demoq3/pak0.pk3dir/')
+const ASSETS_DIRECTORY = path.resolve(__dirname + '/../../../docs/' + GAME_DIRECTORY + '/pak0.pk3dir/')
 const BUILD_DIRECTORY = path.resolve(__dirname + '/../../../build/')
 const ALLOWED_DIRECTORIES = [
   WEB_DIRECTORY,
@@ -129,18 +129,26 @@ function findAltAudio(localName) {
 }
 
 function hasAlpha(otherFormatName) {
-  const { execSync } = require('child_process');
+  const { spawnSync } = require('child_process');
+  let alphaCmd
   try {
-    let alphaCmd = execSync(`identify -format '%[opaque]' "${path
-      .resolve(otherFormatName)}"`, {stdio : 'pipe'}).toString('utf-8')
-    // if it is alpha
-    if(/* true || TODO: allAlpha? */ alphaCmd.match(/true/ig)) {
-      return false
-    }
+    let alphaProcess = spawnSync('magick', [
+      path.resolve(otherFormatName), 
+      '-scale', '1x1!', '-format', "'%[fx:int(255*a+.5)]'", 'info:-'
+    ], {
+    //  cwd: SOURCE_PATH,
+      timeout: 3000,
+    })
+    alphaCmd = alphaProcess.stdout.toString('utf-8')
+    //console.log(alphaCmd)
+    //console.log(alphaProcess.stderr.toString('utf-8'))
   } catch (e) {
     console.error(e.message, (e.output || '').toString('utf-8').substr(0, 1000))
   }
-  return true
+
+  //const MATCH = /false/ig
+  const MATCH = /'0'|'255'/ig
+  return !alphaCmd.match(MATCH)
 }
 
 
@@ -314,13 +322,14 @@ function makePaletteShader(localName, response) {
 
 
 function sendCompressed(file, res, acceptEncoding) {
+  const turnOffCompression = true
   const zlib = require('zlib')
   const mime = require('mime')
   let readStream = fs.createReadStream(file)
   res.setHeader('cache-control', 'public, max-age=31557600')
   res.setHeader('content-type', mime.lookup(file))
   // if compressed version already exists, send it directly
-  if(acceptEncoding.includes('br')) {
+  if(!turnOffCompression && acceptEncoding.includes('br')) {
     res.append('content-encoding', 'br')
     if(fs.existsSync(file + '.br')) {
       res.append('content-length', fs.statSync(file + '.br').size)
@@ -328,7 +337,7 @@ function sendCompressed(file, res, acceptEncoding) {
     } else {
       readStream = readStream.pipe(zlib.createBrotliCompress())
     }
-  } else if(acceptEncoding.includes('gzip')) {
+  } else if(!turnOffCompression && acceptEncoding.includes('gzip')) {
     res.append('content-encoding', 'gzip')
     if(fs.existsSync(file + '.gz')) {
       res.append('content-length', fs.statSync(file + '.gz').size)
@@ -336,7 +345,7 @@ function sendCompressed(file, res, acceptEncoding) {
     } else {
       readStream = readStream.pipe(zlib.createGzip())
     }
-  } else if(acceptEncoding.includes('deflate')) {
+  } else if(!turnOffCompression && acceptEncoding.includes('deflate')) {
     res.append('content-encoding', 'deflate')
     if(fs.existsSync(file + '.df')) {
       res.append('content-length', fs.statSync(file + '.df').size)
@@ -421,7 +430,7 @@ function respondRequest(request, response) {
     let alpha = hasAlpha(file)
     if((!alpha && localName.includes('.jpeg'))
       || (alpha && localName.includes('.png'))) {
-      execSync(`convert -strip -interlace Plane -sampling-factor 4:2:0 -quality 20% -auto-orient "${file}" "${path.resolve(newPath)}"`, {stdio : 'pipe'})
+      execSync(`magick "${file}" -auto-orient -strip -quality 50% "${path.resolve(newPath)}"`, {stdio : 'pipe'})
     }
     if(fs.existsSync(newPath)) {
       if(request.headers['accept-encoding']) {

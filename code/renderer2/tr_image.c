@@ -2381,11 +2381,6 @@ static image_t *R_CreateImage2( const char *name, byte *pic, int width, int heig
 
 #ifdef __WASM__
 
-
-
-#ifdef __WASM__
-extern  cvar_t  *r_paletteMode;
-#endif
 extern qboolean shouldUseAlternate;
 
 void R_FinishImage3( image_t *, byte *pic, GLenum picFormat, int numMips );
@@ -2536,11 +2531,6 @@ static const imageExtToLoaderMap_t imageLoaders[ ] =
 	{ "jpeg", R_LoadJPG },
 	{ "pcx",  R_LoadPCX },
 	{ "bmp",  R_LoadBMP }
-#endif
-#if 0 //def __WASM__
-	,{ "png",  R_LoadPNG_Remote },
-	{ "jpg",  R_LoadJPG_Remote },
-	{ "jpeg", R_LoadJPG_Remote }
 #endif
 };
 

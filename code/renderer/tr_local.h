@@ -515,8 +515,10 @@ typedef struct image_s {
 	GLint		internalFormat;
 	int			TMU;				// only needed for voodoo2
 	int			lastTimeUsed;
+	char variables[MAX_QPATH];
 	struct image_s *palette;
 	struct image_s *alternate;
+	struct image_s *replace;
 
 } image_t;
 
@@ -1236,6 +1238,7 @@ typedef struct {
 	trRefEntity_t			*currentEntity;
 	trRefEntity_t			worldEntity;		// point currentEntity at this when rendering world
 	int						currentEntityNum;
+	int           currentFogNum;
 	int						shiftedEntityNum;	// currentEntityNum << QSORT_REFENTITYNUM_SHIFT
 	model_t					*currentModel;
 
@@ -1291,24 +1294,36 @@ typedef struct {
 
 	qboolean				vertexLightingAllowed;
 
+#ifdef USE_PTHREADS
+	int lastAsyncCheck;
+#endif
+
 } trGlobals_t;
 
 extern backEndState_t	backEnd;
 
-
 #ifdef USE_MULTIVM_RENDERER
-
-#define MAX_NUM_WORLDS MAX_NUM_VMS
-
 extern float dvrXScale;
 extern float dvrYScale;
 extern float dvrXOffset;
 extern float dvrYOffset;
+#endif
+
+#ifdef USE_BSP_MODELS
+#define MAX_WORLD_MODELS 64
+extern trGlobals_t	trWorlds[MAX_WORLD_MODELS];
+#define tr trWorlds[0]
+#else
+#ifdef USE_MULTIVM_RENDERER
+
+#define MAX_NUM_WORLDS MAX_NUM_VMS
+
 extern int     rwi;
 extern trGlobals_t	trWorlds[MAX_NUM_WORLDS];
 #define tr trWorlds[rwi]
 #else
 extern trGlobals_t	tr;
+#endif
 #endif
 
 extern int					gl_clamp_mode;
@@ -1494,6 +1509,7 @@ void R_AddLitSurf( surfaceType_t *surface, shader_t *shader, int fogIndex );
 
 #define	CULL_IN		0		// completely unclipped
 #define	CULL_CLIP	1		// clipped by one or more planes
+#define	CULL_MAYBE	3		// clipped by one or more planes
 #define	CULL_OUT	2		// completely outside the clipping planes
 
 void R_LocalPointToWorld( const vec3_t local, vec3_t world );
@@ -1571,11 +1587,17 @@ void		RE_BeginFrame( stereoFrame_t stereoFrame );
 void		RE_BeginRegistration( glconfig_t *glconfig );
 
 #ifdef USE_MULTIVM_RENDERER
-int		RE_LoadWorldMap( const char *mapname );
 void    RE_SetDvrFrame( float x, float y, float width, float height );
+#endif
 
+#ifdef USE_BSP_MODELS
+qhandle_t RE_LoadWorldMap( const char *mapname );
 #else
-void		RE_LoadWorldMap( const char *mapname );
+#ifdef USE_MULTIVM_RENDERER
+int				RE_LoadWorldMap( const char *mapname );
+#else
+void			RE_LoadWorldMap( const char *mapname );
+#endif
 #endif
 
 void		RE_SetWorldVisData( const byte *vis );
@@ -2139,6 +2161,7 @@ void RE_VertexLighting( qboolean allowed );
 
 void R_BloomScreen( void );
 
+#ifndef __WASM__
 #define GLE( ret, name, ... ) extern ret ( APIENTRY * q##name )( __VA_ARGS__ );
 	QGL_Core_PROCS;
 	QGL_Ext_PROCS;
@@ -2147,6 +2170,7 @@ void R_BloomScreen( void );
 	QGL_FBO_PROCS;
 	QGL_FBO_OPT_PROCS;
 #undef GLE
+#endif
 
 // VBO functions
 #ifdef USE_VBO

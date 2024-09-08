@@ -64,7 +64,7 @@ typedef struct {
 											// making the snapshot current
 
 // making the snapshot current
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+#if defined(USE_MULTIVM_CLIENT)
 	int     world;
 #endif
 } clSnapshot_t;
@@ -89,7 +89,7 @@ typedef struct {
 // the parseEntities array must be large enough to hold PACKET_BACKUP frames of
 // entities, so that when a delta compressed message arives from the server
 // it can be un-deltad from the original 
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+#if defined(USE_MULTIVM_CLIENT)
 extern int cgvmi_ref;
 
 #define	MAX_PARSE_ENTITIES	( PACKET_BACKUP * MAX_GENTITIES )
@@ -103,7 +103,7 @@ typedef struct {
 	int			timeoutcount;		// it requres several frames in a timeout condition
 									// to disconnect, preventing debugging breaks from
 									// causing immediate disconnects on continue
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+#if defined(USE_MULTIVM_CLIENT)
   clSnapshot_t	snapWorlds[MAX_NUM_VMS];			// latest received from server
 #define snap snapWorlds[igs]
 int			serverTimes[MAX_NUM_VMS];
@@ -128,7 +128,7 @@ int			serverTimeDeltas[MAX_NUM_VMS];
 									// cleared when CL_AdjustTimeDelta looks at it
 	qboolean	newSnapshots;		// set on parse of any valid packet
 
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+#if defined(USE_MULTIVM_CLIENT)
 	gameState_t	gameStates[MAX_NUM_VMS];			// configstrings
 #define gameState gameStates[igs]
 #else
@@ -136,7 +136,7 @@ int			serverTimeDeltas[MAX_NUM_VMS];
 #endif
 	char		mapname[MAX_QPATH];	// extracted from CS_SERVERINFO
 
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+#if defined(USE_MULTIVM_CLIENT)
 	int			parseEntitiesNumWorlds[MAX_NUM_VMS];	// index (not anded off) into cl_parse_entities[]
 #else
 	int			parseEntitiesNum;	// index (not anded off) into cl_parse_entities[]
@@ -147,7 +147,7 @@ int			serverTimeDeltas[MAX_NUM_VMS];
 	int			joystickAxis[MAX_JOYSTICK_AXIS];	// set by joystick events
 
 	// cgame communicates a few values to the client system
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+#if defined(USE_MULTIVM_CLIENT)
 	int			cgameUserCmdValues[MAX_NUM_VMS];	// current weapon to add to usercmd_t
 #define cgameUserCmdValue cgameUserCmdValues[igs]
 #else
@@ -158,7 +158,7 @@ int			serverTimeDeltas[MAX_NUM_VMS];
 
 	// cmds[cmdNumber] is the predicted command, [cmdNumber-1] is the last
 	// properly generated command
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+#if defined(USE_MULTIVM_CLIENT)
 	usercmd_t	cmdWorlds[MAX_NUM_VMS][CMD_BACKUP];	// each mesage will send several old cmds
 #define cmds         cmdWorlds[igs]  // `igvm` because it is based on number of client VMs, not server worlds
   int			cmdNumber;			// incremented each frame, because multiple
@@ -181,7 +181,7 @@ int			serverTimeDeltas[MAX_NUM_VMS];
 	int			serverId;			// included in each client message so the server
 												// can tell if it is for a prior map_restart
 	// big stuff at end of structure so most offsets are 15 bits or less
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+#if defined(USE_MULTIVM_CLIENT)
 	clSnapshot_t	snapshotWorlds[MAX_NUM_VMS][PACKET_BACKUP];
 #define snapshots snapshotWorlds[igs] // `igs` because it is based on number of server worlds, not cgames
 	entityState_t	entityBaselines[MAX_NUM_VMS][MAX_GENTITIES];	// for delta compression when not in previous frame
@@ -296,21 +296,23 @@ typedef struct {
 	qboolean	demowaiting;	// don't record until a non-delta message is received
 	qboolean	firstDemoFrameSkipped;
 
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+#if defined(USE_MULTIVM_CLIENT)
 	qboolean isMultiGame;
 	int     selectedWorld; // force the client to load a new VM
 	int     selectedClient;
 	qboolean      sv_mvWorld;
 	qboolean      sv_mvOmnipresent;
-//  fileHandle_t	demofiles[MAX_NUM_VMS];
-//#define demofile demofiles[igs]
-//  int			      numDemoIndexes[MAX_NUM_VMS];
-//#define numDemoIndex numDemoIndexes[igs]
-//  demoIndex_t  *demoIndexes[MAX_NUM_VMS];
-//#define demoIndex demoIndexes[igs]
+  fileHandle_t	demofiles[MAX_NUM_VMS];
+#define demofile demofiles[igs]
+  int			      numDemoIndexes[MAX_NUM_VMS];
+#define numDemoIndex numDemoIndexes[igs]
+  demoIndex_t  *demoIndexes[MAX_NUM_VMS];
+#define demoIndex demoIndexes[igs]
 #else
-#endif
 	fileHandle_t	demofile;
+  int			      numDemoIndex;
+	demoIndex_t  *demoIndex;
+#endif
 
 	fileHandle_t	recordfile;
 
@@ -476,6 +478,8 @@ extern	vm_t			*uivm;	// interface to ui dll or vm
 
 extern	refexport_t		re;		// interface to refresh .dll
 
+extern float clientScreens[MAX_NUM_VMS][4];
+extern int cgvmi_ref;
 
 //
 // cvars
@@ -495,7 +499,7 @@ extern	cvar_t	*cl_aviPipeFormat;
 
 extern	cvar_t	*cl_activeAction;
 
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+#if defined(USE_MULTIVM_CLIENT)
 extern  cvar_t  *cl_mvHighlight;
 #endif
 
@@ -600,7 +604,7 @@ extern int cl_connectedToPureServer;
 extern int cl_connectedToCheatServer;
 
 void CL_ParseServerMessage( msg_t *msg );
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+#if defined(USE_MULTIVM_CLIENT)
 void CL_ParseSnapshot( msg_t *msg, int igs );
 #else
 //static void CL_ParseSnapshot( msg_t *msg );
@@ -676,7 +680,7 @@ void CIN_CloseAllVideos(void);
 //
 // cl_cgame.c
 //
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+#if defined(USE_MULTIVM_CLIENT)
 extern float clientScreens[MAX_NUM_VMS][4];
 #else
 #ifdef USE_MULTIVM_SERVER

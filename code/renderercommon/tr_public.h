@@ -58,10 +58,14 @@ typedef struct {
 	qhandle_t (*RegisterSkin)( const char *name );
 	qhandle_t (*RegisterShader)( const char *name );
 	qhandle_t (*RegisterShaderNoMip)( const char *name );
-#ifdef USE_MULTIVM_RENDERER
-	int	(*LoadWorld)( const char *name );
+#ifdef USE_BSP_MODELS
+	qhandle_t	(*LoadWorld)( const char *name );
 #else
-	void	(*LoadWorld)( const char *name );
+#ifdef USE_MULTIVM_RENDERER
+	int				(*LoadWorld)( const char *name );
+#else
+	void			(*LoadWorld)( const char *name );
+#endif
 #endif
 
 	// the vis data is a large enough block of data that we go to the trouble
@@ -147,8 +151,10 @@ typedef struct {
 
   const cplane_t *(*GetFrustum)( void );
 
-#if defined(USE_MULTIVM_RENDERER) || defined(__WASM__)
+#if defined(USE_MULTIVM_RENDERER) || defined(__WASM__) || defined(USE_PTHREADS)
 	void	(*InitShaders)( void );
+#endif
+#if defined(__WASM__)
 	void	(*FinishImage3)(void *, byte *pic, int picFormat, int numMips);
 #endif
 #ifdef USE_MULTIVM_RENDERER
@@ -214,7 +220,12 @@ typedef struct {
 	byte	*(*CM_ClusterPVS)(int cluster, int cmi);
 #else
 	byte	*(*CM_ClusterPVS)(int cluster);
+	 
 #endif
+	void (*CM_BoxTrace)( trace_t *results, const vec3_t start, const vec3_t end,
+						const vec3_t mins, const vec3_t maxs,
+						clipHandle_t model, int brushmask, qboolean capsule );
+
 
 	// visualization for debugging collision detection
 	void	(*CM_DrawDebugSurface)( void (*drawPoly)(int color, int numPoints, float *points) );
@@ -263,6 +274,13 @@ typedef struct {
 	void	(*VKimp_Shutdown)( qboolean unloadDLL );
 	void*	(*VK_GetInstanceProcAddr)( VkInstance instance, const char *name );
 	qboolean (*VK_CreateSurface)( VkInstance instance, VkSurfaceKHR *pSurface );
+
+#ifdef USE_PTHREADS
+	void	(*CL_LoadJPG2)( const char *filename, byte *existing, int length, unsigned char **pic, int *width, int *height );
+	int (*Pthread_Start)( void * (* threadfunc)(int, int, int), int data, int dataLength, int enumValue );
+	void	(*free)( void *ptr );
+	void	*(*malloc)( unsigned long bytes );
+#endif
 
 } refimport_t;
 

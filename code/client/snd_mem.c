@@ -32,8 +32,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "snd_local.h"
 #include "snd_codec.h"
 
-#ifndef __WASM__
-
 #define DEF_COMSOUNDMEGS "8"
 
 /*
@@ -259,6 +257,14 @@ static int ResampleSfxRaw( short *sfx, int channels, int inrate, int inwidth, in
 
 //=============================================================================
 
+#ifdef USE_PTHREADS
+
+#include <pthread.h>
+
+extern pthread_mutex_t read_file_sync;
+
+#endif
+
 /*
 ==============
 S_LoadSound
@@ -275,7 +281,14 @@ qboolean S_LoadSound( sfx_t *sfx )
 //	int		size;
 
 	// load it in
+#ifdef USE_PTHREADS
+	pthread_mutex_lock(&read_file_sync);
+#endif
 	data = S_CodecLoad(sfx->soundName, &info);
+#ifdef USE_PTHREADS
+	pthread_mutex_unlock(&read_file_sync);
+#endif
+
 	if(!data)
 		return qfalse;
 
@@ -323,7 +336,11 @@ qboolean S_LoadSound( sfx_t *sfx )
 	sfx->soundChannels = info.channels;
 	
 	Hunk_FreeTempMemory(samples);
+#ifdef USE_PTHREADS
+	free(data);
+#else
 	Hunk_FreeTempMemory(data);
+#endif
 
 	return qtrue;
 }
@@ -331,5 +348,3 @@ qboolean S_LoadSound( sfx_t *sfx )
 void S_DisplayFreeMemory(void) {
 	Com_Printf("%d bytes free sound buffer memory, %d total used\n", inUse, totalInUse);
 }
-
-#endif

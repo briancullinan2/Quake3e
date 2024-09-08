@@ -710,6 +710,8 @@ typedef enum {
 #define FS_MATCH_PURE   (1<<1)
 #define FS_MATCH_UNPURE (1<<2)
 #define FS_MATCH_STICK  (1<<3)
+#define FS_MATCH_EITHER (1<<4) // used by FS_ListNearestFiles to match either by filter or pakFilter
+#define FS_MATCH_STRIP  (1<<5) // allows matching on file basename and no extension, in the case of map names
 #define FS_MATCH_PK3s   (FS_MATCH_PURE | FS_MATCH_UNPURE)
 #define FS_MATCH_ANY    (FS_MATCH_EXTERN | FS_MATCH_PURE | FS_MATCH_UNPURE)
 
@@ -1225,7 +1227,7 @@ void Key_WriteBindings( fileHandle_t f );
 void S_ClearSoundBuffer( void );
 // call before filesystem access
 
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+#if defined(USE_MULTIVM_CLIENT)
 void CL_SystemInfoChanged( qboolean onlyGame, int igs );
 #else
 void CL_SystemInfoChanged( qboolean onlyGame );
@@ -1328,7 +1330,8 @@ qboolean Sys_SetAffinityMask( const uint64_t mask );
 
 // Sys_Milliseconds should only be used for profiling purposes,
 // any game related timing information should come from event timestamps
-int		Sys_Milliseconds( void );
+extern int		Sys_Milliseconds( void );
+
 int64_t	Sys_Microseconds( void );
 
 void	Sys_SnapVector( float *vector );
@@ -1347,7 +1350,9 @@ qboolean	Sys_StringToAdr( const char *s, netadr_t *a, netadrtype_t family );
 //Does NOT parse port numbers, only base addresses.
 
 qboolean	Sys_IsLANAddress(const netadr_t *adr);
+#ifndef __WASM__
 void		Sys_ShowIP(void);
+#endif
 
 qboolean	Sys_Mkdir( const char *path );
 FILE	*Sys_FOpen( const char *ospath, const char *mode );

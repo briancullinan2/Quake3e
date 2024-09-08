@@ -29,15 +29,13 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 int NET_OpenIP(void);
 uint16_t ntohs(uint16_t n);
 void Sys_SendPacket( int length, const void *data, const netadr_t *to );
-static void	NET_Restart_f( void );
+void	NET_Restart_f( void );
 void Sys_SockaddrToString(char *dest, int destlen, const void *input);
 
 #define FD_SETSIZE 1024
-#ifndef EMSCRIPTEN
 typedef struct {
 	unsigned long fds_bits[FD_SETSIZE / 8 / sizeof(long)];
 } fd_set;
-#endif
 
 #ifdef USE_MULTIVM_SERVER
 int NET_GetPacket( netadr_t *net_from, msg_t *net_message, const fd_set *fdr, int igvm );
@@ -179,7 +177,9 @@ typedef union socks5_udp_request_s {
 #pragma pack(pop)
 
 
-#endif
+#endif // !__WASM__
+
+
 static qboolean usingSocks = qfalse;
 static int networkingEnabled = 0;
 
@@ -2114,9 +2114,6 @@ qboolean NET_Sleep( int timeout )
 	return qtrue;
 }
 
-#endif
-
-
 /*
 ====================
 NET_Restart_f
@@ -2126,3 +2123,6 @@ static void NET_Restart_f( void )
 {
 	NET_Config( qtrue );
 }
+
+#endif
+

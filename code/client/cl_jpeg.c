@@ -87,7 +87,19 @@ extern void CL_Try_Fail_LoadJPG(void * fbuffer, const char *filename, unsigned c
 #endif
 
 
+#ifdef USE_PTHREADS
+
+void CL_LoadJPG2( const char *filename, byte *existing, int length, unsigned char **pic, int *width, int *height );
+
+void CL_LoadJPG( const char *filename, unsigned char **pic, int *width, int *height ) {
+  CL_LoadJPG2(filename, NULL, 0, pic, width, height);
+}
+
+
+void CL_LoadJPG2( const char *filename, byte *existing, int length, unsigned char **pic, int *width, int *height )
+#else
 void CL_LoadJPG( const char *filename, unsigned char **pic, int *width, int *height )
+#endif
 {
 	/* This struct contains the JPEG decompression parameters and pointers to
 	* working space (which is allocated as needed by the JPEG library).
@@ -128,7 +140,12 @@ void CL_LoadJPG( const char *filename, unsigned char **pic, int *width, int *hei
 	 * VERY IMPORTANT: use "b" option to fopen() if you are on a machine that
 	 * requires it in order to read binary files.
 	*/
-
+#ifdef USE_PTHREADS
+  if(existing) {
+    fbuffer.b = existing;
+    len = length;
+  } else
+#endif
 	len = FS_ReadFile( ( char * ) filename, &fbuffer.v );
 	if ( !fbuffer.b || len < 0 ) {
 		return;
@@ -170,7 +187,9 @@ void CL_Fail_LoadJPG( const char *filename, void *buffer, struct jpeg_decompress
 		* We need to clean up the JPEG object, close the input file, and return.
 		*/
 		jpeg_destroy_decompress( &cinfo );
+#ifndef USE_PTHREADS
 		FS_FreeFile( fbuffer.v );
+#endif
 
 		/* Append the filename to the error for easier debugging */
 		Com_Printf( ", loading file %s\n", filename );
@@ -243,7 +262,9 @@ void CL_Try_LoadJPG( const char *filename, struct jpeg_decompress_struct cinfo, 
     )
   {
     // Free the memory to make sure we don't leak memory
+#ifndef USE_PTHREADS
     FS_FreeFile( fbuffer.v );
+#endif
     jpeg_destroy_decompress(&cinfo);
   
     Com_Error( ERR_DROP, "LoadJPG: %s has an invalid image format: %dx%d*4=%d, components: %d", filename,
@@ -253,7 +274,11 @@ void CL_Try_LoadJPG( const char *filename, struct jpeg_decompress_struct cinfo, 
   memcount = pixelcount * 4;
   row_stride = cinfo.output_width * cinfo.output_components;
 
+#ifdef USE_PTHREADS
+  out = malloc( memcount );
+#else
   out = Z_Malloc( memcount );
+#endif
 
   *width = cinfo.output_width;
   *height = cinfo.output_height;
@@ -307,7 +332,9 @@ void CL_Try_LoadJPG( const char *filename, struct jpeg_decompress_struct cinfo, 
    * so as to simplify the setjmp error logic above.  (Actually, I don't
    * think that jpeg_destroy can do an error exit, but why assume anything...)
    */
+#ifndef USE_PTHREADS
   FS_FreeFile( fbuffer.v );
+#endif
 
   /* At this point you may want to check to see whether any corrupt-data
    * warnings occurred (test whether jerr.pub.num_warnings is nonzero).

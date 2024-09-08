@@ -179,14 +179,18 @@ void R_ImageList_f( void ) {
 				estSize /= 2;
 				break;
 			case GL_RGBA4:
+#ifndef __WASM__
 			case GL_RGBA8:
+#endif
 			case GL_RGBA:
 				format = "RGBA ";
 				// 4 bytes per pixel
 				estSize *= 4;
 				break;
 			case GL_RGB5:
+#ifndef __WASM__
 			case GL_RGB8:
+#endif
 			case GL_RGB:
 				format = "RGB  ";
 				// 3 bytes per pixel?
@@ -799,6 +803,120 @@ image_t *R_FreeOldestImage( void ) {
 
 
 
+#ifdef USE_PTHREADS
+
+#include <pthread.h>
+
+
+typedef enum {
+	IM_NONE,
+	IM_PNG,
+	IM_TGA,
+	IM_JPG,
+} imageType_t;
+
+extern qboolean shouldUseAlternate;
+
+static byte *pixelDatas[MAX_DRAWIMAGES] = {0};
+static byte *fileDatas[MAX_DRAWIMAGES] = {0};
+static pthread_mutex_t pixel_data_mutex;
+
+const char *R_LoadImage( const char *name, byte **pic, int *width, int *height );
+
+image_t *R_CreateImage2( const char *name, const char *name2, byte *pic, int width, int height, imgFlags_t flags, image_t *existing );
+
+byte *R_LoadAlternateImage( byte *pic, int width, int height );
+byte *R_LoadAlternateImageVariables( byte *pic, int width, int height, const char *variables);
+void R_LoadPNGFromBuffer(char *name, byte *buffer, int length, byte **pic, int *width, int *height);
+void R_LoadTGAFromBuffer( const char *filename, byte *existing, int length, byte **pic, int *width, int *height );
+
+
+void R_FinishImage3( image_t *image, byte *pic ) {
+	byte *variableImage = NULL;
+	//image_t *replace;
+
+	if(image->variables[0] != '\0') {
+		variableImage = R_LoadAlternateImageVariables(pic, image->width, image->height, image->variables);
+		if(variableImage && variableImage != pic) {
+			pic = variableImage;
+		}
+	}
+
+	byte *altImage = R_LoadAlternateImage(pic, image->width, image->height);
+	if(altImage && altImage != pic) {
+		image->alternate = R_CreateImage( va("-alternate%s", image->imgName), va("-alternate%s", image->imgName2), altImage, image->width, image->height, image->flags);
+		ri.free(altImage);
+	}
+
+	/*replace =*/ R_CreateImage2(image->imgName, image->imgName2, pic, image->width, image->height, image->flags, image);
+	//image->replace = replace;
+
+	if(variableImage && variableImage != pic) {
+		ri.free(variableImage);
+	}
+
+}
+
+void R_LoadJPGFromBuffer( const char *filename, byte *existing, int length, unsigned char **pic, int *width, int *height )
+{
+	ri.CL_LoadJPG2( filename, existing, length, pic, width, height );
+}
+
+
+static void *R_LoadRemote(int index, int length, int enumValue) {
+	//const char *localName;
+	image_t *image;
+	byte	*pic = NULL;
+	image = tr.images[index];
+
+	/*localName =*/ 
+	//R_LoadImage( image->imgName2, &pic, &image->width, &image->height );
+	if(enumValue == IM_PNG) {
+		R_LoadPNGFromBuffer(image->imgName2, fileDatas[index], length, &pic, &image->width, &image->height);
+	} else if(enumValue == IM_PNG) {
+		R_LoadJPGFromBuffer(image->imgName2, fileDatas[index], length, &pic, &image->width, &image->height);
+	} else if(enumValue == IM_TGA) {
+		R_LoadTGAFromBuffer(image->imgName2, fileDatas[index], length, &pic, &image->width, &image->height);
+	}
+
+	// update name
+	if(pic) {
+		//strcpy( image->imgName2, localName );
+		pthread_mutex_lock(&pixel_data_mutex);
+		pixelDatas[index] = pic;
+		pthread_mutex_unlock(&pixel_data_mutex);
+		return pic;
+	}
+	return NULL;
+}
+
+void CheckAsyncImages( int msec ) {
+	int i;
+
+	R_IssuePendingRenderCommands();
+
+	RE_ClearScene();
+
+	if(ri.Milliseconds() - tr.lastAsyncCheck > 100) {
+		tr.lastAsyncCheck = msec;
+		pthread_mutex_lock(&pixel_data_mutex);
+		for(i = 0; i < MAX_DRAWIMAGES; i++) {
+			if(pixelDatas[i]) {
+				//ri.Printf(PRINT_ALL, "finishing: %s\n", tr.images[i]->imgName2);
+				R_FinishImage3(tr.images[i], pixelDatas[i]);
+				ri.FS_FreeFile(fileDatas[i]);
+				ri.free(pixelDatas[i]);
+				pixelDatas[i] = NULL;
+			}
+		}
+		pthread_mutex_unlock(&pixel_data_mutex);
+	}
+}
+
+
+#endif
+
+
 /*
 ================
 R_CreateImage
@@ -807,7 +925,18 @@ This is the only way any image_t are created
 Picture data may be modified in-place during mipmap processing
 ================
 */
-image_t *R_CreateImage( const char *name, const char *name2, byte *pic, int width, int height, imgFlags_t flags ) {
+#ifdef USE_PTHREADS
+image_t *R_CreateImage( const char *name, const char *name2, byte *pic, int width, int height, imgFlags_t flags ) 
+{
+	return R_CreateImage2( name, name2, pic, width, height, flags, NULL );
+}
+
+
+image_t *R_CreateImage2( const char *name, const char *name2, byte *pic, int width, int height, imgFlags_t flags, image_t *existing ) 
+#else
+image_t *R_CreateImage( const char *name, const char *name2, byte *pic, int width, int height, imgFlags_t flags ) 
+#endif
+{
 	image_t		*image;
 	long		hash;
 	GLint		glWrapClampMode;
@@ -836,6 +965,9 @@ image_t *R_CreateImage( const char *name, const char *name2, byte *pic, int widt
 		}
 	}
 
+#ifdef USE_PTHREADS
+	if(!existing) {
+#endif
 	image = ri.Hunk_Alloc( sizeof( *image ) + namelen + namelen2, h_low );
 	image->lastTimeUsed = tr.lastRegistrationTime;
 	image->imgName = (char *)( image + 1 );
@@ -857,6 +989,15 @@ image_t *R_CreateImage( const char *name, const char *name2, byte *pic, int widt
 		trWorlds[0].images[ trWorlds[0].numImages++ ] = image;
 #endif
 
+#ifdef USE_PTHREADS
+	} else {
+		image = existing;
+		if(image->texnum) {
+			qglDeleteTextures(1, &image->texnum);
+		}
+	}
+#endif
+
 	image->flags = flags;
 	image->width = width;
 	image->height = height;
@@ -870,7 +1011,11 @@ image_t *R_CreateImage( const char *name, const char *name2, byte *pic, int widt
 	if ( flags & IMGFLAG_RGB )
 		image->internalFormat = GL_RGB;
 	else
+#ifdef __WASM__
+		image->internalFormat = GL_RGBA; // autodetect
+#else
 		image->internalFormat = 0; // autodetect
+#endif
 
 	if ( flags & IMGFLAG_CLAMPTOBORDER )
 		glWrapClampMode = GL_CLAMP_TO_BORDER;
@@ -940,12 +1085,14 @@ typedef struct
 // when there are multiple images of different formats available
 static const imageExtToLoaderMap_t imageLoaders[] =
 {
-	{ "png",  R_LoadPNG },
 	{ "tga",  R_LoadTGA },
+#ifndef __WASM__ // because it has these longjmps for error handling I would have to rewrite
+	{ "png",  R_LoadPNG },
 	{ "jpg",  R_LoadJPG },
 	{ "jpeg", R_LoadJPG },
 	{ "pcx",  R_LoadPCX },
 	{ "bmp",  R_LoadBMP }
+#endif
 };
 
 static const int numImageLoaders = ARRAY_LEN( imageLoaders );
@@ -961,8 +1108,13 @@ Loads any of the supported image types into a canonical
 const char *R_LoadImage( const char *name, byte **pic, int *width, int *height )
 {
 	static char localName[ MAX_QPATH ];
+#ifdef USE_PTHREADS
+	static char localName2[ MAX_QPATH ];
+	const char *ext;
+#else
 	const char *altName, *ext;
-	//qboolean orgNameFailed = qfalse;
+#endif
+	qboolean orgNameFailed = qfalse;
 	int orgLoader = -1;
 	int i;
 
@@ -993,9 +1145,8 @@ const char *R_LoadImage( const char *name, byte **pic, int *width, int *height )
 			{
 				// Loader failed, most likely because the file isn't there;
 				// try again without the extension
-				//orgNameFailed = qtrue;
+				orgNameFailed = qtrue;
 				orgLoader = i;
-				COM_StripExtension( name, localName, MAX_QPATH );
 			}
 			else
 			{
@@ -1003,6 +1154,8 @@ const char *R_LoadImage( const char *name, byte **pic, int *width, int *height )
 				return localName;
 			}
 		}
+
+		COM_StripExtension( name, localName, MAX_QPATH );
 	}
 
 	// Try and find a suitable match using all
@@ -1012,21 +1165,39 @@ const char *R_LoadImage( const char *name, byte **pic, int *width, int *height )
 		if ( i == orgLoader )
 			continue;
 
+#ifdef USE_PTHREADS
+		strcpy(localName2, localName);
+		strcat(localName2, ".");
+		strcat(localName2, imageLoaders[ i ].ext);
+
+		// Load
+		imageLoaders[ i ].ImageLoader( localName2, pic, width, height );
+
+		// va() uses static chars which causes a race condition. function variables use heap.
+#else
 		altName = va( "%s.%s", localName, imageLoaders[ i ].ext );
 
 		// Load
 		imageLoaders[ i ].ImageLoader( altName, pic, width, height );
+#endif
 
 		if ( *pic )
 		{
-#if 0
 			if ( orgNameFailed )
 			{
+#ifdef USE_PTHREADS
+				//ri.Printf( PRINT_DEVELOPER, S_COLOR_YELLOW "WARNING: %s not present, using %s instead\n",
+				//		name, localName2 );
+#else
 				ri.Printf( PRINT_DEVELOPER, S_COLOR_YELLOW "WARNING: %s not present, using %s instead\n",
 						name, altName );
-			}
 #endif
+			}
+#ifdef USE_PTHREADS
+			Q_strncpyz( localName, localName2, sizeof( localName ) );
+#else
 			Q_strncpyz( localName, altName, sizeof( localName ) );
+#endif
 			break;
 		}
 	}
@@ -1060,19 +1231,35 @@ byte *R_LoadAlternateImage_real( byte *pic, int width, int height, float greysca
 			newWorkImage = R_InvertColors4(workImage, width, height);
 		}
 		if(workImage != pic) {
+#ifdef USE_PTHREADS
+			ri.free(workImage);
+#else
 			ri.Free(workImage);
+#endif
 		}
 		workImage = newWorkImage;
 	}
 	if(edgy > 0) {
 		any = qtrue;
 		byte *rgb = R_RGBAtoR(workImage, width, height);
+#ifdef USE_PTHREADS
+		byte *edgy = ri.malloc(width * height * 4);
+#else
 		byte *edgy = ri.Malloc(width * height * 4);
+#endif
 		canny_edge_detection((pixel_t *)rgb, width, height, (pixel_t *)edgy, 45, 55, 2.0f);
 		newWorkImage = R_RtoRGBA(edgy, pic, width, height);
+#ifdef USE_PTHREADS
+		ri.free(edgy);
+#else
 		ri.Free(edgy);
+#endif
 		if(workImage != pic) {
+#ifdef USE_PTHREADS
+			ri.free(workImage);
+#else
 			ri.Free(workImage);
+#endif
 		}
 		workImage = newWorkImage;
 	}
@@ -1084,7 +1271,11 @@ byte *R_LoadAlternateImage_real( byte *pic, int width, int height, float greysca
 			newWorkImage = R_Rainbow(workImage, width, height);
 		}
 		if(workImage != pic) {
+#ifdef USE_PTHREADS
+			ri.free(workImage);
+#else
 			ri.Free(workImage);
+#endif
 		}
 		workImage = newWorkImage;
 	}
@@ -1092,7 +1283,11 @@ byte *R_LoadAlternateImage_real( byte *pic, int width, int height, float greysca
 		any = qtrue;
 		newWorkImage = R_Berserk(workImage, width, height);
 		if(workImage != pic) {
+#ifdef USE_PTHREADS
+			ri.free(workImage);
+#else
 			ri.Free(workImage);
+#endif
 		}
 		workImage = newWorkImage;
 	}
@@ -1100,7 +1295,11 @@ byte *R_LoadAlternateImage_real( byte *pic, int width, int height, float greysca
 		any = qtrue;
 		newWorkImage = R_HueShift(hueShift, workImage, width, height);
 		if(workImage != pic) {
+#ifdef USE_PTHREADS
+			ri.free(workImage);
+#else
 			ri.Free(workImage);
+#endif
 		}
 		workImage = newWorkImage;
 	}
@@ -1108,7 +1307,11 @@ byte *R_LoadAlternateImage_real( byte *pic, int width, int height, float greysca
 		any = qtrue;
 		newWorkImage = R_SatShift(satShift, workImage, width, height);
 		if(workImage != pic) {
+#ifdef USE_PTHREADS
+			ri.free(workImage);
+#else
 			ri.Free(workImage);
+#endif
 		}
 		workImage = newWorkImage;
 	}
@@ -1116,7 +1319,11 @@ byte *R_LoadAlternateImage_real( byte *pic, int width, int height, float greysca
 		any = qtrue;
 		newWorkImage = R_LumShift(lumShift, workImage, width, height);
 		if(workImage != pic) {
+#ifdef USE_PTHREADS
+			ri.free(workImage);
+#else
 			ri.Free(workImage);
+#endif
 		}
 		workImage = newWorkImage;
 	}
@@ -1222,9 +1429,17 @@ void R_UpdateAlternateImages( void ) {
 			byte *altImage = R_LoadAlternateImage(pic, width, height);
 			if(altImage && altImage != pic) {
 				image->alternate = R_CreateImage( va("-alternate%s", image->imgName), va("-alternate%s", localName), altImage, width, height, image->flags);
+#ifdef USE_PTHREADS
+				ri.free(altImage);
+#else
 				ri.Free(altImage);
+#endif
 			}
+#ifdef USE_PTHREADS
+			ri.free(pic);
+#else
 			ri.Free(pic);
+#endif
 		}
 	}
 
@@ -1257,12 +1472,12 @@ COM_StripExtension
 */
 void COM_StripFilename( const char *in, char *out, int destsize )
 {
-	const char *dot = strrchr(in, '\\'), *slash;
+	const char *dot = strrchr(in, '\\'); //, *slash;
 	if(!dot) {
 		dot = strrchr(in, '/');
 	}
 
-	if (dot && ((slash = strchr(in, '/')) == NULL || slash < dot))
+	if (dot)
 		destsize = (destsize < dot-in+1 ? destsize : dot-in+1);
 
 	if ( in == out && destsize > 1 )
@@ -1292,7 +1507,7 @@ image_t	*R_FindImageFile( const char *name, imgFlags_t flags )
 	int		hash;
 	char variables[ MAX_QPATH ] = {'\0'};
 
-	if ( !name ) {
+	if ( !name || !name[0] ) {
 		return NULL;
 	}
 
@@ -1325,9 +1540,9 @@ image_t	*R_FindImageFile( const char *name, imgFlags_t flags )
 
 	if ( strrchr( name, '.' ) > name ) {
 		// try with stripped extension
-		//COM_StripExtension( name, strippedName, sizeof( strippedName ) );
+		//COM_StripExtension( name, strippedName, sizeof( strippedName ) ); // moved above
 		for ( image = hashTable[ hash ]; image; image = image->next ) {
-			if ( !Q_stricmp( strippedName, image->imgName )
+			if ( !Q_stricmp( image->imgName, strippedName ) // was Q_stricmp( strippedName, image->imgName ) because this image file is special
 				&& (variables[0] == '\0' || Q_stristr(image->imgName, variables)) ) {
 				//if ( strcmp( strippedName, "*white" ) ) {
 					if ( image->flags != flags ) {
@@ -1344,11 +1559,42 @@ image_t	*R_FindImageFile( const char *name, imgFlags_t flags )
 	// load the pic from disk
 	//
 	byte* pal = R_FindPalette(strippedName2);
+
+#ifdef USE_PTHREADS
+	void *fileData;
+	int length;
+	if(ri.Pthread_Start && pal) { // conditions to load async
+		imageType_t type = IM_NONE;
+		// create a placeholder image for async loading
+		//image = R_CreateImage3( ( char * ) name, strippedName2, flags & ~IMGFLAG_MIPMAP & ~IMGFLAG_PICMIP );
+		if((length = ri.FS_ReadFile(va("%s.%s", strippedName, "png"), &fileData)) > 0) {
+			type = IM_PNG;
+		} else if((length = ri.FS_ReadFile(va("%s.%s", strippedName, "jpg"), &fileData)) > 0) {
+			type = IM_JPG;
+		} else if((length = ri.FS_ReadFile(va("%s.%s", strippedName, "tga"), &fileData)) > 0) {
+			type = IM_TGA;
+		} else {
+			type = IM_NONE;
+		}
+
+		if(type != IM_NONE) {
+			image = R_CreateImage(name, strippedName, pal, 16, 16, flags & ~IMGFLAG_MIPMAP & ~IMGFLAG_PICMIP );
+			Q_strncpyz(image->imgName2, strippedName, MAX_QPATH);
+			Q_strncpyz(image->variables, variables, MAX_QPATH);
+			//R_LoadRemote((void *)(tr.numImages - 1), sizeof(int));
+			fileDatas[tr.numImages - 1] = fileData;
+			//return image;
+			if(ri.Pthread_Start(R_LoadRemote, (tr.numImages - 1), length, type) > -1) { // initiate async load
+				return image;
+			}
+		}
+	}
+#endif
+
 	image_t *palette = NULL;
 	if(pal) {
 		Q_strncpy(paletteName, (char *)va("*pal%i-%i-%i-%i", pal[0], pal[1], pal[2], pal[3]), sizeof(paletteName));
-		palette = R_CreateImage(paletteName, paletteName, 
-			pal, 16, 16, IMGFLAG_CLAMPTOEDGE | IMGFLAG_MIPMAP );
+		palette = R_CreateImage(paletteName, paletteName, pal, 16, 16, IMGFLAG_CLAMPTOEDGE | IMGFLAG_MIPMAP );
 	}
 
 	if(Q_stristr(name, "*pal")) {
@@ -1368,7 +1614,11 @@ image_t	*R_FindImageFile( const char *name, imgFlags_t flags )
 	if(variables[0] != '\0') {
 		byte *variableImage = R_LoadAlternateImageVariables(pic, width, height, variables);
 		if(variableImage && variableImage != pic) {
+#ifdef USE_PTHREADS
+			ri.free(pic);
+#else
 			ri.Free(pic);
+#endif
 			pic = variableImage;
 		}
 	}
@@ -1380,10 +1630,18 @@ image_t	*R_FindImageFile( const char *name, imgFlags_t flags )
 	image->palette = palette;
 	if(altImage && altImage != pic) {
 		image->alternate = R_CreateImage( va("-alternate%s", name), va("-alternate%s", localName), altImage, width, height, flags );
-		ri.Free(altImage);
+#ifdef USE_PTHREADS
+		ri.free(altImage);
+#else
+		ri.Free( altImage );
+#endif
 	}
 
+#ifdef USE_PTHREADS
+	ri.free(pic);
+#else
 	ri.Free( pic );
+#endif
 	return image;
 }
 
@@ -1819,6 +2077,12 @@ void R_InitImages( void ) {
 		trWorlds[i].numImages = 5;
 	}
 #endif
+
+#ifdef USE_PTHREADS
+	pthread_mutex_init(&pixel_data_mutex, NULL);
+	Com_Memset(pixelDatas, 0, sizeof(pixelDatas));
+#endif
+
 }
 
 

@@ -55,12 +55,16 @@ void GL_Bind( image_t *image ) {
 		texnum = image->texnum;
 	}
 
-	if(image && r_paletteMode->integer && image->palette) {
+	if(image && (r_paletteMode->integer || !image->texnum) && image->palette) {
 		texnum = image->palette->texnum;
 	}
 
 	if(image && shouldUseAlternate && image->alternate) {
 		texnum = image->alternate->texnum;
+	}
+
+	if(image && !shouldUseAlternate && image->replace) {
+		texnum = image->replace->texnum;
 	}
 
 	if ( r_nobind->integer && tr.dlightImage ) {		// performance evaluation option
@@ -988,7 +992,9 @@ void RB_SetGL2D( void ) {
 		GLS_DSTBLEND_ONE_MINUS_SRC_ALPHA );
 
 	GL_Cull( CT_TWO_SIDED );
+#ifndef __WASM__
 	qglDisable( GL_CLIP_PLANE0 );
+#endif
 
 	// set time for 2D shaders
 	backEnd.refdef.time = ri.Milliseconds();

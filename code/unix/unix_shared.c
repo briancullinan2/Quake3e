@@ -19,6 +19,7 @@ along with Quake III Arena source code; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
+
 #define _GNU_SOURCE
 #include <sched.h>
 #include <sys/types.h>
@@ -492,7 +493,7 @@ void *Sys_LoadLibrary( const char *name )
 		Com_Error( ERR_FATAL, "Sys_LoadLibrary: Unable to load library with '%s' extension", ext );
 	}
 
-	handle = dlopen( name, RTLD_NOW );
+	handle = dlopen( name, RTLD_NOW | RTLD_LOCAL );
 	return handle;
 }
 
@@ -610,3 +611,69 @@ qboolean Sys_SetAffinityMask( const uint64_t mask )
 	}
 }
 #endif // USE_AFFINITY_MASK
+
+#ifdef USE_PTHREADS
+
+#include <pthread.h>
+
+qboolean initPthreads = qfalse;
+
+typedef struct {
+	void *p;
+	int data;
+	int dataLength;
+	int enumValue;
+	void * (* threadfunc)(int, int, int);
+	volatile qboolean finished;
+} q3threadHandle_t;
+
+static q3threadHandle_t *running[MAX_PTHREADS];
+
+static void *Sys_Pthread_Start(void *data) {
+	q3threadHandle_t* tcb;
+	tcb = (q3threadHandle_t*)data;
+	tcb->threadfunc(tcb->data, tcb->dataLength, tcb->enumValue);
+	tcb->finished = qtrue;
+	return NULL;
+}
+
+int Sys_Pthread(void * (* threadfunc)(int, int, int), int data, int dataLength, int enumValue) {
+	int i;
+
+	if(!initPthreads) {
+		for (i = 0; i < MAX_PTHREADS; i++) {
+			if(running[i] == NULL) {
+				q3threadHandle_t* tcb = malloc( sizeof(q3threadHandle_t));
+				running[i] = tcb;
+				running[i]->finished = qtrue; // because it's new
+			}
+		}
+		initPthreads = qtrue;
+	}
+
+	for (i = 0; i < MAX_PTHREADS; i++) {
+		if(running[i] && running[i]->finished) {
+			running[i]->data = data;
+			running[i]->dataLength = dataLength;
+			running[i]->threadfunc = threadfunc;
+			running[i]->enumValue = enumValue;
+			pthread_create( (pthread_t *)running[i], NULL, Sys_Pthread_Start, &running[i]->p);
+			return i;
+		}
+	}
+
+	return -1;
+}
+
+qboolean Sys_Pthread_Running(int handle) {
+	if(handle < 0 || handle >= MAX_PTHREADS) {
+		return qfalse;
+	}
+	return !running[handle]->finished;
+}
+
+
+#endif
+
+
+

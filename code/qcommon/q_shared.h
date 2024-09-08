@@ -56,18 +56,23 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 
 //===========================================================================
+// show did you mean? results for map names, cvars, command names, etc
+#define USE_DIDYOUMEAN 1
 
-#define USE_MULTIVM_CLIENT 1
-#ifndef __WASM__
-#define USE_MULTIVM_SERVER 1
-#endif
-#define USE_MULTIVM_RENDERER 1
+#define USE_BSP_MODELS 1
+//#define USE_MULTIVM_CLIENT 1
+//#ifndef __WASM__
+//#define USE_MULTIVM_SERVER 1
+//#endif
+//#define USE_MULTIVM_RENDERER 1
+//#define USE_PTHREADS 1
+//#define MAX_PTHREADS 20
+
 
 #if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
 // Cyrax's Multiview is what makes multiworld possible.
 //#define USE_UNLOCKED_CVARS 0
 #define USE_ENGINE_TELE 1
-#define USE_LAZY_MEMORY 1
 //#define USE_LAZY_LOAD 1
 #endif
 
@@ -342,7 +347,7 @@ typedef int		clipHandle_t;
 #define	BIG_INFO_VALUE		8192
 
 
-#define	MAX_QPATH			64		// max length of a quake game pathname
+#define	MAX_QPATH			128		// max length of a quake game pathname
 #ifdef PATH_MAX
 #define MAX_OSPATH			PATH_MAX
 #else
@@ -861,6 +866,11 @@ const char *Com_SkipCharset( const char *s, const char *sep );
 void Com_RandomBytes( byte *string, int len );
 
 void Com_SortFileList( char **list, int nfiles, int fastSort );
+#ifdef USE_DIDYOUMEAN
+const char *FS_SimpleFilename(const char *filename);
+int levenshtein(const char *s, const char *t);
+char  **FS_ListNearestFiles( const char *pathFilter, const char *filter, int *numfiles, float matchDivisor, int flags );
+#endif
 
 // mode parm for FS_FOpenFile
 typedef enum {
@@ -1467,7 +1477,7 @@ typedef struct {
 typedef struct {
   glyphInfo_t glyphs [GLYPHS_PER_FONT];
   float glyphScale;
-  char name[MAX_QPATH];
+  char name[64];
 } fontInfo_t;
 
 #define Square(x) ((x)*(x))

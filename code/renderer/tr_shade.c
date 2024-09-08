@@ -919,7 +919,6 @@ static void RB_IterateStagesGeneric( const shaderCommands_t *input )
 			break;
 
 
-
 	if(input->shader && input->shader->lightmapIndex == LIGHTMAP_2D
 		&& pStage->bundle[0].image[0] && input->shader->surfaceFlags == 0) {
 		pStage->bundle[0].image[0]->palette = NULL;

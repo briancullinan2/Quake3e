@@ -235,9 +235,9 @@ static qhandle_t R_RegisterOBJ(const char *name, model_t *mod)
 		void *v;
 	} buf;
 	qboolean loaded = qfalse;
-	int filesize;
+	//int filesize;
 
-	filesize = ri.FS_ReadFile(name, (void **) &buf.v);
+	/*filesize = */ri.FS_ReadFile(name, (void **) &buf.v);
 	if(!buf.u)
 	{
 		mod->type = MOD_BAD;
@@ -258,6 +258,16 @@ static qhandle_t R_RegisterOBJ(const char *name, model_t *mod)
 	return mod->index;
 }
 
+
+#ifdef USE_BSP_MODELS
+qhandle_t RE_LoadWorldMap_real( const char *name, model_t *model );
+static qhandle_t R_RegisterBSP(const char *name, model_t *mod)
+{
+	return RE_LoadWorldMap_real( name, mod );
+}
+#endif
+
+
 typedef struct
 {
 	const char *ext;
@@ -271,7 +281,10 @@ static modelExtToLoaderMap_t modelLoaders[ ] =
 	{ "iqm", R_RegisterIQM },
 	{ "mdr", R_RegisterMDR },
 	{ "md3", R_RegisterMD3 },
-	{ "obj", R_RegisterOBJ }
+	{ "obj", R_RegisterOBJ },
+#ifdef USE_BSP_MODELS
+	{ "bsp", R_RegisterBSP }
+#endif
 };
 
 static int numModelLoaders = ARRAY_LEN(modelLoaders);
@@ -310,9 +323,12 @@ model_t *R_AllocModel( void ) {
 	mod->index = tr.numModels;
 	tr.models[tr.numModels] = mod;
 
-#ifdef USE_MULTIVM_RENDERER
-	if(rwi != 0)
-		trWorlds[0].models[trWorlds[0].numModels++] = mod;
+#if 0 // defined(USE_MULTIVM_RENDERER) || defined(USE_BSP_MODELS)
+	if(rwi != 0) {
+		trWorlds[0].models[trWorlds[0].numModels] = mod;
+		mod->index = trWorlds[0].numModels;
+		trWorlds[0].numModels++;
+	}
 #endif
 
 	tr.numModels++;
@@ -485,6 +501,7 @@ static qboolean R_LoadMD3( model_t *mod, int lod, void *buffer, int fileSize, co
 	md3Tag_t			*tag;
 	int					version;
 	int					size;
+	char	strippedName[ MAX_QPATH ];
 	char	dirName[ MAX_QPATH ];
 
 	pinmodel = (md3Header_t *)buffer;
@@ -505,6 +522,9 @@ static qboolean R_LoadMD3( model_t *mod, int lod, void *buffer, int fileSize, co
 	mod->type = MOD_MESH;
 	mod->dataSize += size;
 	mod->md3[lod] = ri.Hunk_Alloc( size, h_low );
+
+	COM_StripExtension(mod->name, strippedName, MAX_QPATH);
+	COM_StripFilename(strippedName, dirName, MAX_QPATH);
 
 	Com_Memcpy( mod->md3[lod], buffer, size );
 
@@ -642,8 +662,6 @@ static qboolean R_LoadMD3( model_t *mod, int lod, void *buffer, int fileSize, co
 			surf->name[j-2] = 0;
 		}
 
-		COM_StripFilename(mod->name, dirName, MAX_QPATH);
-
 		// register the shaders
 		shader = (md3Shader_t *) ( (byte *)surf + surf->ofsShaders );
 		for ( j = 0 ; j < surf->numShaders ; j++, shader++ ) {
@@ -656,20 +674,37 @@ static qboolean R_LoadMD3( model_t *mod, int lod, void *buffer, int fileSize, co
 			if ( sh->defaultShader ) {
 				const char *temp;
 				const char *fname = strrchr(shader->name, '/');
+				char strippedName2[MAX_QPATH];
+				COM_StripExtension(shader->name, strippedName2, MAX_QPATH);
+
+				sh = R_FindShader( strippedName2, LIGHTMAP_NONE, qtrue );
+				Com_Printf("loading: %s, %i\n", strippedName2, sh->defaultShader);
+
 				if(!fname) {
 					fname = strrchr(shader->name, '\\');
 				}
-				temp = va("%s%s", dirName, fname);
-				if(fname) {
+				if(!fname) {
+					temp = va("%s/%s", dirName, strippedName2);
+				} else {
+					COM_StripExtension(fname, strippedName2, MAX_QPATH);
+					temp = va("%s%s", dirName, strippedName2);
+				}
+				if(sh->index == 0) {
 					sh = R_FindShader( temp, LIGHTMAP_NONE, qtrue );
 					//Com_Printf("shader found! %s, %s, %s\n", dirName, fname, shader->name);
 				}
-				if ( sh->defaultShader ) {
+
+				if(sh->index == 0) {
+					COM_StripExtension(shader->name, strippedName2, MAX_QPATH);
+					sh = R_FindShader( va("textures/%s", strippedName2), LIGHTMAP_NONE, qtrue );
+				}
+
+				if ( sh->index == 0 ) {
 					shader->shaderIndex = 0;
 				} else {
 					shader->shaderIndex = sh->index;
 					if(makeSkin)
-						R_AddSkinSurface((char *)temp, sh);
+						R_AddSkinSurface(surf->name, sh);
 				}
 			} else {
 				shader->shaderIndex = sh->index;
@@ -1087,6 +1122,15 @@ if(rwi != 0) {
 	RE_ClearScene();
 
 	tr.registered = qtrue;
+
+#ifdef USE_PTHREADS
+	// make sure the thread list is clear and ready to use
+	//for(int i = 0; i < MAX_PTHREADS; i++) {
+	//	if(ri.Pthread_Status(i)) {
+	//		tr.pthreads = qfalse; // continue as normal
+	//	}
+	//}
+#endif
 }
 
 //=============================================================================

@@ -23,6 +23,9 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "tr_local.h"
 
+static char	variables[ MAX_QPATH ] = {'\0'};
+#define R_FindShader(x, y, z) R_FindShader( variables[0] == '\0' ? x : va("%s%s", x, variables), y, z )
+
 /*
 
 Loads and prepares a map file for scene rendering.
@@ -33,7 +36,18 @@ void RE_LoadWorldMap( const char *name );
 
 */
 
+#ifdef USE_BSP_MODELS
+#define MAX_WORLD_MODELS 64
+int       rwi = 0;
+static 		world_t		s_worldDatas[MAX_WORLD_MODELS];
+#define s_worldData s_worldDatas[rwi]
+#ifdef tr
+#undef tr
+#endif
+#define tr trWorlds[rwi]
+#else
 #ifdef USE_MULTIVM_RENDERER
+#define MAX_WORLD_MODELS MAX_NUM_WORLDS
 static 		world_t		s_worldDatas[MAX_NUM_WORLDS];
 int       rwi = 0; // render world, should match number of loaded clip maps, 
                    //   since they are reusable
@@ -41,6 +55,7 @@ int 			rwi_ref = 0;
 #define s_worldData s_worldDatas[rwi]
 #else
 static	world_t		s_worldData;
+#endif
 #endif
 
 static	byte		*fileBase;
@@ -293,7 +308,7 @@ static float R_ProcessLightmap( byte *image, const byte *buf_p, float maxIntensi
 }
 
 
-#if !defined(__WASM__) && !defined(USE_MULTIVM_SERVER) && !defined(USE_MULTIVM_RENDERER)
+#if !defined(__WASM__) && !defined(USE_MULTIVM_SERVER) && !defined(USE_MULTIVM_RENDERER) && !defined(USE_BSP_MODELS)
 
 static int SetLightmapParams( int numLightmaps, int maxTextureSize )
 {
@@ -339,7 +354,7 @@ int R_GetLightmapCoords( const int lightmapIndex, float *x, float *y )
 	return lightmapNum;
 }
 
-#if !defined(__WASM__) && !defined(USE_MULTIVM_SERVER) && !defined(USE_MULTIVM_RENDERER)
+#if !defined(__WASM__) && !defined(USE_MULTIVM_SERVER) && !defined(USE_MULTIVM_RENDERER) && !defined(USE_BSP_MODELS)
 
 /*
 ===============
@@ -437,7 +452,7 @@ void R_LoadLightmaps( const lump_t *l ) {
 
 	numLightmaps = l->filelen / (LIGHTMAP_SIZE * LIGHTMAP_SIZE * 3);
 
-#if !defined(__WASM__) && !defined(USE_MULTIVM_SERVER) && !defined(USE_MULTIVM_RENDERER)
+#if !defined(USE_PTHREADS) && !defined(USE_MULTIVM_SERVER) && !defined(USE_MULTIVM_RENDERER) && !defined(__WASM__) && !defined(USE_BSP_MODELS)
 	if ( r_mergeLightmaps->integer && numLightmaps > 1 ) {
 		// check for low texture sizes
 		if ( glConfig.maxTextureSize >= LIGHTMAP_LEN*2 ) {
@@ -460,8 +475,13 @@ void R_LoadLightmaps( const lump_t *l ) {
 	for ( i = 0 ; i < tr.numLightmaps ; i++ ) {
 		maxIntensity = R_ProcessLightmap( image, buf + i * LIGHTMAP_SIZE * LIGHTMAP_SIZE * 3, maxIntensity );
 		byte *altImage = R_LoadAlternateImage(image, LIGHTMAP_SIZE, LIGHTMAP_SIZE);
+#ifdef USE_BSP_MODELS
+		tr.lightmaps[i] = R_CreateImage( va( "*lightmap%d%i", i, rwi ), NULL, image, LIGHTMAP_SIZE, LIGHTMAP_SIZE,
+			lightmapFlags | IMGFLAG_CLAMPTOEDGE );
+#else
 		tr.lightmaps[i] = R_CreateImage( va( "*lightmap%d", i ), NULL, image, LIGHTMAP_SIZE, LIGHTMAP_SIZE,
 			lightmapFlags | IMGFLAG_CLAMPTOEDGE );
+#endif
 
 		if(altImage && altImage != image) {
 			tr.lightmaps[i]->alternate = R_CreateImage( va( "*lightmapalt%d", i ), NULL, altImage, LIGHTMAP_SIZE, LIGHTMAP_SIZE,
@@ -641,6 +661,9 @@ static void ParseFace( const dsurface_t *ds, const drawVert_t *verts, msurface_t
 		numPoints = MAX_FACE_POINTS;
 		surf->shader = tr.defaultShader;
 	}
+	if(!surf->shader) {
+		surf->shader = tr.defaultShader;
+	}
 
 	numIndexes = LittleLong( ds->numIndexes );
 
@@ -709,6 +732,7 @@ static void ParseFace( const dsurface_t *ds, const drawVert_t *verts, msurface_t
 if(r_autoTerrain->integer) {
 	shader_t        *parent;
 	byte shaderIndexes[ 256 ];
+	const char *numberedShaderName;
 	float offsets[ 256 ];
 	if((surf->shader->surfaceFlags & SURF_TERRAIN)
 		|| (surf->shader->remappedShader
@@ -723,7 +747,9 @@ if(r_autoTerrain->integer) {
 
 		/* get matching shader and set alpha */
 		parent = surf->shader;
-		surf->shader = R_FindShader(GetIndexedShader( &s_worldData.terrain, numPoints, shaderIndexes ), LIGHTMAP_NONE, qfalse);
+		numberedShaderName = GetIndexedShader( &s_worldData.terrain, numPoints, shaderIndexes );
+		//Com_Printf("%s", numberedShaderName);
+		surf->shader = R_FindShader(numberedShaderName, LIGHTMAP_NONE, qfalse);
 		if(surf->shader->defaultShader) {
 			surf->shader = parent;
 		}
@@ -890,6 +916,43 @@ static void ParseTriSurf( const dsurface_t *ds, const drawVert_t *verts, msurfac
 			tri->verts[i].lightmap[1] = tri->verts[i].lightmap[1] * tr.lightmapScale[1] + lightmapY;
 		}
 	}
+
+
+#ifdef USE_AUTO_TERRAIN
+if(r_autoTerrain->integer) {
+	shader_t        *parent;
+	byte shaderIndexes[ 256 ];
+	const char *numberedShaderName;
+	float offsets[ 256 ];
+	if((surf->shader->surfaceFlags & SURF_TERRAIN)
+		|| (surf->shader->remappedShader
+		&& surf->shader->remappedShader->surfaceFlags & SURF_TERRAIN)) {
+
+		for ( i = 0; i < numVerts; i++ )
+		{
+			shaderIndexes[ i ] = GetShaderIndexForPoint( &s_worldData.terrain, s_worldData.bounds, tri->verts[i].xyz, tri->verts[i].st[0], tri->verts[i].st[1] );
+			offsets[ i ] = 0; // b->im->offsets[ shaderIndexes[ i ] ];
+			//%	Sys_Printf( "%f ", offsets[ i ] );
+		}
+
+		/* get matching shader and set alpha */
+		parent = surf->shader;
+		numberedShaderName = GetIndexedShader( &s_worldData.terrain, numVerts, shaderIndexes );
+		surf->shader = R_FindShader(numberedShaderName, LIGHTMAP_NONE, qfalse);
+		if(surf->shader->defaultShader) {
+			surf->shader = parent;
+		}
+
+		for ( i = 0; i < numVerts; i++ )
+		{
+			tri->verts[i].color.rgba[3] = shaderIndexes[ i ];
+		}
+	} else {
+		//Com_Printf("terrain %s\n", surf->shader->name);
+	}
+
+}
+#endif
 
 #if 0 //def USE_AUTO_TERRAIN
 {
@@ -1745,7 +1808,7 @@ static void R_LoadSurfaces( const lump_t *surfs, const lump_t *verts, const lump
 R_LoadSubmodels
 =================
 */
-static void R_LoadSubmodels( const lump_t *l ) {
+static void R_LoadSubmodels( const lump_t *l, model_t *inModel ) {
 	const dmodel_t *in;
 	bmodel_t	*out;
 	int			i, j, count;
@@ -1760,6 +1823,12 @@ static void R_LoadSubmodels( const lump_t *l ) {
 	for ( i=0 ; i<count ; i++, in++, out++ ) {
 		model_t *model;
 
+#ifdef USE_BSP_MODELS
+		if(i == 0 && inModel) {
+			model = inModel;
+			tr.models[tr.numModels++] = model;
+		} else
+#endif
 		model = R_AllocModel();
 
 		if ( model == NULL ) {
@@ -1768,7 +1837,11 @@ static void R_LoadSubmodels( const lump_t *l ) {
 
 		model->type = MOD_BRUSH;
 		model->bmodel = out;
+#ifdef USE_BSP_MODELS
+		Com_sprintf( model->name, sizeof( model->name ), "*%d", model->index - 1 );
+#else
 		Com_sprintf( model->name, sizeof( model->name ), "*%d", i );
+#endif
 
 		for (j=0 ; j<3 ; j++) {
 			out->bounds[0][j] = LittleFloat (in->mins[j]) * r_scale->value;
@@ -2301,6 +2374,7 @@ qboolean RE_GetEntityToken( char *buffer, int size ) {
 
 
 const char *R_LoadImage( const char *name, byte **pic, int *width, int *height );
+void COM_StripVariables( const char *in, char *out, int destsize );
 
 
 /*
@@ -2310,10 +2384,20 @@ RE_LoadWorldMap
 Called directly from cgame
 =================
 */
+#ifdef USE_BSP_MODELS
+qhandle_t RE_LoadWorldMap_real( const char *name, model_t *model );
+
+qhandle_t RE_LoadWorldMap( const char *name ) {
+	return RE_LoadWorldMap_real(name, NULL);
+}
+
+qhandle_t RE_LoadWorldMap_real( const char *name, model_t *model )
+#else
 #ifdef USE_MULTIVM_RENDERER
 int RE_LoadWorldMap( const char *name )
 #else
 void RE_LoadWorldMap( const char *name )
+#endif
 #endif
 {
 	int			i;
@@ -2324,15 +2408,27 @@ void RE_LoadWorldMap( const char *name )
 		void *v;
 	} buffer;
 	byte		*startMarker;
+	char		strippedName2[MAX_QPATH];
 
 	R_IssuePendingRenderCommands();
 
 	RE_ClearScene();
 
-#ifdef USE_MULTIVM_RENDERER
+
+	const char *varStart = strchr(name, '%');
+	if (varStart) {
+		Q_strncpyz(variables, varStart, MAX_QPATH);
+	} else {
+		variables[0] = '\0';
+	}
+	COM_StripVariables(name, strippedName2, MAX_QPATH);
+
+
+
+#if defined(USE_MULTIVM_RENDERER) || defined(USE_BSP_MODELS)
 	int j, empty = -1;
-	for(j = 0; j < MAX_NUM_WORLDS; j++) {
-		if ( !Q_stricmp( s_worldDatas[j].name, name ) ) {
+	for(j = 0; j < MAX_WORLD_MODELS; j++) {
+		if ( !Q_stricmp( s_worldDatas[j].name, strippedName2 ) ) {
 			// TODO: PRINT_DEVELOPER
 			rwi = 0;
 			ri.Printf( PRINT_ALL, "RE_LoadWorldMap (%i): Already loaded %s\n", j, name );
@@ -2347,7 +2443,7 @@ void RE_LoadWorldMap( const char *name )
 
 #else
 	if ( tr.worldMapLoaded ) {
-#ifdef USE_LAZY_MEMORY
+#if defined(USE_MULTIVM_RENDERER) || defined(USE_BSP_MODELS)
   	ri.Printf( PRINT_WARNING, "ERROR: attempted to redundantly load world map\n" );
 #else
 	if ( tr.worldMapLoaded ) {
@@ -2371,7 +2467,12 @@ void RE_LoadWorldMap( const char *name )
 	tr.worldMapLoaded = qtrue;
 
 	// load it
-	size = ri.FS_ReadFile( name, &buffer.v );
+	size = ri.FS_ReadFile( strippedName2, &buffer.v );
+#ifdef USE_BSP_MODELS
+	if(!buffer.b && trWorlds[0].world) {
+		return 0;
+	}
+#endif
 	if ( !buffer.b ) {
 		ri.Error( ERR_DROP, "%s: couldn't load %s", __func__, name );
 	}
@@ -2386,7 +2487,7 @@ void RE_LoadWorldMap( const char *name )
 	tr.world = NULL;
 
 	Com_Memset( &s_worldData, 0, sizeof( s_worldData ) );
-	Q_strncpyz( s_worldData.name, name, sizeof( s_worldData.name ) );
+	Q_strncpyz( s_worldData.name, strippedName2, sizeof( s_worldData.name ) );
 
 	Q_strncpyz( s_worldData.baseName, COM_SkipPath( s_worldData.name ), sizeof( s_worldData.name ) );
 	COM_StripExtension(s_worldData.baseName, s_worldData.baseName, sizeof(s_worldData.baseName));
@@ -2438,11 +2539,12 @@ if(!s_worldData.terrain.terrainImage) {
 	s_worldData.terrain.terrainFlip = qtrue;
 }
 
+// if we have an image but no layers default to 3 i guess
+if(!s_worldData.terrain.terrainLayers) {
+	s_worldData.terrain.terrainLayers = 3;
+}
+
 if(s_worldData.terrain.terrainImage) {
-	// if we have an image but no layers default to 3 i guess
-	if(!s_worldData.terrain.terrainLayers) {
-		s_worldData.terrain.terrainLayers = 3;
-	}
 
 	for ( i = 0; i < s_worldData.terrain.terrainHeight * s_worldData.terrain.terrainWidth * 4; i++ )
 	{
@@ -2471,11 +2573,12 @@ if(s_worldData.terrain.terrainImage) {
 	R_LoadSurfaces( &header->lumps[LUMP_SURFACES], &header->lumps[LUMP_DRAWVERTS], &header->lumps[LUMP_DRAWINDEXES] );
 	R_LoadMarksurfaces( &header->lumps[LUMP_LEAFSURFACES] );
 	R_LoadNodesAndLeafs( &header->lumps[LUMP_NODES], &header->lumps[LUMP_LEAFS] );
-	R_LoadSubmodels( &header->lumps[LUMP_MODELS] );
+	R_LoadSubmodels( &header->lumps[LUMP_MODELS], model );
 	R_LoadVisibility( &header->lumps[LUMP_VISIBILITY] );
 	R_LoadLightGrid( &header->lumps[LUMP_LIGHTGRID] );
 
 #ifdef USE_VBO
+	if(!rwi)
 	R_BuildWorldVBO( s_worldData.surfaces, s_worldData.numsurfaces );
 #endif
 
@@ -2488,9 +2591,16 @@ if(s_worldData.terrain.terrainImage) {
 
 	ri.FS_FreeFile( buffer.v );
 
+#ifdef USE_BSP_MODELS
+	rwi = 0;
+	if(model) {
+		return model->index;
+	}
+	return empty;
+#else
 #ifdef USE_MULTIVM_RENDERER
 	rwi = 0;
 	return empty;
 #endif
-
+#endif
 }

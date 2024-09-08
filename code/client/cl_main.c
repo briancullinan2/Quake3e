@@ -113,7 +113,7 @@ clientActive_t		cl;
 clientConnection_t	clc;
 clientStatic_t		cls;
 
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+#if defined(USE_MULTIVM_CLIENT)
 cvar_t  *cl_mvHighlight;
 #endif
 
@@ -361,7 +361,7 @@ static void CL_WriteGamestate( qboolean initial )
 	int			len;
 	entityState_t	*ent;
 	entityState_t	nullstate;
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+#if defined(USE_MULTIVM_CLIENT)
 	int igs = cgvmi_ref;
 #endif
 
@@ -443,7 +443,7 @@ static void CL_EmitPacketEntities( clSnapshot_t *from, clSnapshot_t *to, msg_t *
 	int		oldindex, newindex;
 	int		oldnum, newnum;
 	int		from_num_entities;
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+#if defined(USE_MULTIVM_CLIENT)
 	int igs = cgvmi_ref;
 #endif
 
@@ -508,11 +508,11 @@ static void CL_EmitPacketEntities( clSnapshot_t *from, clSnapshot_t *to, msg_t *
 CL_WriteSnapshot
 ====================
 */
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+#if defined(USE_MULTIVM_CLIENT)
 #undef snap
 #endif
 static void CL_WriteSnapshot( void ) {
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+#if defined(USE_MULTIVM_CLIENT)
 	int igs = cgvmi_ref;
 #endif
 
@@ -523,7 +523,7 @@ static void CL_WriteSnapshot( void ) {
 	byte	bufData[ MAX_MSGLEN_BUF ];
 	msg_t	msg;
 	int		i, len;
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+#if defined(USE_MULTIVM_CLIENT)
 	snap = &cl.snapshots[ cl.snapWorlds[cgvmi_ref].messageNum & PACKET_MASK ]; // current snapshot
 #else
 	snap = &cl.snapshots[ cl.snap.messageNum & PACKET_MASK ]; // current snapshot
@@ -716,12 +716,22 @@ CLIENT SIDE DEMO PLAYBACK
 =======================================================================
 */
 
+static int messageShift = 0;
+int        serverShift = 0;
+
 /*
 =================
 CL_DemoCompleted
 =================
 */
 static void CL_DemoCompleted( void ) {
+	Com_Printf("DEMO: ended.\n");
+	if(clc.demoIndex) {
+		messageShift = 0;
+		serverShift = 0;
+		Z_Free(clc.demoIndex);
+	}
+	
 	if ( com_timedemo->integer ) {
 		int	time;
 
@@ -735,6 +745,185 @@ static void CL_DemoCompleted( void ) {
 	CL_Disconnect( qtrue );
 	CL_NextDemo();
 }
+
+int MSG_ReadBits( msg_t *msg, int bits );
+#if defined(USE_MULTIVM_CLIENT)
+void CL_ParseSnapshot( msg_t *msg, int igs );
+#else
+void CL_ParseSnapshot( msg_t *msg );
+#endif
+
+void CL_ReadDemoIndex( void ) {
+	int			s;
+	int			r;
+	msg_t		buf;
+	int				cmd;
+	int count = 0, newnum, i;
+	byte		bufData[ MAX_MSGLEN_BUF ];
+	int    startTime;
+	int    demoStart = 0, demoEnd = 0;
+	entityState_t	*es;
+	entityState_t	nullstate;
+	const int SIMPLE_READ_SIZE = 24;
+#ifdef USE_MULTIVM_CLIENT
+  int igs = clientGames[cgvmi];
+#endif
+
+	startTime = Sys_Milliseconds();
+	
+	Com_Memset( &nullstate, 0, sizeof( nullstate ) );
+	
+	while(qtrue) {
+		// get the sequence number
+		r = FS_Read( &s, 4, clc.demofile );
+		if ( r != 4 ) {
+			break;
+		}
+	
+		// init the message
+		MSG_Init( &buf, bufData, MAX_MSGLEN );
+
+		// get the length
+		r = FS_Read( &buf.cursize, 4, clc.demofile );
+
+		// only read enough to get acknowledge and cmd
+		r = FS_Read( buf.data, SIMPLE_READ_SIZE, clc.demofile );
+
+		// check it if is a gamestate/snapshot
+		MSG_Bitstream( &buf );
+		MSG_ReadLong( &buf );
+		s = MSG_ReadByte( &buf );
+		if(s == svc_gamestate) {
+
+		} else if (s == svc_snapshot) {
+			// serverTime is first
+			if(demoStart == 0)
+				demoStart = MSG_ReadLong( &buf );
+			else
+				demoEnd = MSG_ReadLong( &buf );
+			count++;
+		} else if(s == svc_baseline) {
+			count++;
+		} else {
+			// skip this message
+		}
+		r = FS_Seek( clc.demofile, buf.cursize - SIMPLE_READ_SIZE, FS_SEEK_CUR );
+	}
+
+	clc.numDemoIndex = (demoEnd - demoStart) / 1000 + 10;
+
+	// allocate the necessary number of indexes 1 for each second, 
+	//   +1 in case it's ever rounded down after / 1000
+	Com_Printf( "DEMO: Initial scan took %ims\n", Sys_Milliseconds() - startTime );
+	Com_Printf("DEMO: Allocating %i KB for %i frames\n", 
+		(int)(clc.numDemoIndex * sizeof(demoIndex_t) / 1000), clc.numDemoIndex);
+
+	clc.demoIndex = Z_Malloc(clc.numDemoIndex * sizeof(demoIndex_t));
+	
+	// TODO: parse every snapshot and make a copy of the entity state once every second so it can be rewound
+	FS_Seek(clc.demofile, 0, FS_SEEK_SET);
+	
+	count = -1;
+	while(qtrue) {
+		// get the sequence number
+		r = FS_Read( &s, 4, clc.demofile );
+		if ( r != 4 ) {
+			break;
+		}
+	
+		// init the message
+		MSG_Init( &buf, bufData, MAX_MSGLEN );
+
+		// get the length
+		r = FS_Read( &buf.cursize, 4, clc.demofile );
+
+		// only read enough to get acknowledge and cmd
+		r = FS_Read( buf.data, buf.cursize, clc.demofile );
+
+		// check it if is a gamestate/snapshot
+		MSG_Bitstream( &buf );
+		MSG_ReadLong( &buf );
+		s = MSG_ReadByte( &buf );
+		if(s == svc_gamestate) {
+			CL_ClearState();
+
+			// a gamestate always marks a server command sequence
+			clc.serverCommandSequence = MSG_ReadLong( &buf );
+
+			// parse all the configstrings and baselines
+#ifdef USE_MULTIVM_CLIENT
+			cl.gameStates[igs].dataCount = 1;	// leave a 0 at the beginning for uninitialized configstrings
+#else
+			cl.gameState.dataCount = 1;	// leave a 0 at the beginning for uninitialized configstrings
+#endif
+			while ( 1 ) {
+				cmd = MSG_ReadByte( &buf );
+
+				if ( cmd == svc_EOF ) {
+					break;
+				}
+				
+				if ( cmd == svc_configstring ) {
+					i = MSG_ReadShort( &buf );
+					if ( i < 0 || i >= MAX_CONFIGSTRINGS ) {
+						Com_Error( ERR_DROP, "configstring > MAX_CONFIGSTRINGS" );
+					}
+
+					MSG_ReadBigString( &buf );
+				} else if ( cmd == svc_baseline ) {
+					newnum = MSG_ReadBits( &buf, GENTITYNUM_BITS );
+					if ( newnum < 0 || newnum >= MAX_GENTITIES ) {
+						Com_Error( ERR_DROP, "Baseline number out of range: %i", newnum );
+					}
+					es = &cl.entityBaselines[ newnum ];
+					MSG_ReadDeltaEntity( &buf, &nullstate, es, newnum );
+					cl.baselineUsed[ newnum ] = 1;
+				} else {
+					Com_Error( ERR_DROP, "CL_ParseGamestate: bad command byte %i", cmd );
+				}
+			}
+
+			clc.eventMask |= EM_GAMESTATE;
+
+			clc.clientNum = MSG_ReadLong( &buf );
+			// read the checksum feed
+			clc.checksumFeed = MSG_ReadLong( &buf );
+
+		} else if (s == svc_snapshot) {
+#ifdef USE_MULTIVM_CLIENT
+			CL_ParseSnapshot( &buf, igs );
+#else
+			CL_ParseSnapshot( &buf );
+#endif
+			int newcount = floor((cl.snap.serverTime - demoStart) / 1000);
+			if(newcount > count) {
+				count = newcount;
+				clc.demoIndex[count].serverTime = cl.snap.serverTime;
+				clc.demoIndex[count].offset = FS_FTell(clc.demofile) - buf.cursize - 8;
+        clSnapshot_t *clSnap = &cl.snapshots[cl.snap.messageNum & PACKET_MASK];
+        for ( i = 0 ; i < clSnap->numEntities ; i++ ) {
+          entityState_t *ent = &cl.parseEntities[ ( clSnap->parseEntitiesNum + i ) & (MAX_PARSE_ENTITIES-1) ];
+          memcpy(clc.demoIndex[ent->number].entities, ent, sizeof(entityState_t));
+        }
+			} else {
+			}
+		}
+		//offset = 8 + buf.cursize;
+	}
+
+	Com_Printf( "DEMO: Read %i key frames\n", count );
+	if(demoEnd - demoStart > 120000)
+		Com_Printf( "DEMO: Length %im %is\n", (demoEnd - demoStart) / 1000 / 60, (demoEnd - demoStart) / 1000 % 60 );
+	else if(demoEnd - demoStart > 2000)
+		Com_Printf( "DEMO: Length %is\n", (demoEnd - demoStart) / 1000 );
+	else
+		Com_Printf( "DEMO: Length %ims\n", demoEnd - demoStart );
+	Com_Printf( "DEMO: Indexing took %ims\n", Sys_Milliseconds() - startTime );
+	
+	
+	FS_Seek(clc.demofile, 0, FS_SEEK_SET);
+}
+
 
 
 /*
@@ -759,7 +948,7 @@ void CL_ReadDemoMessage( void ) {
 		CL_DemoCompleted();
 		return;
 	}
-	clc.serverMessageSequence = LittleLong( s );
+	clc.serverMessageSequence = LittleLong( s ) - messageShift;
 
 	// init the message
 	MSG_Init( &buf, bufData, MAX_MSGLEN );
@@ -874,6 +1063,155 @@ static void CL_CompleteDemoName(const char *args, int argNum )
 		FS_SetFilenameCallback( NULL );
 	}
 }
+
+void CL_Pause_f( void ) {
+	if(!clc.demoplaying) {
+		Com_Printf("Demo not playing.\n");
+		return;
+	}
+
+  Cvar_Set("timescale", "0");
+	Cvar_Set("cl_paused", "1");
+}
+
+void CL_Play_f( void ) {
+	if(!clc.demoplaying) {
+		Com_Printf("Demo not playing.\n");
+		return;
+	}
+
+	Cvar_Set("cl_paused", "0");
+}
+
+static void CL_Rewind_f( void ) {
+	int seconds = 10;
+#ifdef USE_MULTIVM_CLIENT
+  int igs = clc.currentView;
+#endif
+
+	if(!clc.demoplaying) {
+		Com_Printf("Demo not playing.\n");
+		return;
+	}
+
+	if(Cmd_Argc() > 2) {
+		Com_Printf( "Usage: %s (10|<seconds>)\n", Cmd_Argv(0) );
+		return;
+	}
+	
+	if(Cmd_Argc() == 2) {
+		seconds = atoi(Cmd_Argv(1));
+	}
+
+	//  find the nearest snapshot
+	int prevMessageNum = cl.snap.messageNum;
+	int prevServerTime = cl.snap.serverTime;
+	int nearest = (cl.snap.serverTime - clc.demoIndex[0].serverTime) / 1000;
+	if(Q_stricmpn(Cmd_Argv(0), "rew", 3)==0) {
+		Com_Printf("DEMO: rewind %i seconds\n", seconds);
+		nearest -= seconds;
+		if(nearest < 0) {
+			nearest = 0;
+		}
+	} else if (Q_stricmpn(Cmd_Argv(0), "for", 3)==0) {
+		Com_Printf("DEMO: fast forward %i seconds\n", seconds);
+		nearest += seconds;
+		if(nearest > clc.numDemoIndex) {
+			nearest = clc.numDemoIndex - 1;
+		}
+	} else if (Q_stricmpn(Cmd_Argv(0), "skip", 4)==0) {
+		nearest = seconds;
+		if(nearest < 0) {
+			Com_Printf("DEMO: Starting from the beginning.");
+			nearest = 0;
+		}
+		if(nearest > clc.numDemoIndex) {
+			Com_Printf("DEMO: Skipping to the end.");
+			nearest = clc.numDemoIndex - 1;
+		}
+	}
+	
+	nearest = 1;
+
+	// reset snapshot state to time we are skipping to
+	FS_Seek(clc.demofile, clc.demoIndex[nearest].offset, FS_SEEK_SET);
+	for(int j = 0; j < 3; j++) {
+		CL_ReadDemoMessage();
+	}
+	messageShift = cl.snap.messageNum - (prevMessageNum - messageShift) ;
+	serverShift = cl.snap.serverTime - (prevServerTime - serverShift);
+	Com_Printf("Message shift: %i (%i)\n", messageShift, serverShift);
+	// reset again to load the correct message shift
+	FS_Seek(clc.demofile, clc.demoIndex[nearest].offset, FS_SEEK_SET);
+	memcpy(cl.entityBaselines, clc.demoIndex[nearest].entities, MAX_GENTITIES * sizeof(entityState_t));
+#ifdef USE_MULTIVM_CLIENT
+  cl.serverTimes[0] = cl.snap.serverTime - serverShift;
+#else
+	cl.serverTime = cl.snap.serverTime - serverShift;
+#endif
+	for(int j = 0; j < 3; j++) {
+		CL_ReadDemoMessage();
+	}
+
+	// TODO: on time change (rewind, forward) reset the previous snapshot to 0?
+}
+
+
+/*
+====================
+CL_DemoExtCallback
+====================
+*/
+static qboolean CL_ModelNameCallback_f( const char *filename, int length )
+{
+	const int ext_len = strlen( "." );
+	const int num_len = 2;
+	int version;
+
+	if ( length <= ext_len + num_len || Q_stricmpn( filename + length - (ext_len + num_len), ".", ext_len ) != 0 )
+		return qfalse;
+
+	version = atoi( filename + length - num_len );
+	if ( version == com_protocol->integer )
+		return qtrue;
+
+	if ( version < 66 || version > NEW_PROTOCOL_VERSION )
+		return qfalse;
+
+	return qtrue;
+}
+
+
+/*
+====================
+CL_CompleteDemoName
+====================
+*/
+static void CL_CompleteModelName(const char *args, int argNum )
+{
+	if ( argNum == 2 )
+	{
+		FS_SetFilenameCallback( CL_ModelNameCallback_f );
+		Field_CompleteFilename( "models", ".", qfalse, FS_MATCH_ANY | FS_MATCH_STICK );
+		FS_SetFilenameCallback( NULL );
+	}
+}
+
+
+void CL_SpawnModel_f ( void ) {
+	// must spy on game command so we can switch cgvmi_ref to the right view when it starts receiving packets
+	if ( Cmd_Argc() > 3 || cls.state < CA_PRIMED) {
+		if(cls.state < CA_PRIMED) {
+			Com_Printf("Not connected to server.\n");
+		}
+		Com_Printf ("Usage: spawn [modelname] (<mode>)\n");
+		return;
+	}
+	//const char *i = Cmd_Argv(2);
+	//clc.selectedWorld = atoi(i);
+	CL_AddReliableCommand( Cmd_ArgsFrom(0), qfalse );
+}
+
 
 
 /*
@@ -1083,7 +1421,7 @@ void CL_ClearMemory( void ) {
 		// clear collision map data
 		CM_ClearMap();
 	} else {
-#ifdef USE_MULTIVM_SERVER
+#if 0 //def USE_MULTIVM_SERVER
 		// clear to mark doesn't work in multivm mode because there are many marks
 		Hunk_Clear();
     CM_ClearMap();
@@ -1124,7 +1462,7 @@ memory on the hunk from cgame, ui, and renderer
 =====================
 */
 void CL_MapLoading( void ) {
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+#if defined(USE_MULTIVM_CLIENT)
 	int igs = cgvmi_ref;
 #endif
 	if ( com_dedicated->integer ) {
@@ -1963,7 +2301,7 @@ CL_Configstrings_f
 static void CL_Configstrings_f( void ) {
 	int		i;
 	int		ofs;
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+#if defined(USE_MULTIVM_CLIENT)
 	int igs = cgvmi_ref;
 #endif
 
@@ -1992,7 +2330,7 @@ static void CL_Clientinfo_f( void ) {
 	Com_Printf( "state: %i\n", cls.state );
 	Com_Printf( "Server: %s\n", cls.servername );
 	Com_Printf ("User info settings:\n");
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+#if defined(USE_MULTIVM_CLIENT)
 // TODO: something here
   Info_Print( Cvar_InfoString( CVAR_USERINFO, NULL ) );
 #else
@@ -2010,7 +2348,7 @@ CL_Serverinfo_f
 static void CL_Serverinfo_f( void ) {
 	int		ofs;
 
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+#if defined(USE_MULTIVM_CLIENT)
 	ofs = cl.gameStates[cgvmi_ref].stringOffsets[ CS_SERVERINFO ];
 #else
 	ofs = cl.gameState.stringOffsets[ CS_SERVERINFO ];
@@ -2019,7 +2357,7 @@ static void CL_Serverinfo_f( void ) {
 		return;
 
 	Com_Printf( "Server info settings:\n" );
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+#if defined(USE_MULTIVM_CLIENT)
 	Info_Print( cl.gameStates[cgvmi_ref].stringData + ofs );
 #else
 	Info_Print( cl.gameState.stringData + ofs );
@@ -2035,7 +2373,7 @@ CL_Systeminfo_f
 static void CL_Systeminfo_f( void ) {
 	int ofs;
 
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+#if defined(USE_MULTIVM_CLIENT)
 	ofs = cl.gameStates[cgvmi_ref].stringOffsets[ CS_SYSTEMINFO ];
 #else
 	ofs = cl.gameState.stringOffsets[ CS_SYSTEMINFO ];
@@ -2044,7 +2382,7 @@ static void CL_Systeminfo_f( void ) {
 		return;
 
 	Com_Printf( "System info settings:\n" );
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+#if defined(USE_MULTIVM_CLIENT)
 	Info_Print( cl.gameStates[cgvmi_ref].stringData + ofs );
 #else
 	Info_Print( cl.gameState.stringData + ofs );
@@ -2123,9 +2461,8 @@ static void CL_DownloadsComplete( void ) {
 	// this will also (re)load the UI
 	// if this is a local client then only the client part of the hunk
 	// will be cleared, note that this is done after the hunk mark has been set
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
+#if defined(USE_MULTIVM_RENDERER) || defined(USE_PTHREADS)
 	// TODO: cl_norenderRestart
-	
 	re.InitShaders();
 	S_Shutdown();
 	CL_ShutdownVMs();
@@ -2302,7 +2639,7 @@ and determine if we need to download them
 =================
 */
 void CL_InitDownloads( void ) {
-#ifdef USE_MULTIVM_RENDERER
+#ifdef USE_MULTIVM_CLIENT
 #ifdef USE_CURL
 	int igs = cgvmi_ref;
 #endif
@@ -2411,7 +2748,7 @@ static void CL_CheckForResend( void ) {
 		port = Cvar_VariableIntegerValue( "net_qport" );
 
 		infoTruncated = qfalse;
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+#if defined(USE_MULTIVM_CLIENT)
     Q_strncpyz( info, Cvar_InfoString( CVAR_USERINFO, &infoTruncated ), sizeof( info ) );
 #else
 		Q_strncpyz( info, Cvar_InfoString( CVAR_USERINFO, &infoTruncated ), sizeof( info ) );
@@ -2699,6 +3036,13 @@ static void CL_ServersResponsePacket( const netadr_t* from, msg_t *msg, qboolean
 		addresses[numservers].port = (*buffptr++) << 8;
 		addresses[numservers].port += *buffptr++;
 		addresses[numservers].port = BigShort( addresses[numservers].port );
+
+
+#ifdef USE_MASTER_LAN
+		if(websocket) {
+			Q_strncpyz(addresses[numservers].protocol, "ws", 3);
+		}
+#endif
 
 		// syntax check
 		if (*buffptr != '\\' && *buffptr != '/')
@@ -3107,7 +3451,7 @@ static void CL_CheckUserinfo( void ) {
 
 		cvar_modifiedFlags &= ~CVAR_USERINFO;
 
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+#if defined(USE_MULTIVM_CLIENT)
 		info = Cvar_InfoString( CVAR_USERINFO, &infoTruncated );
 #else
 		info = Cvar_InfoString( CVAR_USERINFO, &infoTruncated );
@@ -3341,7 +3685,7 @@ CL_InitRenderer
 */
 static void CL_InitRenderer( void ) {
 
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+#if defined(USE_MULTIVM_CLIENT)
 	if(cls.state > CA_CONNECTING) {
 		cgvmi_ref = clc.selectedWorld;
 	} else {
@@ -3400,7 +3744,7 @@ This is the only place that any of these functions are called from
 ============================
 */
 void CL_StartHunkUsers( void ) {
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+#if defined(USE_MULTIVM_CLIENT)
 	int igs = cgvmi_ref;
 #endif
 
@@ -3435,7 +3779,7 @@ void CL_StartHunkUsers( void ) {
 	}
 
 #ifdef __WASM__
-	if(!first_click)
+//	if(!first_click)
 #endif
 	if ( !cls.soundStarted ) {
 		cls.soundStarted = qtrue;
@@ -3530,6 +3874,12 @@ void CL_R_FinishImage3( void *img, byte *pic, int picFormat, int numMips ) {
 #endif
 
 
+#ifdef USE_PTHREADS
+int Sys_Pthread(void * (* threadfunc)(int, int, int), int data, int dataLength, int enumValue);
+void CL_LoadJPG2( const char *filename, byte *existing, int length, unsigned char **pic, int *width, int *height );
+
+#endif
+
 /*
 ============
 CL_InitRef
@@ -3600,6 +3950,7 @@ static void CL_InitRef( void ) {
 	rimp.Hunk_AllocateTempMemory = Hunk_AllocateTempMemory;
 	rimp.Hunk_FreeTempMemory = Hunk_FreeTempMemory;
 
+	rimp.CM_BoxTrace = CM_BoxTrace;
 	rimp.CM_ClusterPVS = CM_ClusterPVS;
 	rimp.CM_DrawDebugSurface = CM_DrawDebugSurface;
 
@@ -3661,6 +4012,13 @@ static void CL_InitRef( void ) {
 	rimp.VKimp_Shutdown = VKimp_Shutdown;
 	rimp.VK_GetInstanceProcAddr = VK_GetInstanceProcAddr;
 	rimp.VK_CreateSurface = VK_CreateSurface;
+#endif
+
+#ifdef USE_PTHREADS
+	rimp.CL_LoadJPG2 = CL_LoadJPG2,
+	rimp.Pthread_Start = Sys_Pthread;
+	rimp.free = free;
+	rimp.malloc = malloc;
 #endif
 
 	ret = GetRefAPI( REF_API_VERSION, &rimp );
@@ -4028,7 +4386,7 @@ static void CL_InitGLimp_Cvars( void )
 #endif
 }
 
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+#if defined(USE_MULTIVM_CLIENT)
 
 extern int worldMaps[MAX_NUM_VMS];
 
@@ -4091,7 +4449,11 @@ void CL_LoadVM_f( void ) {
     for(i = 0; i < MAX_NUM_VMS; i++) {
 			if(worldMaps[i] > -1);
       else {
+#ifdef USE_MULTIVM_RENDERER
         worldMaps[i] = re.LoadWorld( va("maps/%s.bsp", name) );
+#else
+      	re.LoadWorld( va("maps/%s.bsp", name) );
+#endif
         Com_Printf("World loaded on %i\n", i);
         break;
       }
@@ -4115,7 +4477,7 @@ void CL_Tele_f ( void ) {
 
 #endif
 
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+#if defined(USE_MULTIVM_CLIENT)
 void CL_Game_f ( void ) {
 	// must spy on game command so we can switch cgvmi_ref to the right view when it starts receiving packets
 	if ( Cmd_Argc() > 3 || cls.state < CA_PRIMED) {
@@ -4366,7 +4728,7 @@ void CL_Init( void ) {
   }
 #endif
 
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+#if defined(USE_MULTIVM_CLIENT)
 	Cvar_Get( "mvproto", va( "%i", MV_MULTIWORLD_VERSION ), CVAR_USERINFO | CVAR_ROM );
   cl_mvHighlight = Cvar_Get("cl_mvHighlight", "1", CVAR_ARCHIVE);
   Cvar_CheckRange( cl_mvHighlight, "0", "1", CV_INTEGER );
@@ -4441,7 +4803,7 @@ void CL_Init( void ) {
 	// userinfo
 	Cvar_Get ("name", "UnnamedPlayer", CVAR_USERINFO | CVAR_ARCHIVE_ND );
 	Cvar_Get ("rate", "25000", CVAR_USERINFO | CVAR_ARCHIVE );
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+#if defined(USE_MULTIVM_CLIENT)
 	Cvar_Get ("snaps", "100", CVAR_USERINFO | CVAR_ARCHIVE );
 #else
 	Cvar_Get ("snaps", "40", CVAR_USERINFO | CVAR_ARCHIVE );
@@ -4477,10 +4839,18 @@ void CL_Init( void ) {
 	Cmd_AddCommand ("snd_restart", CL_Snd_Restart_f);
 	Cmd_AddCommand ("vid_restart", CL_Vid_Restart_f);
 	Cmd_AddCommand ("disconnect", CL_Disconnect_f);
+
 	Cmd_AddCommand ("record", CL_Record_f);
 	Cmd_SetCommandCompletionFunc( "record", CL_CompleteRecordName );
 	Cmd_AddCommand ("demo", CL_PlayDemo_f);
 	Cmd_SetCommandCompletionFunc( "demo", CL_CompleteDemoName );
+	Cmd_AddCommand ("spawn", CL_SpawnModel_f);
+	Cmd_SetCommandCompletionFunc( "spawn", CL_CompleteModelName );
+	Cmd_AddCommand("demo_pause", CL_Pause_f);
+	Cmd_AddCommand("rewind", CL_Rewind_f);
+	Cmd_AddCommand("forward", CL_Rewind_f);
+	Cmd_AddCommand("demo_play", CL_Play_f);
+
 	Cmd_AddCommand ("cinematic", CL_PlayCinematic_f);
 	Cmd_AddCommand ("stoprecord", CL_StopRecord_f);
 	Cmd_AddCommand ("connect", CL_Connect_f);
@@ -4512,7 +4882,7 @@ void CL_Init( void ) {
 
 
 
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+#if defined(USE_MULTIVM_CLIENT)
 	Cmd_AddCommand( "load", CL_LoadVM_f );
 	//Cmd_SetDescription("load", "Load extra VMs for showing multiple players or maps\nUsage: load [ui|cgame|game]");
 	Cmd_AddCommand ("tele", CL_Tele_f);
@@ -4607,7 +4977,7 @@ void CL_Shutdown( const char *finalmsg, qboolean quit ) {
 #endif
 
 
-#if defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_RENDERER)
+#if defined(USE_MULTIVM_CLIENT)
 	Cmd_RemoveCommand( "load" );
 #endif
 

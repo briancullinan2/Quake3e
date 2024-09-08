@@ -1,5 +1,55 @@
 ## Build Instructions
 
+### web assembly
+
+Download and install Node.Js https://nodejs.org/en/download/package-manager/current
+
+Download https://github.com/WebAssembly/wasi-sdk/releases
+
+Also download https://github.com/WebAssembly/binaryen/releases
+
+Put it in you /code/wasm/`os` folder where os is replaced with either linux, mingw, or darwin.
+
+The paths should match /code/darwin/binaryen-version_111 and /code/wasm/darwin/wasi-sdk-22.00
+
+These settings are found in the MAKEFILE under: 
+```
+WASISDK        := $(lastword $(wildcard code/wasm/$(COMPILE_PLATFORM)/wasi-sdk-*))
+WASI-BUILTINS  := $(lastword $(wildcard $(WASISDK)/lib/clang/*))
+WASM-OPT       ?= $(lastword $(wildcard code/wasm/$(COMPILE_PLATFORM)/binaryen-version_*/bin/wasm-opt))
+```
+
+Build per OS instructions.
+
+Extract a directory of pk3s, flattened on top of each other, to /docs/`mod`/pak0.pk3dir
+
+Run `npm run repack` command with image magick and ffmpeg and oggvorbis installed. This will convert assets to web compatible format and make some quality adjustments for download performance. This creates a files /docs/maps/`mod`/pak0.pk3 that will be served to clients. You may also add the original pk3 files to a folder named /docs/original/`mod`/pak0.pk3 and then use sv_dlURL and direct native clients to the original mod while hosting a server within a browser window game. Repack also generates a /docs/`mod`/pak0.pk3dir/scripts/palette.shader file that contains a list of all the images detected with their RGBA average values. The engine loads this to determine which files to attempt to load from the server to speed up image loading.
+
+Run `npm start` to start the proxy/repack conjoined server.
+
+Open a browser and direct it to http://localhost:8080/ to see the engine try to load. Use the debug console. Contact the original developer when it fails and report common issues to list here:
+
+Error: ENOENT: no such file or directory, rename '...'
+
+Set the MODNAME const in /code/wasm/repack.js to your mod name
+
+Uncaught (in promise) ReferenceError: malloc is not defined
+
+Make sure engine is exporting symbols with `-Wl,--export=malloc`
+
+wasm-ld: error: symbol exported via --export not found: R_FindPalette
+
+Make sure C++ files wrap public/export/visible functions in:
+```
+#ifdef __cplusplus
+extern "C" {
+#endif // __cplusplus
+```
+
+error: declaration of 'SCR_DebugGraph' has a different language linkage
+
+Same as above but more annoying.
+
 ### windows/msvc
 
 Install Visual Studio Community Edition 2017 or later and compile `quake3e` project from solution

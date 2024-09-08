@@ -585,10 +585,16 @@ static void SV_ClipMoveToEntities( moveclip_t *clip ) {
 		if ( !touch->r.bmodel ) {
 			angles = vec3_origin;	// boxes don't rotate
 		}
-
+	
+#if 0 //def USE_BSP_MODELS
 		CM_TransformedBoxTrace ( &trace, (float *)clip->start, (float *)clip->end,
 			(float *)clip->mins, (float *)clip->maxs, clipHandle,  clip->contentmask,
 			origin, angles, clip->capsule);
+#else
+		CM_TransformedBoxTrace ( &trace, (float *)clip->start, (float *)clip->end,
+			(float *)clip->mins, (float *)clip->maxs, clipHandle,  clip->contentmask,
+			origin, angles, clip->capsule);
+#endif
 
 		if ( trace.allsolid ) {
 			clip->trace.allsolid = qtrue;
@@ -609,6 +615,9 @@ static void SV_ClipMoveToEntities( moveclip_t *clip ) {
 			clip->trace.startsolid |= oldStart;
 		}
 	}
+#if 0 //def USE_BSP_MODELS
+	CM_SwitchMap(0);
+#endif
 }
 
 

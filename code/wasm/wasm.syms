@@ -31,6 +31,7 @@ Sys_gettime
 popen
 pclose
 Sys_clock_gettime
+__secs_to_zone
 
 DebugBreak
 Sys_Microseconds
@@ -91,7 +92,6 @@ S_CodecReadStream
 S_CodecLoad
 S_CodecInit
 S_CodecShutdown
-S_PaintChannel
 
 
 Sys_FreeFileList
@@ -112,6 +112,10 @@ Sys_Exit
 Sys_Print
 Sys_LoadLibrary
 Sys_LoadFunction
+FS_FOpenFileWriteAsync
+Sys_GetClipboardData
+Sys_DefaultInstallPath
+NET_Restart_f
 
 
 SDL_OpenAudioDevice
@@ -295,3 +299,13 @@ glNamedRenderbufferStorageMultisampleEXT
 glCheckNamedFramebufferStatusEXT
 glNamedFramebufferRenderbufferEXT
 glNamedFramebufferTexture2DEXT
+
+
+
+glBindBufferARB
+glBlitFramebuffer
+glBufferDataARB
+glDeleteBuffersARB
+glGenBuffersARB
+glGetInternalformativ
+glRenderbufferStorageMultisample

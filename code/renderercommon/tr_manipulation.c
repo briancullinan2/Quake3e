@@ -13,9 +13,9 @@
 
 byte GetShaderIndexForPoint( terrain_t *s_worldData, const vec3_t eMinmax[2], const vec3_t point, const float s, const float t ){
 	/* early out if no indexmap */
-if(!s_worldData->terrainImage) {
-	return 0;
-}
+	//if(!s_worldData->terrainImage) {
+	//	return 0;
+	//}
 
 	/* this code is really broken */
 #if 0
@@ -61,6 +61,26 @@ if(!s_worldData->terrainImage) {
 
 	/* return index */
 	//Com_Printf("found: %i\n", s_worldData->terrainImage[ y * s_worldData->terrainWidth * 4 + x * 4 ]);
+	if(!s_worldData->terrainImage) {
+		trace_t tr;
+		vec3_t start, end;
+		int shaderIndex;
+		start[0] = end[0] = point[ 0 ];
+		start[1] = end[1] = point[ 1 ];
+		start[2] = 65536;
+		end[2] = -65536;
+		ri.CM_BoxTrace(&tr, start, end, NULL, NULL, 0, 1 /*MASK_SOLID*/, qfalse);
+		if((tr.endpos[2] - eMinmax[0][2]) / size[2] > 1.0f) { // hit the skybox
+			start[2] = tr.endpos[2] - 64;
+			ri.CM_BoxTrace(&tr, start, end, NULL, NULL, 0, 1 /*MASK_SOLID*/, qfalse);
+		}
+		shaderIndex = (tr.endpos[2] - eMinmax[0][2]) / size[2] * s_worldData->terrainLayers;
+		if(shaderIndex >= s_worldData->terrainLayers) {
+			shaderIndex = s_worldData->terrainLayers - 1;
+		}
+		//Com_Printf("shader wtf: %f, %i\n", (tr.endpos[2] - eMinmax[0][2]) / size[2], shaderIndex );
+		return shaderIndex;
+	} else
 	if(s_worldData->terrainFlip) {
 		return s_worldData->terrainImage[ (s_worldData->terrainHeight - y) * s_worldData->terrainWidth * 4 + x * 4 ];
 	} else {
@@ -76,7 +96,7 @@ if(!s_worldData->terrainImage) {
 
 const char *GetIndexedShader( terrain_t *s_worldData, int numPoints, byte *shaderIndexes ){
 	/* early out if bad data */
-	if ( s_worldData->terrainImage == NULL || numPoints <= 0 || shaderIndexes == NULL ) {
+	if ( /*s_worldData->terrainImage == NULL ||*/ numPoints <= 0 || shaderIndexes == NULL ) {
 		return  "default";
 	}
 
@@ -267,7 +287,11 @@ void R_AddPalette(const char *name, int a, int r, int g, int b) {
 		}
 	}
 
+#ifdef USE_PTHREADS
+	palette = ri.malloc( sizeof( *palette ) + namelen + 1 );
+#else
 	palette = ri.Hunk_Alloc( sizeof( *palette ) + namelen + 1, h_low );
+#endif
 	palette->imgName = (char *)( palette + 1 );
 	strcpy( palette->imgName, normalName );
 	palette->a = a;
@@ -313,7 +337,11 @@ Q_EXPORT byte *R_FindPalette(const char *name) {
 
 
 byte *R_RaddtoRGBA(byte *pic, byte *pic2, int width, int height) {
+#ifdef USE_PTHREADS
+	byte *grey = ri.malloc(width * height * 4);
+#else
 	byte *grey = ri.Malloc(width * height * 4);
+#endif
 
 	byte *img, *scan, *alpha;
 	int i;
@@ -333,7 +361,11 @@ byte *R_RaddtoRGBA(byte *pic, byte *pic2, int width, int height) {
 
 // because i'm going to need a drink after this one
 byte *R_RtoRGBA(byte *pic, byte *pic2, int width, int height) {
+#ifdef USE_PTHREADS
+	byte *grey = ri.malloc(width * height * 4);
+#else
 	byte *grey = ri.Malloc(width * height * 4);
+#endif
 
 //if ( tr.mapLoading && r_mapGreyScale->value > 0 ) {
 	byte *img, *scan, *alpha;
@@ -350,7 +382,11 @@ byte *R_RtoRGBA(byte *pic, byte *pic2, int width, int height) {
 
 
 byte *R_RGBAtoR(byte *pic, int width, int height) {
+#ifdef USE_PTHREADS
+	byte *grey = ri.malloc(width * height * 1);
+#else
 	byte *grey = ri.Malloc(width * height * 1);
+#endif
 
 	byte *img, *scan;
 	int i;
@@ -458,7 +494,11 @@ RGB hsl2rgb(float h, float s, float l) {
 }
 
 byte *R_Rainbow2(byte *pic, int width, int height) {
+#ifdef USE_PTHREADS
+	byte *grey = ri.malloc(width * height * 4);
+#else
 	byte *grey = ri.Malloc(width * height * 4);
+#endif
 
 	byte *img, *scan;
 	int i;
@@ -477,7 +517,11 @@ byte *R_Rainbow2(byte *pic, int width, int height) {
 }
 
 byte *R_LumShift(float lumShift, byte *pic, int width, int height) {
+#ifdef USE_PTHREADS
+	byte *grey = ri.malloc(width * height * 4);
+#else
 	byte *grey = ri.Malloc(width * height * 4);
+#endif
 
 	byte *img, *scan;
 	int i;
@@ -495,7 +539,11 @@ byte *R_LumShift(float lumShift, byte *pic, int width, int height) {
 }
 
 byte *R_SatShift(float satShift, byte *pic, int width, int height) {
+#ifdef USE_PTHREADS
+	byte *grey = ri.malloc(width * height * 4);
+#else
 	byte *grey = ri.Malloc(width * height * 4);
+#endif
 
 	byte *img, *scan;
 	int i;
@@ -513,7 +561,11 @@ byte *R_SatShift(float satShift, byte *pic, int width, int height) {
 }
 
 byte *R_HueShift(float hueShift, byte *pic, int width, int height) {
+#ifdef USE_PTHREADS
+	byte *grey = ri.malloc(width * height * 4);
+#else
 	byte *grey = ri.Malloc(width * height * 4);
+#endif
 
 	byte *img, *scan;
 	int i;
@@ -532,7 +584,11 @@ byte *R_HueShift(float hueShift, byte *pic, int width, int height) {
 }
 
 byte *R_Rainbow(byte *pic, int width, int height) {
+#ifdef USE_PTHREADS
+	byte *grey = ri.malloc(width * height * 4);
+#else
 	byte *grey = ri.Malloc(width * height * 4);
+#endif
 
 	byte *img, *scan;
 	int i;
@@ -552,7 +608,11 @@ byte *R_Rainbow(byte *pic, int width, int height) {
 
 
 byte *R_InvertColors4(byte *pic, int width, int height) {
+#ifdef USE_PTHREADS
+	byte *grey = ri.malloc(width * height * 4);
+#else
 	byte *grey = ri.Malloc(width * height * 4);
+#endif
 
 	byte *img, *scan;
 	int i;
@@ -571,7 +631,11 @@ byte *R_InvertColors4(byte *pic, int width, int height) {
 }
 
 byte *R_InvertColors3(byte *pic, int width, int height) {
+#ifdef USE_PTHREADS
+	byte *grey = ri.malloc(width * height * 4);
+#else
 	byte *grey = ri.Malloc(width * height * 4);
+#endif
 
 	byte *img, *scan;
 	int i;
@@ -591,7 +655,11 @@ byte *R_InvertColors3(byte *pic, int width, int height) {
 
 
 byte *R_InvertColors2(byte *pic, int width, int height) {
+#ifdef USE_PTHREADS
+	byte *grey = ri.malloc(width * height * 4);
+#else
 	byte *grey = ri.Malloc(width * height * 4);
+#endif
 
 	byte *img, *scan;
 	int i;
@@ -609,7 +677,11 @@ byte *R_InvertColors2(byte *pic, int width, int height) {
 }
 
 byte *R_InvertColors(byte *pic, int width, int height) {
+#ifdef USE_PTHREADS
+	byte *grey = ri.malloc(width * height * 4);
+#else
 	byte *grey = ri.Malloc(width * height * 4);
+#endif
 
 	byte *img, *scan;
 	int i;
@@ -624,7 +696,11 @@ byte *R_InvertColors(byte *pic, int width, int height) {
 }
 
 byte *R_Berserk(byte *pic, int width, int height) {
+#ifdef USE_PTHREADS
+	byte *grey = ri.malloc(width * height * 4);
+#else
 	byte *grey = ri.Malloc(width * height * 4);
+#endif
 
 //if ( tr.mapLoading && r_mapGreyScale->value > 0 ) {
 	byte *img, *scan;
@@ -641,7 +717,11 @@ byte *R_Berserk(byte *pic, int width, int height) {
 }
 
 byte *R_GreyScale(float greyscale, byte *pic, int width, int height) {
+#ifdef USE_PTHREADS
+	byte *grey = ri.malloc(width * height * 4);
+#else
 	byte *grey = ri.Malloc(width * height * 4);
+#endif
 
 //if ( tr.mapLoading && r_mapGreyScale->value > 0 ) {
 	byte *img, *scan;
@@ -729,7 +809,11 @@ void gaussian_filter(const pixel_t *in, pixel_t *out,
     const int n = 2 * (int)(2 * sigma) + 3;
     const float mean = (float)floor(n / 2.0);
     float (*kernel); // variable length array
+#ifdef USE_PTHREADS
+		kernel = ri.malloc(n * n * sizeof(float));
+#else
 		kernel = ri.Malloc(n * n * sizeof(float));
+#endif
 
     //fprintf(stderr, "gaussian_filter: kernel size %d, sigma=%g\n",
     //        n, sigma);

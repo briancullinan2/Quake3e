@@ -8,9 +8,9 @@ let soundEffects = {}
 // So that we don't keep retrying missing sounds
 const REMOTE_SOUNDS = {}
 function S_CodecLoad (name, info) {
-  if(!SND.inited) {
-    return 0
-  }
+  //if(!SND.inited) {
+  //  return 0
+  //}
   let filenameStr = addressToString(name)
   if(filenameStr.length == 0) {
     return 0
@@ -74,43 +74,50 @@ function S_CodecLoad (name, info) {
   return 0
 }
 
+
+function SNDDMA_Init() {
+  SND.inited = true
+  if(HEAPU32[first_click >> 2]) {
+    return 0
+  }
+  HEAPU32[(dma >> 2) + 0] = 2
+  HEAPU32[(dma >> 2) + 1] = 16384
+  HEAPU32[(dma >> 2) + 2] = 16384 / 2
+  HEAPU32[(dma >> 2) + 3] = 1
+  HEAPU32[(dma >> 2) + 4] = 32
+  HEAPU32[(dma >> 2) + 5] = 1
+  HEAPU32[(dma >> 2) + 6] = 44100
+  //HEAPU32[(dma >> 2) + 7] = Z_Malloc(16384 * 200)
+  HEAPU32[(dma >> 2) + 8] = Z_Malloc(AUDIO_DRIVER.length + 1)
+  stringToAddress(AUDIO_DRIVER, HEAPU32[(dma >> 2) + 7])
+  if(!listener) {
+    InitListener()
+  }
+  return 1
+}
+
+
+function SNDDMA_Shutdown() {
+  if(HEAPU32[(dma >> 2) + 8]) {
+    //Z_Free(HEAPU32[(dma >> 2) + 7])
+    Z_Free(HEAPU32[(dma >> 2) + 8])
+    //HEAPU32[(dma >> 2) + 7] = 0
+    HEAPU32[(dma >> 2) + 8] = 0
+  }
+  HEAPU32[first_click >> 2] = 1
+}
+
+
+
+
 let SND = {
-  SNDDMA_Init: function () {
-    SND.inited = true
-    if(HEAPU32[first_click >> 2]) {
-      return 0
-    }
-    HEAPU32[(dma >> 2) + 0] = 2
-    HEAPU32[(dma >> 2) + 1] = 16384
-    HEAPU32[(dma >> 2) + 2] = 16384 / 2
-    HEAPU32[(dma >> 2) + 3] = 1
-    HEAPU32[(dma >> 2) + 4] = 32
-    HEAPU32[(dma >> 2) + 5] = 1
-    HEAPU32[(dma >> 2) + 6] = 44100
-    //HEAPU32[(dma >> 2) + 7] = Z_Malloc(16384 * 200)
-    HEAPU32[(dma >> 2) + 8] = Z_Malloc(AUDIO_DRIVER.length + 1)
-    stringToAddress(AUDIO_DRIVER, HEAPU32[(dma >> 2) + 7])
-    if(!listener) {
-      InitListener()
-    }
-    return 1
-  },
-  SNDDMA_Shutdown: function () {
-    if(HEAPU32[(dma >> 2) + 8]) {
-      //Z_Free(HEAPU32[(dma >> 2) + 7])
-      Z_Free(HEAPU32[(dma >> 2) + 8])
-      //HEAPU32[(dma >> 2) + 7] = 0
-      HEAPU32[(dma >> 2) + 8] = 0
-    }
-    HEAPU32[first_click >> 2] = 1
-  },
+  SNDDMA_Init: SNDDMA_Init,
+  SNDDMA_Shutdown: SNDDMA_Shutdown,
   SNDDMA_BeginPainting: function () {},
   SNDDMA_Submit: function () {},
   SNDDMA_GetDMAPos: function () {
     return Sys_Milliseconds()
   },
-
-
 
   S_CodecCloseStream: function () {},
   S_CodecOpenStream: function () {},
@@ -298,7 +305,7 @@ function S_Base_StartSound(origin, entityNum, entchannel, sfx) {
   if(HEAPU32[first_click >> 2]) {
     return
   }
-  let name = addressToString(s_knownSfx + sfx * 100 + 28).replace(/\..*?$/, '.ogg')
+  let name = addressToString(sfx).replace(/\..*?$/, '.ogg')
   //let name = sfx-72
 
   /*

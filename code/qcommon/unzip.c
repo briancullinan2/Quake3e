@@ -1064,11 +1064,21 @@ static void   zcfree  OF((voidp opaque, voidp ptr));
 #define UNZ_MAXFILENAMEINZIP (256)
 #endif
 
+#ifdef USE_PTHREADS
+#ifndef ALLOC
+# define ALLOC(size) (malloc(size))
+#endif
+#ifndef TRYFREE
+# define TRYFREE(p) {if (p) free(p);}
+#endif
+
+#else
 #ifndef ALLOC
 # define ALLOC(size) (Z_Malloc(size))
 #endif
 #ifndef TRYFREE
 # define TRYFREE(p) {if (p) Z_Free(p);}
+#endif
 #endif
 
 #define SIZECENTRALDIRITEM (0x2e)
@@ -4338,11 +4348,19 @@ voidp zcalloc (voidp opaque, unsigned items, unsigned size)
 {
     if (opaque) items += size - size; /* make compiler happy */
     // use small zone to avoid main zone fragmentation
+#ifdef USE_PTHREADS
+    return (voidp)malloc(items*size);
+#else
     return (voidp)S_Malloc(items*size);
+#endif
 }
 
 void  zcfree (voidp opaque, voidp ptr)
 {
+#ifdef USE_PTHREADS
+    free(ptr);
+#else
     Z_Free(ptr);
+#endif
     if (opaque) return; /* make compiler happy */
 }

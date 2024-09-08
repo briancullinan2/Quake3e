@@ -63,8 +63,10 @@ endif
 #########################  WASM     ###################################
 ifeq ($(PLATFORM),wasm)
 ARCH=js
+USE_RENDERER_DLOPEN=0
 RENDERER_DEFAULT=opengl2
 WASM=1
+USE_LOCAL_HEADERS=0
 CROSS_COMPILING=1
 BUILD_SERVER=0
 USE_SYSTEM_JPEG=1
@@ -90,6 +92,10 @@ ifeq ($(COMPILE_PLATFORM),darwin)
   USE_SDL=1
   USE_LOCAL_HEADERS=1
   USE_RENDERER_DLOPEN = 0
+endif
+
+ifeq ($(PLATFORM),wasm)
+USE_LOCAL_HEADERS=0
 endif
 
 ifeq ($(COMPILE_PLATFORM),cygwin)
@@ -372,7 +378,13 @@ CLIENT_EXTRA_FILES=
 #############################################################################
 
 ifdef WASM
+ifeq ($(PLATFORM),js)
+ARCHEXT = .js
+else
 ARCHEXT = .wasm
+endif
+
+USE_LOCAL_HEADERS=0
 
 ifeq ($(COMPILE_PLATFORM),mingw)
 HAS_WASI=1
@@ -391,7 +403,11 @@ WASISDK        := $(lastword $(wildcard code/wasm/$(COMPILE_PLATFORM)/wasi-sdk-*
 WASI-BUILTINS  := $(lastword $(wildcard $(WASISDK)/lib/clang/*))
 WASM-OPT       ?= $(lastword $(wildcard code/wasm/$(COMPILE_PLATFORM)/binaryen-version_*/bin/wasm-opt))
 #LD             := $(WASISDK)/bin/wasm-ld
+ifeq ($(PLATFORM),js)
+CC             := emcc
+else
 CC             := $(WASISDK)/bin/clang 
+endif
 LD             := $(CC)
 
 WASI_INCLUDES  := \
@@ -399,13 +415,13 @@ WASI_INCLUDES  := \
   -Icode/wasm \
 	-I$(WASISDK)/share/wasi-sysroot/include \
   -I$(WASISDK)/share/wasi-sysroot/include/wasm32-wasi \
-  -Icode/wasm/SDL2-2.0.14/include \
-  -Icode/libogg/include -Icode/libvorbis/include
+  -Icode/libogg/include -Icode/libvorbis/include \
+  -I/opt/homebrew/Cellar/emscripten/3.1.64/libexec/system/include/SDL/
 
 BASE_CFLAGS    += -fno-rtti -Wall \
-	-Wimplicit -fstrict-aliasing  -fno-inline \
-	-ftree-vectorize -fsigned-char -MMD \
-	-fno-short-enums  -fPIC \
+	 -fstrict-aliasing  -fno-inline \
+	 -MMD \
+	 -fPIC \
   -DNO_VM_COMPILED=1 -fno-common  \
 	-D_XOPEN_SOURCE=700 -D__EMSCRIPTEN__=1 \
 	-D__WASM__=1 -D__wasi__=1 -D__wasm32__=1 \
@@ -415,9 +431,12 @@ BASE_CFLAGS    += -fno-rtti -Wall \
 
 LDFLAGS        += -D__WASM__=1 --no-standard-libraries \
   -Wl,--export-dynamic -Wl,--error-limit=200 \
-  -Wl,--import-memory,--import-table \
-	$(WASI-BUILTINS)/lib/wasi/libclang_rt.builtins-wasm32.a \
+	$(WASI-BUILTINS)/lib/wasi/libclang_rt.builtins-wasm32.a
+
+ifeq ($(PLATFORM),wasm)
+LDFLAGS        += -Wl,--import-memory,--import-table \
 	$(WASISDK)/share/wasi-sysroot/lib/wasm32-wasi/libc.a 
+endif
 
 
 #  -Wl,--initial-memory=52428800 \
@@ -436,16 +455,44 @@ SHLIBLDFLAGS = -Wl,--no-entry $(LDFLAGS) \
 #  -fno-builtin -nostdlib 
 # -shared not supported
 #  -Wl,--export=CL_Try_LoadJPG,--export=CL_Fail_LoadJPG \
+#  -Wl,--export=stackRestore,--export=stackSave,--export=stackAlloc \
 
-CLIENT_LDFLAGS  = $(LDFLAGS) code/wasm/stack_ops.S \
+ifeq ($(PLATFORM),js)
+CLIENT_LDFLAGS  = \
+  -s MIN_WEBGL_VERSION=1 \
+  -s MAX_WEBGL_VERSION=3 \
+  -s USE_WEBGL2=1 \
+  -s FULL_ES2=1 \
+  -s FULL_ES3=1 \
+  -s USE_SDL=2 \
+  -s SINGLE_FILE=1 \
+  -s ALLOW_MEMORY_GROWTH=1 \
+  -s INITIAL_MEMORY=256MB \
+  --js-library $(MOUNT_DIR)/wasm/sys_in.js \
+  --js-library $(MOUNT_DIR)/wasm/sys_wasm.js \
+  --js-library $(MOUNT_DIR)/wasm/sys_snd.js \
+  --js-library $(MOUNT_DIR)/wasm/sys_net.js \
+  --js-library $(MOUNT_DIR)/wasm/sys_web.js \
+  --js-library $(MOUNT_DIR)/wasm/sys_fs.js \
+  --js-library $(MOUNT_DIR)/wasm/sys_std.js \
+  --js-library $(MOUNT_DIR)/wasm/sys_emjs.js
+
+else
+
+CLIENT_LDFLAGS  = code/wasm/stack_ops.S 
+
+endif
+
+#  -Wl,--export=stackRestore,--export=stackSave,--export=stackAlloc
+
+CLIENT_LDFLAGS  += $(LDFLAGS) \
 	-Wl,--export=sprintf       -Wl,--export=malloc  \
 	-Wl,--export=stderr        -Wl,--export=stdout  \
   -Wl,--export=FS_CreatePath -Wl,--export=free \
-	-Wl,--export=errno,--export=R_FindPalette \
+	-Wl,--export=errno,--export=R_FindPalette,--export=_start \
   -Wl,--export=Key_ClearStates,--export=Key_GetCatcher \
   -Wl,--export=Key_SetCatcher,--export=CL_PacketEvent \
   -Wl,--export=s_soundStarted,--export=s_soundMuted,--export=s_knownSfx \
-  -Wl,--export=stackRestore,--export=stackSave,--export=stackAlloc \
   -Wl,--export=dma,--export=S_SoundInfo,--export=Cbuf_ExecuteText \
   -Wl,--export=Cbuf_AddText,--export=gw_minimized,--export=FS_RecordFile \
   -Wl,--export=gw_active,--export=Z_Free,--export=CL_R_FinishImage3 \
@@ -621,7 +668,7 @@ ifeq ($(COMPILE_PLATFORM),darwin)
     CLIENT_EXTRA_FILES += $(MACLIBSDIR)/libSDL2-2.0.0.dylib
   else
   ifneq ($(SDL_INCLUDE),)
-    BASE_CFLAGS += $(SDL_INCLUDE)
+    BASE_CFLAGS += $(SDL_INCLUDE) -DUSE_ICON 
     CLIENT_LDFLAGS = $(SDL_LIBS)
   else
     BASE_CFLAGS += -I/Library/Frameworks/SDL2.framework/Headers
@@ -1288,6 +1335,8 @@ endif
 
 ifdef WASM
 
+#    $(B)/client/sdl_snd.o 
+
 Q3OBJ += \
     $(B)/client/sys_main.o \
     $(B)/client/dlmalloc.o \
@@ -1379,7 +1428,7 @@ $(B)/$(TARGET_CLIENT): $(Q3OBJ) $(wildcard code/wasm/*.js) code/wasm/index.html 
 	cp code/wasm/*.js docs/
 	cp code/wasm/*.html docs/
 	cp code/wasm/*.css docs/
-	cp $(B)/$(TARGET_CLIENT) docs/
+	cp $(B)/$(CNAME).* docs/
 
 
 else

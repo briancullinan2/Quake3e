@@ -127,7 +127,6 @@ function Server(opts) {
 
   var self = this
 	this._forwardIP = (opts || {}).proxy || ''
-  this._slaves = (opts || {}).slaves || []
   this._listeners = {}
 	this._httpServers = {}
   this._receivers = {}
@@ -641,7 +640,8 @@ Server.prototype._onSocketConnect = function(udpLookupPort, reqInfo) {
   var self = this
   var socket = self._receivers[udpLookupPort]
   if(!socket._socket.writable) return
-  var ipv6 = ip6addr.parse(this._slaves[0] || socket._socket.localAddress)
+  var ipv6 = ip6addr.parse(socket._socket.localAddress == '::1' ? '127.0.0.1' : socket._socket.localAddress)
+  //console.log('connection from ', reqInfo);
   var localbytes = ipv6.toBuffer()
   if(ipv6.kind() == 'ipv4') {
     localbytes = localbytes.slice(12)

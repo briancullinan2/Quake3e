@@ -24,8 +24,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "client.h"
 #include "snd_codec.h"
 
-#ifndef __WASM__
-
 /*
 =================
 FGetLittleLong
@@ -224,7 +222,11 @@ void *S_WAV_CodecLoad(const char *filename, snd_info_t *info)
 	}
 
 	// Allocate some memory
+#ifdef USE_PTHREADS
+	buffer = malloc(info->size);
+#else
 	buffer = Hunk_AllocateTempMemory(info->size);
+#endif
 	if(!buffer)
 	{
 		FS_FCloseFile(file);
@@ -296,5 +298,3 @@ int S_WAV_CodecReadStream(snd_stream_t *stream, int bytes, void *buffer)
 	S_ByteSwapRawSamples(samples, stream->info.width, stream->info.channels, buffer);
 	return bytes;
 }
-
-#endif

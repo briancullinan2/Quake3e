@@ -653,7 +653,12 @@ static qboolean R_LoadMD3(model_t * mod, int lod, void *buffer, int bufferSize, 
 				if(!fname) {
 					fname = strrchr(md3Shader->name, '\\');
 				}
-				temp = va("%s%s", dirName, fname);
+				if(!fname) {
+					fname = md3Shader->name;
+					temp = va("%s/%s", dirName, fname);
+				} else {
+					temp = va("%s%s", dirName, fname);
+				}
 				if(fname) {
 					sh = R_FindShader( temp, LIGHTMAP_NONE, qtrue );
 					//Com_Printf("shader found! %s, %s, %s\n", dirName, fname, shader->name);
@@ -663,15 +668,15 @@ static qboolean R_LoadMD3(model_t * mod, int lod, void *buffer, int bufferSize, 
 				} else {
 					*shaderIndex = sh->index;
 					if(makeSkin)
-						R_AddSkinSurface((char *)temp, sh);
+						R_AddSkinSurface(surf->name, sh);
 				}
 			}
 			else
 			{
 				*shaderIndex = sh->index;
+				if(makeSkin)
+					R_AddSkinSurface(surf->name, sh);
 			}
-			if(makeSkin)
-				R_AddSkinSurface(surf->name, sh);
 		}
 
 		// swap all the triangles

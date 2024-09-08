@@ -39,7 +39,20 @@ typedef struct _TargaHeader {
 	unsigned char	pixel_size, attributes;
 } TargaHeader;
 
+#ifdef USE_PTHREADS
+void R_LoadTGAFromBuffer( const char *name, byte *existing, int len, byte **pic, int *width, int *height );
+
 void R_LoadTGA ( const char *name, byte **pic, int *width, int *height)
+{
+	R_LoadTGAFromBuffer(name, NULL, 0, pic, width, height);
+}
+
+
+void R_LoadTGAFromBuffer ( const char *name, byte *existing, int len, byte **pic, int *width, int *height)
+
+#else
+void R_LoadTGA ( const char *name, byte **pic, int *width, int *height)
+#endif
 {
 	unsigned	columns, rows, numPixels;
 	byte	*pixbuf;
@@ -64,6 +77,12 @@ void R_LoadTGA ( const char *name, byte **pic, int *width, int *height)
 	//
 	// load the file
 	//
+#ifdef USE_PTHREADS
+	if(existing) {
+		length = len;
+		buffer.b = existing;
+	} else
+#endif
 	length = ri.FS_ReadFile ( ( char * ) name, &buffer.v);
 	if (!buffer.b || length < 0) {
 		return;
@@ -127,7 +146,11 @@ void R_LoadTGA ( const char *name, byte **pic, int *width, int *height)
 	}
 
 
+#ifdef USE_PTHREADS
+	targa_rgba = ri.malloc (numPixels);
+#else
 	targa_rgba = ri.Malloc (numPixels);
+#endif
 
 	if (targa_header.id_length != 0)
 	{
@@ -317,5 +340,7 @@ void R_LoadTGA ( const char *name, byte **pic, int *width, int *height)
 
   *pic = targa_rgba;
 
+#ifndef USE_PTHREADS
   ri.FS_FreeFile (buffer.v);
+#endif
 }
