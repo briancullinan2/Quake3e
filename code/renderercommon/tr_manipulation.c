@@ -81,7 +81,7 @@ byte GetShaderIndexForPoint( terrain_t *s_worldData, const vec3_t eMinmax[2], co
 		// this isn't going to work because the entity isn't placed until game sends it, so it can't be loaded until it's added to scene
 		if(s_worldData->clipIndex > 0) {
 			ri.CM_TransformedBoxTrace ( &clipTrace, start, end,
-				s_worldData->mins, s_worldData->maxs, s_worldData->clipIndex, 1,
+				NULL, NULL, s_worldData->clipIndex, 1,
 				s_worldData->origin, s_worldData->angles, qfalse);
 			/*if((clipTrace.endpos[2] - eMinmax[0][2]) / size[2] > 0.95f) { // hit the skybox
 				start[2] = tr.endpos[2] - 128;
@@ -89,7 +89,7 @@ byte GetShaderIndexForPoint( terrain_t *s_worldData, const vec3_t eMinmax[2], co
 					s_worldData->mins, s_worldData->maxs, s_worldData->clipIndex, 1,
 					s_worldData->origin, s_worldData->angles, qfalse);
 			}*/
-			Com_Printf("trace: %f \n", clipTrace.fraction);
+			//Com_Printf("trace: %f, %f \n", (clipTrace.endpos[2] - eMinmax[0][2]) / size[2], clipTrace.fraction);
 		}
 		if(clipTrace.fraction > 0 && clipTrace.fraction < tr.fraction) {
 			shaderIndex = (clipTrace.endpos[2] - eMinmax[0][2]) / size[2] * s_worldData->terrainLayers;
