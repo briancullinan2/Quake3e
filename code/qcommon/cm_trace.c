@@ -495,6 +495,16 @@ static void CM_TraceThroughBrush( traceWork_t *tw, const cbrush_t *brush ) {
 		return;
 	}
 
+	for (i = 0; i < brush->numsides; i++) {
+		side = brush->sides + i;
+		plane = side->plane;
+
+		if(side->surfaceFlags & SURF_SKY) {
+			return;
+		}
+
+	}
+	
 	c_brush_traces++;
 
 	getout = qfalse;
