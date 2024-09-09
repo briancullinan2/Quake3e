@@ -247,7 +247,8 @@ static void SV_TraceArea(vec3_t angle, vec3_t scale, float *d1, int mask, int fl
 	VectorCopy(cm.cmodels[0].mins, newMins);
 	VectorCopy(cm.cmodels[0].maxs, newMaxs);
 	VectorSubtract(newMaxs, newMins, newScale);
-	radius = VectorLength(newScale) / 2.0f;
+	newScale[2] = 0;
+	radius = VectorLength(newScale); //  / 2.0f;
 	VectorScale(newScale, 0.5f, center);
 	VectorAdd(newMins, center, center);
 	VectorMA(center, -scale[2], forward, midpoint);
@@ -550,7 +551,7 @@ void SV_MakeMinimap( void ) {
 	// could use height from above to add a bunch of stupid black space around it
 	//   but I like the extra dexterity - Brian Cullinan
 	VectorSubtract(newMaxs, newMins, size);
-	length = VectorLength(size) / 2;
+	length = VectorLength(size);
 	for(int i = 0; i < 3; i++) {
 		scale[i] = size[i] / sv_bspMiniSize->value;
 	}
@@ -778,7 +779,7 @@ void SV_MakeMinimap( void ) {
 	// TODO: mark all the entities on blue
 #endif
 
-	if(Cmd_Argc() > 1) {
+	if(Cmd_Argc() > 2) {
 		COM_StripExtension(filename, minimapFilename, sizeof(minimapFilename));
 	} else {
 		COM_StripExtension(cm.name, minimapFilename, sizeof(minimapFilename));
@@ -786,9 +787,9 @@ void SV_MakeMinimap( void ) {
 
 	//Q_strcat(minimapFilename, sizeof(minimapFilename), "_tracemap0001");
 	if(monochrome) {
-		WriteTGA( va("maps/%s.tga", minimapFilename), data4b, MAPSIZE, MAPSIZE, TGA_E );
+		WriteTGA( va("%s.tga", minimapFilename), data4b, MAPSIZE, MAPSIZE, TGA_E );
 	} else {
-		WriteTGA( va("maps/%s.tga", minimapFilename), data4b, MAPSIZE, MAPSIZE, TGA_RGBA );
+		WriteTGA( va("%s.tga", minimapFilename), data4b, MAPSIZE, MAPSIZE, TGA_RGBA );
 	}
 
 	if(data4b)

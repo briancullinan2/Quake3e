@@ -260,8 +260,6 @@ typedef struct terrain_s {
 #ifdef USE_BSP_MODELS
 	vec3_t origin; // for CM_TransformedBoxTrace
 	vec3_t angles;
-	vec3_t mins;
-	vec3_t maxs;
 	int clipIndex;
 #endif
 } terrain_t;

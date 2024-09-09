@@ -361,21 +361,11 @@ static qboolean CullPoints( vec4_t v[], const int count )
 	return qfalse;
 }
 
-#ifdef USE_THE_GRID
-extern qboolean gridMode;
-#endif
-
 
 static qboolean CullSkySide( const int mins[2], const int maxs[2] )
 {
 	int s, t;
 	vec4_t v[4];
-
-#ifdef USE_THE_GRID
-	if(gridMode) {
-		return qfalse;
-	}
-#endif
 
 	if ( r_nocull->integer )
 		return qfalse;

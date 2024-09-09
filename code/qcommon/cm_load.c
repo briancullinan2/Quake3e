@@ -90,9 +90,6 @@ static cbrush_t *box_brush;
 
 
 
-
-
-
 static void	CM_InitBoxHull (void);
 void	CM_FloodAreaConnections (void);
 
@@ -368,13 +365,20 @@ static void CMod_LoadPlanes( const lump_t *l )
 
 		out->dist = LittleFloat( in->dist ) * cm_scale->value;
 
-#if 0 //def USE_THE_GRID
+#ifdef USE_THE_GRID
 		if(cm.gridMode) { // save the tops of every brush in grid mode
-			out->normal[j] = 1.0;
-			out->normal[j] = 0.0;
-			out->normal[j] = 0.0;
-			out->dist =  256;
-			bits = 0;
+			vec3_t point;
+			VectorMA(vec3_origin, out->dist, out->normal, point);
+			Com_Printf("point: %f %f %f\n", point[0], point[1], point[2]);
+			if(point[2] == cm.cmodels[0].mins[2]) {
+
+			} else {
+				//theGrid[(int)round(points[j][1] / 256) * 64 + (int)round(points[j][0] / 256) * 8] = &points[j];
+				//point[2] = cm.cmodels[0].mins[2] + 256;
+			}
+			//out->dist = VectorNormalize(point);
+			//VectorMA(vec3_origin, 1.0f / out->dist, point, out->normal);
+			//VectorCopy(point, out->normal);
 		}
 #endif
 
@@ -897,13 +901,13 @@ void CM_LoadMap( const char *name, qboolean clientload, int *checksum )
 
 	// load into heap
 	CMod_LoadShaders( &header.lumps[LUMP_SHADERS] );
+	CMod_LoadSubmodels (&header.lumps[LUMP_MODELS]);
 	CMod_LoadLeafs (&header.lumps[LUMP_LEAFS]);
 	CMod_LoadLeafBrushes (&header.lumps[LUMP_LEAFBRUSHES]);
 	CMod_LoadLeafSurfaces (&header.lumps[LUMP_LEAFSURFACES]);
 	CMod_LoadPlanes (&header.lumps[LUMP_PLANES]);
 	CMod_LoadBrushSides (&header.lumps[LUMP_BRUSHSIDES]);
 	CMod_LoadBrushes (&header.lumps[LUMP_BRUSHES]);
-	CMod_LoadSubmodels (&header.lumps[LUMP_MODELS]);
 	CMod_LoadNodes (&header.lumps[LUMP_NODES]);
 	CMod_LoadEntityString (&header.lumps[LUMP_ENTITIES], name);
 	CMod_LoadVisibility( &header.lumps[LUMP_VISIBILITY] );

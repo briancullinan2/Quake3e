@@ -72,7 +72,7 @@ byte GetShaderIndexForPoint( terrain_t *s_worldData, const vec3_t eMinmax[2], co
 
 
 		ri.CM_BoxTrace(&tr, start, end, NULL, NULL, 0, 1 /*MASK_SOLID*/, qfalse);
-		if((tr.endpos[2] - eMinmax[0][2]) / size[2] > 0.95f) { // hit the skybox
+		if((tr.endpos[2] - eMinmax[0][2]) / size[2] > 0.99f) { // hit the skybox
 			start[2] = tr.endpos[2] - 128;
 			ri.CM_BoxTrace(&tr, start, end, NULL, NULL, 0, 1 /*MASK_SOLID*/, qfalse);
 		}
@@ -83,12 +83,12 @@ byte GetShaderIndexForPoint( terrain_t *s_worldData, const vec3_t eMinmax[2], co
 			ri.CM_TransformedBoxTrace ( &clipTrace, start, end,
 				NULL, NULL, s_worldData->clipIndex, 1,
 				s_worldData->origin, s_worldData->angles, qfalse);
-			/*if((clipTrace.endpos[2] - eMinmax[0][2]) / size[2] > 0.95f) { // hit the skybox
-				start[2] = tr.endpos[2] - 128;
+			if((clipTrace.endpos[2] - eMinmax[0][2]) / size[2] > 0.99f) { // hit the skybox
+				start[2] = clipTrace.endpos[2] - 128;
 				ri.CM_TransformedBoxTrace ( &clipTrace, start, end,
-					s_worldData->mins, s_worldData->maxs, s_worldData->clipIndex, 1,
+					NULL, NULL, s_worldData->clipIndex, 1,
 					s_worldData->origin, s_worldData->angles, qfalse);
-			}*/
+			}
 			//Com_Printf("trace: %f, %f \n", (clipTrace.endpos[2] - eMinmax[0][2]) / size[2], clipTrace.fraction);
 		}
 		if(clipTrace.fraction > 0 && clipTrace.fraction < tr.fraction) {

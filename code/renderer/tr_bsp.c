@@ -692,14 +692,15 @@ static void ParseFace( const dsurface_t *ds, const drawVert_t *verts, msurface_t
 		}
 #ifdef USE_THE_GRID
 		if(gridMode) { // save the tops of every brush in grid mode
-			if(cv->points[i][2] == s_worldData.terrain.mins[2]) {
+			if(cv->points[i][2] == s_worldData.bounds[0][2]) {
 
 			} else {
 				//theGrid[(int)round(verts[i].xyz[1] / 256) * 64 + (int)round(verts[i].xyz[0] / 256) * 8] = &tri->verts[i];
-				cv->points[i][2] = s_worldData.terrain.mins[2] + 256;
+				cv->points[i][2] = s_worldData.bounds[0][2] + 256;
 			}
 		}
 #endif
+
 		AddPointToBounds( cv->points[i], cv->bounds[0], cv->bounds[1] );
 		for ( j = 0 ; j < 2 ; j++ ) {
 			cv->points[i][3+j] = LittleFloat( verts[i].st[j] );
@@ -750,13 +751,16 @@ if(r_autoTerrain->integer) {
 	byte shaderIndexes[ 256 ];
 	const char *numberedShaderName;
 	float offsets[ 256 ];
+	vec3_t bounds[2];
+	VectorSubtract(s_worldData.bounds[0], s_worldData.terrain.origin, bounds[0]);
+	VectorSubtract(s_worldData.bounds[1], s_worldData.terrain.origin, bounds[1]);
 	if((surf->shader->surfaceFlags & SURF_TERRAIN)
 		|| (surf->shader->remappedShader
 		&& surf->shader->remappedShader->surfaceFlags & SURF_TERRAIN)) {
 
 		for ( i = 0; i < numPoints; i++ )
 		{
-			shaderIndexes[ i ] = GetShaderIndexForPoint( &s_worldData.terrain, s_worldData.bounds, cv->points[i], cv->points[i][3], cv->points[i][4] );
+			shaderIndexes[ i ] = GetShaderIndexForPoint( &s_worldData.terrain, bounds, cv->points[i], cv->points[i][3], cv->points[i][4] );
 			offsets[ i ] = 0; // b->im->offsets[ shaderIndexes[ i ] ];
 			//%	Sys_Printf( "%f ", offsets[ i ] );
 		}
@@ -916,18 +920,15 @@ static void ParseTriSurf( const dsurface_t *ds, const drawVert_t *verts, msurfac
 		}
 #ifdef USE_THE_GRID
 		if(gridMode) { // save the tops of every brush in grid mode
-			if(verts[i].xyz[2] == s_worldData.terrain.mins[2]) {
+			if(verts[i].xyz[2] == s_worldData.bounds[0][2]) {
 
 			} else {
 				theGrid[(int)round(verts[i].xyz[1] / 256) * 64 + (int)round(verts[i].xyz[0] / 256) * 8] = &tri->verts[i];
-				tri->verts[i].xyz[2] = s_worldData.terrain.mins[2] + 256;
+				tri->verts[i].xyz[2] = s_worldData.bounds[0][2] + 256;
 			}
 		}
 #endif
 
-#ifdef USE_THE_GRID
-		if(!gridMode) // save the tops of every brush in grid mode
-#endif
 		AddPointToBounds( tri->verts[i].xyz, tri->bounds[0], tri->bounds[1] );
 		for ( j = 0 ; j < 2 ; j++ ) {
 			tri->verts[i].st[j] = LittleFloat( verts[i].st[j] );
@@ -954,13 +955,16 @@ if(r_autoTerrain->integer) {
 	byte shaderIndexes[ 256 ];
 	const char *numberedShaderName;
 	float offsets[ 256 ];
+	vec3_t bounds[2];
+	VectorSubtract(s_worldData.bounds[0], s_worldData.terrain.origin, bounds[0]);
+	VectorSubtract(s_worldData.bounds[1], s_worldData.terrain.origin, bounds[1]);
 	if((surf->shader->surfaceFlags & SURF_TERRAIN)
 		|| (surf->shader->remappedShader
 		&& surf->shader->remappedShader->surfaceFlags & SURF_TERRAIN)) {
 
 		for ( i = 0; i < numVerts; i++ )
 		{
-			shaderIndexes[ i ] = GetShaderIndexForPoint( &s_worldData.terrain, s_worldData.bounds, tri->verts[i].xyz, tri->verts[i].st[0], tri->verts[i].st[1] );
+			shaderIndexes[ i ] = GetShaderIndexForPoint( &s_worldData.terrain, bounds, tri->verts[i].xyz, tri->verts[i].st[0], tri->verts[i].st[1] );
 			offsets[ i ] = 0; // b->im->offsets[ shaderIndexes[ i ] ];
 			//%	Sys_Printf( "%f ", offsets[ i ] );
 		}
@@ -2613,48 +2617,48 @@ void RE_LoadWorldMap( const char *name )
 #endif
 
 if(r_autoTerrain->integer) {
-		int j;
-		lump_t *subs = &header->lumps[LUMP_MODELS];
-		const dmodel_t *in = (void *)(fileBase + subs->fileofs);
+	int j;
+	lump_t *subs = &header->lumps[LUMP_MODELS];
+	const dmodel_t *in = (void *)(fileBase + subs->fileofs);
 
-		// checkout shaders for terrain
+	// checkout shaders for terrain
 
-if(s_worldData.terrain.terrainIndex[0]) {
-		R_LoadImage(s_worldData.terrain.terrainIndex, &s_worldData.terrain.terrainImage, &s_worldData.terrain.terrainWidth, &s_worldData.terrain.terrainHeight);
-} 
-if(!s_worldData.terrain.terrainImage) {
-		R_LoadImage(va("maps/%s_alphamap.tga", s_worldData.baseName), &s_worldData.terrain.terrainImage, &s_worldData.terrain.terrainWidth, &s_worldData.terrain.terrainHeight);
-}
-if(!s_worldData.terrain.terrainImage) {
-		R_LoadImage(va("maps/%s_tracemap.tga", s_worldData.baseName), &s_worldData.terrain.terrainImage, &s_worldData.terrain.terrainWidth, &s_worldData.terrain.terrainHeight);
-	s_worldData.terrain.terrainFlip = qtrue;
-}
-
-// if we have an image but no layers default to 3 i guess
-if(!s_worldData.terrain.terrainLayers) {
-	s_worldData.terrain.terrainLayers = 3;
-}
-
-if(s_worldData.terrain.terrainImage) {
-
-	for ( i = 0; i < s_worldData.terrain.terrainHeight * s_worldData.terrain.terrainWidth * 4; i++ )
-	{
-		s_worldData.terrain.terrainImage[ i ] = ( ( s_worldData.terrain.terrainImage[ i ] & 0xFF ) * s_worldData.terrain.terrainLayers ) / 256;
-		if ( s_worldData.terrain.terrainImage[ i ] >= s_worldData.terrain.terrainLayers ) {
-			s_worldData.terrain.terrainImage[ i ] = s_worldData.terrain.terrainLayers - 1;
-		}
+	if(s_worldData.terrain.terrainIndex[0]) {
+			R_LoadImage(s_worldData.terrain.terrainIndex, &s_worldData.terrain.terrainImage, &s_worldData.terrain.terrainWidth, &s_worldData.terrain.terrainHeight);
+	} 
+	if(!s_worldData.terrain.terrainImage) {
+			R_LoadImage(va("maps/%s_alphamap.tga", s_worldData.baseName), &s_worldData.terrain.terrainImage, &s_worldData.terrain.terrainWidth, &s_worldData.terrain.terrainHeight);
 	}
-	
-}
+	if(!s_worldData.terrain.terrainImage) {
+			R_LoadImage(va("maps/%s_tracemap.tga", s_worldData.baseName), &s_worldData.terrain.terrainImage, &s_worldData.terrain.terrainWidth, &s_worldData.terrain.terrainHeight);
+		s_worldData.terrain.terrainFlip = qtrue;
+	}
 
+	// if we have an image but no layers default to 3 i guess
+	if(!s_worldData.terrain.terrainLayers) {
+		s_worldData.terrain.terrainLayers = 3;
+	}
 
-		// read the map bounds out of the first submodel (world mesh)
-		for (j=0 ; j<3 ; j++) {
-			s_worldData.terrain.mins[j] = s_worldData.bounds[0][j] = LittleFloat (in->mins[j]);
-			s_worldData.terrain.maxs[j] = s_worldData.bounds[1][j] = LittleFloat (in->maxs[j]);
+	if(s_worldData.terrain.terrainImage) {
+
+		for ( i = 0; i < s_worldData.terrain.terrainHeight * s_worldData.terrain.terrainWidth * 4; i++ )
+		{
+			s_worldData.terrain.terrainImage[ i ] = ( ( s_worldData.terrain.terrainImage[ i ] & 0xFF ) * s_worldData.terrain.terrainLayers ) / 256;
+			if ( s_worldData.terrain.terrainImage[ i ] >= s_worldData.terrain.terrainLayers ) {
+				s_worldData.terrain.terrainImage[ i ] = s_worldData.terrain.terrainLayers - 1;
+			}
 		}
+		
+	}
 
-		// as the map loads, check the plane normals and update the shader for the various surfaces
+
+	// read the map bounds out of the first submodel (world mesh)
+	for (j=0 ; j<3 ; j++) {
+		s_worldData.bounds[0][j] = LittleFloat (in->mins[j]);
+		s_worldData.bounds[1][j] = LittleFloat (in->maxs[j]);
+	}
+
+	// as the map loads, check the plane normals and update the shader for the various surfaces
 
 }
 #endif
