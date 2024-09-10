@@ -364,24 +364,6 @@ static void CMod_LoadPlanes( const lump_t *l )
 		}
 
 		out->dist = LittleFloat( in->dist ) * cm_scale->value;
-
-#ifdef USE_THE_GRID
-		if(cm.gridMode) { // save the tops of every brush in grid mode
-			vec3_t point;
-			VectorMA(vec3_origin, out->dist, out->normal, point);
-			Com_Printf("point: %f %f %f\n", point[0], point[1], point[2]);
-			if(point[2] == cm.cmodels[0].mins[2]) {
-
-			} else {
-				//theGrid[(int)round(points[j][1] / 256) * 64 + (int)round(points[j][0] / 256) * 8] = &points[j];
-				//point[2] = cm.cmodels[0].mins[2] + 256;
-			}
-			//out->dist = VectorNormalize(point);
-			//VectorMA(vec3_origin, 1.0f / out->dist, point, out->normal);
-			//VectorCopy(point, out->normal);
-		}
-#endif
-
 		out->type = PlaneTypeForNormal( out->normal );
 		out->signbits = bits;
 	}
@@ -657,18 +639,6 @@ static void CMod_LoadPatches( const lump_t *surfs, const lump_t *verts ) {
 			points[j][2] = LittleFloat( dv_p->xyz[2] ) * cm_scale->value;
 		}
 
-#ifdef USE_THE_GRID
-		if(cm.gridMode) { // save the tops of every brush in grid mode
-			if(points[j][2] == cm.cmodels[0].mins[2]) {
-
-			} else {
-				//theGrid[(int)round(points[j][1] / 256) * 64 + (int)round(points[j][0] / 256) * 8] = &points[j];
-				points[j][2] = cm.cmodels[0].mins[2] + 256;
-			}
-		}
-#endif
-
-
 		shaderNum = LittleLong( in->shaderNum );
 		patch->contents = cm.shaders[shaderNum].contentFlags;
 		patch->surfaceFlags = cm.shaders[shaderNum].surfaceFlags;
@@ -836,15 +806,6 @@ void CM_LoadMap( const char *name, qboolean clientload, int *checksum )
 		outModel += cmWorlds[i].numSubModels;
 	}
 #endif
-
-#ifdef USE_THE_GRID
-	cm.gridMode = qfalse;
-	if(Q_stristr(name, "terrain/thegrid")) {
-		cm.gridMode = qtrue;
-	}
-#endif
-
-
 #if 0
 	if ( !name[0] ) {
 		cm.numLeafs = 1;
@@ -901,13 +862,13 @@ void CM_LoadMap( const char *name, qboolean clientload, int *checksum )
 
 	// load into heap
 	CMod_LoadShaders( &header.lumps[LUMP_SHADERS] );
-	CMod_LoadSubmodels (&header.lumps[LUMP_MODELS]);
 	CMod_LoadLeafs (&header.lumps[LUMP_LEAFS]);
 	CMod_LoadLeafBrushes (&header.lumps[LUMP_LEAFBRUSHES]);
 	CMod_LoadLeafSurfaces (&header.lumps[LUMP_LEAFSURFACES]);
 	CMod_LoadPlanes (&header.lumps[LUMP_PLANES]);
 	CMod_LoadBrushSides (&header.lumps[LUMP_BRUSHSIDES]);
 	CMod_LoadBrushes (&header.lumps[LUMP_BRUSHES]);
+	CMod_LoadSubmodels (&header.lumps[LUMP_MODELS]);
 	CMod_LoadNodes (&header.lumps[LUMP_NODES]);
 	CMod_LoadEntityString (&header.lumps[LUMP_ENTITIES], name);
 	CMod_LoadVisibility( &header.lumps[LUMP_VISIBILITY] );
