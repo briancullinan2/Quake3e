@@ -39,7 +39,7 @@ void RE_LoadWorldMap( const char *name );
 #ifdef USE_BSP_MODELS
 #define MAX_WORLD_MODELS 64
 int       rwi = 0;
-static 		world_t		s_worldDatas[MAX_WORLD_MODELS];
+world_t		s_worldDatas[MAX_WORLD_MODELS];
 #define s_worldData s_worldDatas[rwi]
 #ifdef tr
 #undef tr
