@@ -1411,14 +1411,15 @@ void CM_TransformedBoxTrace( trace_t *results, const vec3_t start, const vec3_t 
 #ifdef USE_BSP_MODELS
 		int j, numInlines, indexAdjusted;
 
-		// might intersect, so do an exact clip
-		indexAdjusted = CM_InlineModel (model);
-
 		// set the right map before entering trace
 		cmi = 0;
-		if(indexAdjusted < CM_NumInlineModels()) {
-
+		if(model < CM_NumInlineModels() || model == BOX_MODEL_HANDLE) {
+			indexAdjusted = model;
 		} else if (model != BOX_MODEL_HANDLE) {
+
+			// might intersect, so do an exact clip
+			indexAdjusted = CM_InlineModel (model);
+
 			for(j = 0; j < 64; j++) {
 				cmi = j;
 				numInlines = CM_NumInlineModels();
