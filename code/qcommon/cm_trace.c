@@ -1415,8 +1415,7 @@ void CM_TransformedBoxTrace( trace_t *results, const vec3_t start, const vec3_t 
 		cmi = 0;
 		if(model < CM_NumInlineModels() || model == BOX_MODEL_HANDLE) {
 			indexAdjusted = model;
-		} else if (model != BOX_MODEL_HANDLE) {
-
+		} else {
 			// might intersect, so do an exact clip
 			indexAdjusted = CM_InlineModel (model);
 
