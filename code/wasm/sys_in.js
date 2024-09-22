@@ -163,11 +163,11 @@ function InputPushFocusEvent(evt) {
 function InputPushMovedEvent(evt) {
   if (evt.toElement === null && evt.relatedTarget === null) {
     //HEAPU32[first_click>>2] = 1
-    if (SYS.frameInterval) {
-      clearInterval(SYS.frameInterval)
-    }
-    let fps = Math.ceil(1000.0 / HEAPU32[(INPUT.fpsUnfocused>>2)+8])
-    SYS.frameInterval = setInterval(Sys_Frame, fps)
+    // if (SYS.frameInterval) {
+    //   clearInterval(SYS.frameInterval)
+    // }
+    // let fps = Math.ceil(1000.0 / HEAPU32[(INPUT.fpsUnfocused>>2)+8])
+    // SYS.frameInterval = setInterval(Sys_Frame, fps)
     return
   }
 
