@@ -1,10 +1,14 @@
-# BUGS
+# New features
 
+* DONE: WASI-SDK instead of emscripten
 * DONE: Networking, auto-connect, rewrite socks - support `\dlmap` command
 * Sound (no emscripten, no OpenAL, simpler build), respatialize using https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API/Web_audio_spatialization_basics
-* DONE: Re-automate build.yml, auto-download wasi-sdk, integrate QVMs/q3lcc: https://github.com/briancullinan/multigame/actions
+* DONE: Re-automate build.yml, auto-download wasi-sdk, integrate QVMs/q3lcc: https://github.com/briancullinan2/multigame/actions
 * DONE: Upgraded image loader, loads most assets from pk3s and searches for any missing assets through quake3-proxy-server.
 * DONE: Multiworld. - Brian Cullinan
+* DONE: BSP models with clipping, TODO: copy to renderer2
+* DONE: Auto-terrain based on heightmap
+* TODO: trying to control tracemap like a grid
 
 Brian's Patreon for WASM support:
 

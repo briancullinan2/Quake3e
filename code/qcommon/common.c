@@ -5133,7 +5133,8 @@ int levenshtein(const char *s, const char *t)
 {
   int n = strlen(s);
   int m = strlen(t);
-  int d[n + 1][m + 1];
+  int **d;
+	d = Z_TagMalloc((n + 1) * (m + 1), TAG_SMALL);
  
   if (n == 0) {
     return m;
@@ -5166,6 +5167,7 @@ int levenshtein(const char *s, const char *t)
         }
       }
 
+	Z_Free(d);
   return d[n][m];
 }
 #endif
