@@ -2795,10 +2795,20 @@ RE_LoadWorldMap
 Called directly from cgame
 =================
 */
+#ifdef USE_BSP_MODELS
+qhandle_t RE_LoadWorldMap_real( const char *name, model_t *model, int clipIndex );
+
+qhandle_t RE_LoadWorldMap( const char *name ) {
+	return RE_LoadWorldMap_real(name, NULL, 0);
+}
+
+qhandle_t RE_LoadWorldMap_real( const char *name, model_t *model, int clipIndex )
+#else
 #ifdef USE_MULTIVM_RENDERER
 int RE_LoadWorldMap( const char *name )
 #else
 void RE_LoadWorldMap( const char *name ) 
+#endif
 #endif
 {
 	int			i;

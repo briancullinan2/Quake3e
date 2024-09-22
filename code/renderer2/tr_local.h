@@ -2009,12 +2009,16 @@ void	RE_UploadCinematic( int w, int h, int cols, int rows, const byte *data, int
 void		RE_BeginFrame( stereoFrame_t stereoFrame );
 void		RE_BeginRegistration( glconfig_t *glconfig );
 
+#ifdef USE_BSP_MODELS
+qhandle_t		RE_LoadWorldMap( const char *mapname );
+#else
 #ifdef USE_MULTIVM_RENDERER
 int		RE_LoadWorldMap( const char *mapname );
 void    RE_SetDvrFrame( float x, float y, float width, float height );
 
 #else
 void		RE_LoadWorldMap( const char *mapname );
+#endif
 #endif
 
 void		RE_SetWorldVisData( const byte *vis );
