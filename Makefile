@@ -421,7 +421,6 @@ WASI_INCLUDES  := \
 BASE_CFLAGS    += -fno-rtti -Wall \
 	 -fstrict-aliasing  -fno-inline \
 	 -MMD \
-	 -fPIC \
   -DNO_VM_COMPILED=1 -fno-common  \
 	-D_XOPEN_SOURCE=700 -D__EMSCRIPTEN__=1 \
 	-D__WASM__=1 -D__wasi__=1 -D__wasm32__=1 \
@@ -439,7 +438,8 @@ LDFLAGS        += -Wl,--import-memory,--import-table \
 endif
 
 
-#  -Wl,--initial-memory=52428800 \
+#	 -fPIC \
+  -Wl,--initial-memory=52428800 \
   -Wl,--max-memory=1048576000 \
   -Wl,--export-table,--growable-table 
 
