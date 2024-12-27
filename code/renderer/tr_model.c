@@ -263,10 +263,21 @@ static qhandle_t R_RegisterOBJ(const char *name, model_t *mod)
 qhandle_t RE_LoadWorldMap_real( const char *name, model_t *model, int clipIndex );
 static qhandle_t R_RegisterBSP(const char *name, model_t *mod)
 {
+	char		expanded[MAX_QPATH];
 	int chechsum, index;
 	// TODO: patch the bsp into the clipmap
+	if(Q_stristr(name, ".bsp") == 0) {
+		Com_sprintf( expanded, sizeof( expanded ), "%s.bsp", name );
+	} else {
+		Com_sprintf( expanded, sizeof( expanded ), "%s", name );
+	}
+
 	index = ri.CM_LoadMap(name, qtrue, &chechsum);
-	//Com_Printf("loading bsp model: %s: %i\n", name, index);
+	if(index == 0) {
+		mod->type = MOD_BAD;
+		return 0;
+	}
+	Com_Printf("loading bsp model: %s: %i -> %i\n", name, index, mod->index);
 	return RE_LoadWorldMap_real( name, mod, index );
 }
 #endif
@@ -327,7 +338,7 @@ model_t *R_AllocModel( void ) {
 	mod->index = tr.numModels;
 	tr.models[tr.numModels] = mod;
 
-#if 0 // defined(USE_MULTIVM_RENDERER) || defined(USE_BSP_MODELS)
+#if defined(USE_MULTIVM_RENDERER) || defined(USE_BSP_MODELS)
 	if(rwi != 0) {
 		trWorlds[0].models[trWorlds[0].numModels] = mod;
 		mod->index = trWorlds[0].numModels;
@@ -1330,12 +1341,6 @@ void R_ModelBounds( qhandle_t handle, vec3_t mins, vec3_t maxs ) {
 
 	model = R_GetModelByHandle( handle );
 
-	// brian cullinan - this hack for atmospheric effects in cgame/bg_tracemap
-	if(handle == 0 && tr.world) {
-		VectorCopy( tr.world->bmodels[0].bounds[0], mins );
-		VectorCopy( tr.world->bmodels[0].bounds[1], maxs );
-		return;
-	} else
 	if(model->type == MOD_BRUSH) {
 		VectorCopy( model->bmodel->bounds[0], mins );
 		VectorCopy( model->bmodel->bounds[1], maxs );

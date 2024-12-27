@@ -1311,6 +1311,7 @@ extern float dvrYOffset;
 
 #ifdef USE_BSP_MODELS
 #define MAX_WORLD_MODELS 64
+extern int     rwi;
 extern trGlobals_t	trWorlds[MAX_WORLD_MODELS];
 #define tr trWorlds[0]
 #else
