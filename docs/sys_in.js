@@ -464,11 +464,11 @@ function InputPushMouseEvent(evt) {
     document.body.classList.add('captured')
     document.body.classList.remove('released')
 
-    if (SYS.frameInterval) {
-      clearInterval(SYS.frameInterval)
-    }
-    let fps = Math.ceil(1000.0 / HEAPU32[(INPUT.fps>>2)+8])
-    SYS.frameInterval = setInterval(Sys_Frame, fps);
+    //if (SYS.frameInterval) {
+    //  clearInterval(SYS.frameInterval)
+    //}
+    //let fps = Math.ceil(1000.0 / HEAPU32[(INPUT.fps>>2)+8])
+    //SYS.frameInterval = setInterval(Sys_Frame, fps);
   }
 }
 
@@ -478,9 +478,8 @@ function Com_MaxFPSChanged() {
   }
   INPUT.fpsModified = HEAPU32[(INPUT.fps >> 2) + 6]
   INPUT.fpsUnfocusedModified = HEAPU32[(INPUT.fpsUnfocused >> 2) + 6]
-  //let fps = Math.ceil(1000.0 / HEAPU32[((HEAP32[gw_active >> 2]
-  //  ? INPUT.fps : INPUT.fpsUnfocused)>>2)+8])
-  //SYS.frameInterval = setInterval(Sys_Frame, fps)
+  let fps = Math.ceil(1000.0 / HEAPU32[(INPUT.fps>>2)+8])
+  SYS.frameInterval = setInterval(Sys_Frame, fps)
 }
 
 function Sys_ConsoleInput() {

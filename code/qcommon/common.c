@@ -4013,10 +4013,14 @@ void Com_Init( char *commandLine ) {
 	// init commands and vars
 	//
 #ifndef DEDICATED
+#ifdef __WASM__
+	com_maxfps = Cvar_Get( "com_maxfps", "30", 0 ); // try to force that in some light way
+#else
 #if defined(USE_MULTIVM_RENDERER) || defined(USE_MULTIVM_CLIENT) || defined(USE_MULTIVM_SERVER)
 	com_maxfps = Cvar_Get( "com_maxfps", "250", 0 ); // try to force that in some light way
 #else
 	com_maxfps = Cvar_Get( "com_maxfps", "125", 0 ); // try to force that in some light way
+#endif
 #endif
 	com_maxfpsUnfocused = Cvar_Get( "com_maxfpsUnfocused", "60", CVAR_ARCHIVE_ND | (Cvar_VariableIntegerValue("r_headless") ? CVAR_PROTECTED : 0) );
 	Cvar_CheckRange( com_maxfps, "0", "1000", CV_INTEGER );
