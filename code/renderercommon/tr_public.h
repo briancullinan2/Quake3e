@@ -24,7 +24,9 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 
 #include "tr_types.h"
+#ifndef __WASM__
 #include "vulkan/vulkan.h"
+#endif
 
 #define	REF_API_VERSION		8
 
