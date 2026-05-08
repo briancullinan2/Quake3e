@@ -245,7 +245,11 @@ void FORMAT_PRINTF(1, 2) QDECL Com_Printf( const char *fmt, ... ) {
 
 			if ( logfile != FS_INVALID_HANDLE ) {
 				struct tm *newtime;
+#ifdef __WASM__
+				int aclock;
+#else
 				time_t aclock;
+#endif
 				char timestr[32];
 
 				time( &aclock );
