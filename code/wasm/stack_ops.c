@@ -6,7 +6,7 @@ typedef unsigned long long ptr_t;
 typedef unsigned int ptr_t;
 #endif
 
-__attribute__((import_module("env"), import_name("__stack_pointer")))
+//__attribute__((import_module("env"), import_name("__stack_pointer")))
 extern int __stack_pointer;
 
 void* stackSave() {
