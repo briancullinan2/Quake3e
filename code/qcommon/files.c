@@ -3077,7 +3077,6 @@ static pack_t *FS_LoadZipFile( const char *zipfile )
 	int				fileNameLen;
 	int				baseNameLen;
 
-	Com_Printf( S_COLOR_YELLOW "Loading zip: %s\n", basename );
 #ifdef USE_PK3_CACHE
 	pack = FS_LoadCachedPK3( zipfile );
 	if ( pack )
@@ -3103,6 +3102,8 @@ static pack_t *FS_LoadZipFile( const char *zipfile )
 	} else {
 		basename++;
 	}
+	
+	Com_Printf( S_COLOR_YELLOW "Loading zip: %s\n", basename );
 
 	fileNameLen = (int) strlen( zipfile ) + 1;
 	baseNameLen = (int) strlen( basename ) + 1;
