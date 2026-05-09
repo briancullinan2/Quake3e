@@ -1,6 +1,8 @@
 
 /* XXX Emscripten XXX */
 #if __EMSCRIPTEN__ || __WASM__
+static int hidden_errno;
+#define errno hidden_errno
 // When building for wasm we export `malloc` and `emscripten_builtin_malloc` as
 // weak alias of the internal `dlmalloc` which is static to this file.
 #define DLMALLOC_EXPORT static
