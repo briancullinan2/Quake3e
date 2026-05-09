@@ -253,7 +253,7 @@ void FORMAT_PRINTF(1, 2) QDECL Com_Printf( const char *fmt, ... ) {
 				char timestr[32];
 
 				time( &aclock );
-				newtime = localtime( &aclock );
+				newtime = localtime( (const time_t *)&aclock );
 				strftime( timestr, sizeof( timestr ), "%a %b %d %X %Y", newtime );
 
 				Com_Printf( "logfile opened on %s\n", timestr );

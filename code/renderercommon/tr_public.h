@@ -276,11 +276,13 @@ typedef struct {
 	void	(*GLimp_EndFrame)( void );
 	void*	(*GL_GetProcAddress)( const char *name );
 
+#ifndef __WASM__
 	// Vulkan
 	void	(*VKimp_Init)( glconfig_t *config );
 	void	(*VKimp_Shutdown)( qboolean unloadDLL );
 	void*	(*VK_GetInstanceProcAddr)( VkInstance instance, const char *name );
 	qboolean (*VK_CreateSurface)( VkInstance instance, VkSurfaceKHR *pSurface );
+#endif
 
 #ifdef USE_PTHREADS
 	void	(*CL_LoadJPG2)( const char *filename, byte *existing, int length, unsigned char **pic, int *width, int *height );
