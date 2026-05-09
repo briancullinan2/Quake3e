@@ -3113,7 +3113,7 @@ static pack_t *FS_LoadZipFile( const char *zipfile )
 
 	if ( err != UNZ_OK ) {
 		
-		Com_Printf( S_COLOR_YELLOW "Error loading zip: %s\n", basename );
+		Com_Printf( S_COLOR_YELLOW "Error loading zip (%i): %s\n", err, basename );
 
 		return NULL;
 	}
