@@ -3112,6 +3112,9 @@ static pack_t *FS_LoadZipFile( const char *zipfile )
 	err = unzGetGlobalInfo( uf, &gi );
 
 	if ( err != UNZ_OK ) {
+		
+		Com_Printf( S_COLOR_YELLOW "Error loading zip: %s\n", basename );
+
 		return NULL;
 	}
 
