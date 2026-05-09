@@ -32,10 +32,12 @@ void Sys_SendPacket( int length, const void *data, const netadr_t *to );
 void	NET_Restart_f( void );
 void Sys_SockaddrToString(char *dest, int destlen, const void *input);
 
+#ifndef __wasilibc___fd_set_h
 #define FD_SETSIZE 1024
 typedef struct {
 	unsigned long fds_bits[FD_SETSIZE / 8 / sizeof(long)];
 } fd_set;
+#endif
 
 #ifdef USE_MULTIVM_SERVER
 int NET_GetPacket( netadr_t *net_from, msg_t *net_message, const fd_set *fdr, int igvm );
