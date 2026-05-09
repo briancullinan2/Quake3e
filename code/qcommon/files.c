@@ -3102,7 +3102,7 @@ static pack_t *FS_LoadZipFile( const char *zipfile )
 	} else {
 		basename++;
 	}
-	
+
 	Com_Printf( S_COLOR_YELLOW "Loading zip: %s\n", basename );
 
 	fileNameLen = (int) strlen( zipfile ) + 1;
@@ -3136,6 +3136,9 @@ static pack_t *FS_LoadZipFile( const char *zipfile )
 	}
 
 	if ( filecount == 0 ) {
+		
+		Com_Printf( S_COLOR_YELLOW "No files: %s\n", basename );
+
 		unzClose( uf );
 		return NULL;
 	}
