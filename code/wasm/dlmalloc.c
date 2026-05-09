@@ -1524,6 +1524,11 @@ size_t bulk_free(void**, size_t n_elements) __attribute__((weak, alias("dlbulk_f
 #endif /* NO_MALLOC_STATS */
 #ifndef LACKS_ERRNO_H
 #include <errno.h>       /* for MALLOC_FAILURE_ACTION */
+#ifdef __WASM__
+#undef errno
+static int hidden_errno;
+#define errno hidden_errno
+#endif
 #endif /* LACKS_ERRNO_H */
 #ifdef DEBUG
 #if ABORT_ON_ASSERT_FAILURE
