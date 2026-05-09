@@ -1266,7 +1266,7 @@ extern uLong unzlocal_SearchCentralDir(FILE *fin)
 	uLong uMaxBack=0xffff; /* maximum size of global comment */
 	uLong uPosFound=0;
 	
-	if (fseek(fin,0,SEEK_END) != 0)
+	if (fseek(fin,0,2) != 0)
 		return 0;
 
 
