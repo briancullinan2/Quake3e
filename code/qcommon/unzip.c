@@ -132,11 +132,15 @@ typedef unsigned int   uInt;  /* 16 bits or more */
 typedef unsigned long  uLong; /* 32 bits or more */
 typedef Byte    *voidp;
 
-#ifndef SEEK_SET
+//#ifndef SEEK_SET
+#undef SEEK_SET
+#undef SEEK_CUR
+#undef SEEK_END
+
 #  define SEEK_SET        0       /* Seek from beginning of file.  */
 #  define SEEK_CUR        1       /* Seek from current position.  */
 #  define SEEK_END        2       /* Set file pointer to EOF plus "offset" */
-#endif
+//#endif
 
 #endif /* _ZCONF_H */
 
@@ -1266,7 +1270,7 @@ extern uLong unzlocal_SearchCentralDir(FILE *fin)
 	uLong uMaxBack=0xffff; /* maximum size of global comment */
 	uLong uPosFound=0;
 	
-	if (fseek(fin,0,2) != 0)
+	if (fseek(fin,0,SEEK_END) != 0)
 		return 0;
 
 
