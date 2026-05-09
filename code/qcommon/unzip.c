@@ -1270,8 +1270,12 @@ extern uLong unzlocal_SearchCentralDir(FILE *fin)
 		return 0;
 
 
-	uSizeFile = ftell( fin );
-	
+#ifdef __WASM__
+  uSizeFile = Sys_FTell( fin );
+#else
+  uSizeFile = ftell( fin );
+#endif
+
 	if (uMaxBack>uSizeFile)
 		uMaxBack = uSizeFile;
 
