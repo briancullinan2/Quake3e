@@ -202,38 +202,59 @@ void R_LoadSurfaces1( lump_t *surfs, lump_t *verts, lump_t *edgesLump,
     ds.numIndexes = (ds.numVerts - 2) * 3;
     
     ds.lightmapNum = 0;
-    ds.lightmapVecs[2][0] = s_worldData.planes[in->planenum].normal[0];
-    ds.lightmapVecs[2][1] = s_worldData.planes[in->planenum].normal[1];
-    ds.lightmapVecs[2][2] = s_worldData.planes[in->planenum].normal[2];
+    int planenum = LittleShort(in->planenum);
+	int side = LittleShort(in->side);
+	
+	if (side) {
+	    // Invert the structural vector alignment if the face is flagged on the back of the plane splitting node
+	    ds.lightmapVecs[2][0] = -s_worldData.planes[planenum].normal[0];
+	    ds.lightmapVecs[2][1] = -s_worldData.planes[planenum].normal[1];
+	    ds.lightmapVecs[2][2] = -s_worldData.planes[planenum].normal[2];
+	} else {
+	    ds.lightmapVecs[2][0] = s_worldData.planes[planenum].normal[0];
+	    ds.lightmapVecs[2][1] = s_worldData.planes[planenum].normal[1];
+	    ds.lightmapVecs[2][2] = s_worldData.planes[planenum].normal[2];
+	}
 
     int firstEdge = LittleLong(in->firstedge);
+    dBsp1Texinfo_t *ti = &texinfo[in->texinfo]; // Capture the texture projection layout
+
     for(j = 0; j < ds.numVerts; j++) {
-      int edge = surfEdges[firstEdge + j];
-      if (edge >= 0) {
-        pverts[j].xyz[0] = dv[edges[edge].v[0]][0];
-        pverts[j].xyz[1] = dv[edges[edge].v[0]][1];
-        pverts[j].xyz[2] = dv[edges[edge].v[0]][2];
-      } else {
-        pverts[j].xyz[0] = dv[edges[-edge].v[1]][0];
-        pverts[j].xyz[1] = dv[edges[-edge].v[1]][1];
-        pverts[j].xyz[2] = dv[edges[-edge].v[1]][2];
-      }
-      pverts[j].st[0] = 1;
-      pverts[j].st[1] = 1;
-      /*
-      printf("x: %f, y: %f, z: %f\n", 
-        pverts[j].xyz[0],
-        pverts[j].xyz[1],
-        pverts[j].xyz[2]);
-      */
+        int edge = surfEdges[firstEdge + j];
+        vec3_t raw_xyz;
+
+        // 1. Extract the raw structural vertex position
+        if (edge >= 0) {
+            VectorCopy(dv[edges[edge].v[0]], raw_xyz);
+        } else {
+            VectorCopy(dv[edges[-edge].v[1]], raw_xyz);
+        }
+
+        // 2. Downscale the spatial layout to match your Node/Leaf bounds (0.125f)
+        pverts[j].xyz[0] = raw_xyz[0] * 0.125f;
+        pverts[j].xyz[1] = raw_xyz[1] * 0.125f;
+        pverts[j].xyz[2] = raw_xyz[2] * 0.125f;
+
+        // 3. Compute the proper projected Quake 1 texture coordinates (ST/UV)
+        // Math: Dot product of the raw coordinates against the axis alignment vector + offset
+        float raw_s = DotProduct(raw_xyz, ti->vecs[0]) + ti->offs[0];
+        float raw_t = DotProduct(raw_xyz, ti->vecs[1]) + ti->offs[1];
+
+        // Normalize the coordinate space by the texture sheet dimensions
+        // (Default to a 64x64 safety block if miptex width/height calculations are unread)
+        float texWidth  = (ti->miptex >= 0) ? 64.0f : 64.0f; 
+        float texHeight = (ti->miptex >= 0) ? 64.0f : 64.0f;
+
+        pverts[j].st[0] = raw_s / texWidth;
+        pverts[j].st[1] = raw_t / texHeight;
     }
 
-		for (j = 0; j < ds.numVerts - 2; j++)
-		{
-			pindex[j*3+0] = 0;
-			pindex[j*3+1] = j+1;
-			pindex[j*3+2] = j+2;
-		}
+	for (j = 0; j < ds.numVerts - 2; j++)
+	{
+		pindex[j*3+0] = BigLong(0);
+	    pindex[j*3+1] = BigLong(j + 1);
+	    pindex[j*3+2] = BigLong(j + 2);
+	}
 
     ParseFace( &ds, pverts, hdrVertColors, out, pindex );
     numFaces++;
@@ -282,13 +303,18 @@ void R_LoadMarksurfaces1 (lump_t *l)
 R_LoadNodesAndLeafs
 =================
 */
+/*
+=================
+R_LoadNodesAndLeafs
+=================
+*/
 void R_LoadNodesAndLeafs1 (lump_t *nodeLump, lump_t *leafLump) {
 	int			i, j;
 	dBsp1Node_t		*in;
 	dBsp1Leaf_t		*inLeaf;
 	mnode_t 	*out;
 	int			numNodes, numLeafs;
-  int     numSolidLeafs;
+	int      numSolidLeafs;
 
 	in = (void *)(fileBase + nodeLump->fileofs);
 	if (nodeLump->filelen % sizeof(*in) ||
@@ -298,14 +324,15 @@ void R_LoadNodesAndLeafs1 (lump_t *nodeLump, lump_t *leafLump) {
 	numNodes = nodeLump->filelen / sizeof(dnode_t);
 	numLeafs = leafLump->filelen / sizeof(dleaf_t);
 
-  numSolidLeafs = 0;
-  for ( i=0 ; i<numNodes; i++, in++)
+	numSolidLeafs = 0;
+	for ( i=0 ; i<numNodes; i++, in++)
 	{
-    if(in->children[0] == -1
-      || in->children[1] == -1) {
-      numSolidLeafs++;
-    }
-  }
+		// FIX: in->children needs LittleLong translation
+		if(LittleLong(in->children[0]) == -1
+		  || LittleLong(in->children[1]) == -1) {
+			numSolidLeafs++;
+		}
+	}
 
 	out = ri.Hunk_Alloc ( (numNodes + numLeafs + numSolidLeafs) * sizeof(*out), h_low);	
 
@@ -314,26 +341,31 @@ void R_LoadNodesAndLeafs1 (lump_t *nodeLump, lump_t *leafLump) {
 	s_worldData.numDecisionNodes = numNodes;
 
 	// load nodes
-  in = (void *)(fileBase + nodeLump->fileofs);
+	in = (void *)(fileBase + nodeLump->fileofs);
 	for ( i=0 ; i<numNodes; i++, in++, out++)
 	{
 		for (j=0 ; j<3 ; j++)
 		{
-			out->mins[j] = in->mins[j];
-			out->maxs[j] = in->maxs[j];
+			// Explicitly read as short, swap endianness if needed, cast to float, and scale
+			out->mins[j] = (float)(LittleShort(in->mins[j])) * 0.125f;
+			out->maxs[j] = (float)(LittleShort(in->maxs[j])) * 0.125f;
 		}
 	
-		out->plane = s_worldData.planes + in->planenum;
+		// FIX: Swap the plane index from file bytes to native integer space!
+		int parsedPlaneNum = LittleLong(in->planenum);
+		out->plane = s_worldData.planes + parsedPlaneNum;
 
 		out->contents = CONTENTS_NODE;	// differentiate from leafs
 
 		for (j=0 ; j<2 ; j++)
 		{
-			if (in->children[j] >= 0)
-				out->children[j] = s_worldData.nodes + in->children[j];
+			// FIX: Swap children indices
+			int childIdx = LittleLong(in->children[j]);
+			if (childIdx >= 0)
+				out->children[j] = s_worldData.nodes + childIdx;
 			else {
-				out->children[j] = s_worldData.nodes + numNodes + (-1 - in->children[j]);
-      }
+				out->children[j] = s_worldData.nodes + numNodes + (-1 - childIdx);
+			}
 		}
 	}
 	
@@ -343,37 +375,41 @@ void R_LoadNodesAndLeafs1 (lump_t *nodeLump, lump_t *leafLump) {
 	{
 		for (j=0 ; j<3 ; j++)
 		{
-			out->mins[j] = inLeaf->mins[j];
-			out->maxs[j] = inLeaf->maxs[j];
+			out->mins[j] = (float)(LittleShort(inLeaf->mins[j])) * 0.125f;
+			out->maxs[j] = (float)(LittleShort(inLeaf->maxs[j])) * 0.125f;
 		}
 
-    out->contents = inLeaf->contents;
-		out->cluster = inLeaf->contents == CONTENTS_Q1_SOLID ? -1 : (i-1); //LittleLong(inLeaf->contents);
-		out->area = -1; //LittleLong(inLeaf->visofs);
+		// FIX: Swapping contents/vis layouts if needed
+		out->contents = LittleLong(inLeaf->contents);
+		out->cluster = out->contents == CONTENTS_Q1_SOLID ? -1 : (i-1);
+		out->area = -1;
 
 		if ( out->cluster >= s_worldData.numClusters ) {
 			s_worldData.numClusters = out->cluster + 1;
 		}
 
-		out->firstmarksurface = inLeaf->firstmarksurface;
-		out->nummarksurfaces = inLeaf->nummarksurfaces;
+		// FIX: Swap surface tracking hooks for the leaves
+		out->firstmarksurface = LittleLong(inLeaf->firstmarksurface);
+		out->nummarksurfaces = LittleLong(inLeaf->nummarksurfaces);
 
-    if (out->contents && out->contents != CONTENTS_Q1_SOLID)
+		if (out->contents && out->contents != CONTENTS_Q1_SOLID)
 			s_worldData.numDecisionNodes++;
 	}
 
-  in = (void *)(fileBase + nodeLump->fileofs);
-  for ( i=0 ; i<numNodes; i++, in++)
+	in = (void *)(fileBase + nodeLump->fileofs);
+	for ( i=0 ; i<numNodes; i++, in++)
 	{
-    if(in->children[0] == -1
-      || in->children[1] == -1) {
-      out->cluster = -1;
-      out->area = 0;
-      out->firstmarksurface = in->firstface;
-  		out->nummarksurfaces = in->numfaces;
-      out++;
-    }
-  }
+		int c0 = LittleLong(in->children[0]);
+		int c1 = LittleLong(in->children[1]);
+		if(c0 == -1 || c1 == -1) {
+			out->cluster = -1;
+			out->area = 0;
+			// FIX: Swap face trackers for the virtual solid leaves
+			out->firstmarksurface = LittleLong(in->firstface);
+			out->nummarksurfaces = LittleLong(in->numfaces);
+			out++;
+		}
+	}
 
 	// chain descendants
 	R_SetParent (s_worldData.nodes, NULL);
@@ -412,11 +448,17 @@ void R_LoadSubmodels1( lump_t *l ) {
 		model->bmodel = out;
 		Com_sprintf( model->name, sizeof( model->name ), "*%d", i );
 
-		for (j=0 ; j<3 ; j++) {
-			//out->bounds[0][j] = LittleFloat (in->origin[j]) + LittleFloat (in->mins[j]);
+		// LOOK, i tried to repair this one and commented it out but i had my legendary math wrong
+		//for (j=0 ; j<3 ; j++) {
+			//--> this was here before below, out->bounds[0][j] = LittleFloat (in->origin[j]) + LittleFloat (in->mins[j]);
 			//out->bounds[1][j] = LittleFloat (in->origin[j]) + LittleFloat (in->maxs[j]);
-      out->bounds[0][j] = LittleFloat (in->mins[j]);
-			out->bounds[1][j] = LittleFloat (in->maxs[j]);
+      	//	out->bounds[0][j] = LittleFloat (in->mins[j]);
+		//	out->bounds[1][j] = LittleFloat (in->maxs[j]);
+		//}
+		for ( j=0 ; j<3 ; j++ ) {
+		    // Quake 1 submodel bounds are ALSO stored as 16-bit short integers or floats needing scaling
+		    out->bounds[0][j] = (float)(LittleFloat(in->mins[j])) * 0.125f;
+		    out->bounds[1][j] = (float)(LittleFloat(in->maxs[j])) * 0.125f;
 		}
 
 		out->firstSurface = LittleLong( in->firstface );
@@ -467,27 +509,52 @@ static void DecompressVis(byte *dst, void *vis, int pos, int rowSize)
 	}
 }
 
-static	void R_LoadVisibility1( lump_t *l, lump_t *leafLump ) {
-	int		len;
-	byte	*buf;
-  dBsp1Leaf_t 	*in;
+/*
+=================
+R_LoadVisibility1
+=================
+*/
+static void R_LoadVisibility1( lump_t *l, lump_t *leafLump ) {
+	int			len;
+	byte		*buf;
+	dBsp1Leaf_t *in;
+	int			i;
 
 	len = l->filelen;
 	if ( !len ) {
+		// If the map has zero visibility data, explicitly flood the bitmask with 0xFF 
+		// so the entire map defaults to completely visible rather than completely black
+		s_worldData.numClusters = s_worldData.numnodes - s_worldData.numDecisionNodes;
+		s_worldData.clusterBytes = (s_worldData.numClusters + 7) >> 3;
+		s_worldData.vis = ri.Hunk_Alloc( s_worldData.numClusters * s_worldData.clusterBytes, h_high );
+		memset((void *)s_worldData.vis, 0xFF, s_worldData.numClusters * s_worldData.clusterBytes);
 		return;
 	}
-	buf = fileBase + l->fileofs;
-  in = (void *)(fileBase + leafLump->fileofs);
 
-  if ( tr.externalVisData ) {
+	buf = fileBase + l->fileofs;
+	in = (void *)(fileBase + leafLump->fileofs);
+
+	if ( tr.externalVisData ) {
 		s_worldData.vis = tr.externalVisData;
 	} else {
-    s_worldData.numClusters = s_worldData.numnodes - s_worldData.numDecisionNodes; // aka numLeafs
-  	s_worldData.clusterBytes = (s_worldData.numClusters + 7) >> 3; // rowSize
-    s_worldData.vis = Hunk_Alloc( s_worldData.numClusters * s_worldData.clusterBytes, h_high );
-    byte *dst = (void *)s_worldData.vis;
-    for (int i = 1; i < s_worldData.numClusters; i++, dst += s_worldData.clusterBytes)
-  		DecompressVis(dst, buf, in[i].visofs, s_worldData.clusterBytes);
+		// In our Quake 1 setup, every leaf acts as its own unique visibility cluster
+		s_worldData.numClusters = s_worldData.numnodes - s_worldData.numDecisionNodes; // Total Leafs
+		s_worldData.clusterBytes = (s_worldData.numClusters + 7) >> 3; // Matrix Row Width
+		
+		s_worldData.vis = ri.Hunk_Alloc( s_worldData.numClusters * s_worldData.clusterBytes, h_high );
+		byte *dst = (void *)s_worldData.vis;
+
+		// Loop through EVERY leaf node (including the dummy solid leaf 0)
+		for (i = 0; i < s_worldData.numClusters; i++) {
+			// Pull the vis offset directly from file, handle endianness
+			int fileVisOfs = LittleLong(in[i].visofs);
+			
+			// Decompress the byte stream into this specific cluster's row memory slot
+			DecompressVis(dst, buf, fileVisOfs, s_worldData.clusterBytes);
+			
+			// Increment the destination pointer precisely by our row-size stride
+			dst += s_worldData.clusterBytes;
+		}
 	}
 }
 
