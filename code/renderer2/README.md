@@ -295,10 +295,11 @@ Look for editor/ui/menu/FileMenu.js or editor/ui/components/dropdown/DropdownMen
 
 You will inject a menu trigger that creates an HTML5 file inputs element:
 
-JavaScript
+```javascript
 var chooser = document.createElement("input");
 chooser.type = "file";
 chooser.accept = ".map,.bsp";
+```
 Vector B: The Asset Manager Injection (Textures & Shaders)
 Before rendering any geometry, nunuStudio needs to know the materials exist, or it will throw a missing reference error. Look at editor/core/assets/AssetManager.js or where THREE.Texture objects are added to the scene database.
 
@@ -313,7 +314,7 @@ Instead of just adding a raw THREE.Mesh to the scene, you instantiate a nunuStud
 
 Your file injection sequence will conceptually look like this:
 
-JavaScript
+```javascript
 // 1. Run the parsed geometry through Three.js buffer builders
 var geometry = new THREE.BufferGeometry();
 geometry.setAttribute('position', new THREE.BufferAttribute(positionsArray, 3));
@@ -329,6 +330,7 @@ nunuMesh.name = "Brush_" + brushId;
 // 4. Inject directly into the active editing environment
 Editor.addObject(nunuMesh);
 Editor.updateObjectViews();
+```
 Next Steps for the Architecture
 This path saves your brain from framework fatigue. You get to keep your code localized entirely to a clean web-stack environment.
 
@@ -422,7 +424,7 @@ You pass the AI's response straight into the AudioMass engine modules. The workf
 The "Demonic Voice" JSON Blueprint
 When you ask the AI to modify the track, you pass the prompt to your LLM (like Gemini) with a system instruction telling it to act as a sound designer and output a JSON configuration. The AI will return a recipe looking exactly like this:
 
-JSON
+```json
 {
   "pipeline": [
     {
@@ -443,12 +445,13 @@ JSON
     }
   ]
 }
+```
 Implementing the AI Bridge in the Code
 Because AudioMass is open-source, you can strip away the top menu bars and build a clean API wrapper directly around its core audio state manager (src/js/AudioCore/).
 
 Your bridge script will ingest the AI's JSON recipe and apply it directly to the loaded audio buffer arrays sequentially:
 
-JavaScript
+```javascript
 // Step 1: Ingest the AI's behavioral recipe
 async function applyDemonicAiEffects(aiRecipe, audioBuffer) {
     let currentBuffer = audioBuffer;
@@ -476,6 +479,7 @@ async function applyDemonicAiEffects(aiRecipe, audioBuffer) {
     AudioMass.Viewer.updateWaveformDisplay(currentBuffer);
     AudioMass.Playback.play();
 }
+```
 Summary Recommendation
 Go clone pkalogiros/AudioMass on GitHub. Look specifically inside its src/js/actions/ and src/js/effects/ directories.
 
@@ -540,2102 +544,692 @@ even more complicated its in my renderer2 which means it targets gl3/2.5-ish, in
 
 i am so glad you are alive i didn't even try to ask you to help me repair this yet, i think the error is in loadLeafsAndNodes where it finally tries to put it back together into one vertex model, if it's not there, then there could be a scaling issue in one of the previous lump loaders, i remember something like quake1 compiles to .023092348 16 bit floating point values, and quake 3 are full 32 bit integers if the map was compiled to trim fractions?
 
-
-
-/*
-
-===========================================================================
-
-Copyright (C) 1999-2005 Id Software, Inc.
-
-
-
-This file is part of Quake III Arena source code.
-
-
-
-Quake III Arena source code is free software; you can redistribute it
-
-and/or modify it under the terms of the GNU General Public License as
-
-published by the Free Software Foundation; either version 2 of the License,
-
-or (at your option) any later version.
-
-
-
-Quake III Arena source code is distributed in the hope that it will be
-
-useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
-
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-
-GNU General Public License for more details.
-
-
-
-You should have received a copy of the GNU General Public License
-
-along with Quake III Arena source code; if not, write to the Free Software
-
-Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
-
-===========================================================================
-
-*/
-
-// tr_map.c
-
-#include "tr_local.h"
-
-
-
-#ifdef USE_BSP1
-
-
-
-#include "../qcommon/cm_load_bsp1.h"
-
-
-
-extern void ParseFace( dsurface_t *ds, drawVert_t *verts, float *hdrVertColors, msurface_t *surf, int *indexes );
-
-extern void R_LoadSubmodels( lump_t *l );
-
-
-
-
-
-/*
-
-=================
-
-R_LoadShaders
-
-=================
-
-*/
-
-void R_LoadShaders1( lump_t *l ) {
-
-int i, count;
-
-dBsp1Miptex_t *in;
-
-dshader_t *out;
-
-miptex_t *mt;
-
-
-in = (void *)(fileBase + l->fileofs);
-
-count = LittleLong ( in->nummiptex );
-
-out = ri.Hunk_Alloc ( count*sizeof(*out), h_low );
-
-
-
-s_worldData.shaders = out;
-
-s_worldData.numShaders = count;
-
-
-
-for ( i=0 ; i<count ; i++ ) {
-
-if (in->dataofs[i] == -1) {
-
-continue;
-
-}
-
-
-
-mt = (miptex_t *)((byte *)in + in->dataofs[i]);
-
-memcpy(out[i].shader, va("textures/%s", mt->name), MAX_QPATH);
-
-out[i].surfaceFlags = 0;
-
-//out[i].contentFlags = LittleLong( out[i].contentFlags );
-
-if (strstr(mt->name, "water") || strstr(mt->name, "mwat")) {
-
-out[i].contentFlags = CONTENTS_WATER;
-
-}
-
-else if (strstr(mt->name, "slime")) {
-
-out[i].contentFlags = CONTENTS_SLIME;
-
-}
-
-else if (strstr(mt->name, "lava")) {
-
-out[i].contentFlags = CONTENTS_LAVA;
-
-}
-
-//else if (strstr(mt->name, "tele")) {
-
-// out[i].contentFlags = TEXTURE_TURB_TELE;
-
-//}
-
-//else {
-
-// out[i].contentFlags = CONTENTS_SOLID;
-
-//}
-
-
-
-/* TODO:
-
-if()
-
-#define CONTENTS_Q1_SOLID -2
-
-#define CONTENTS_Q1_WATER -3
-
-#define CONTENTS_Q1_SLIME -4
-
-#define CONTENTS_Q1_LAVA -5
-
-if(in->flags & Q2_SURF_SKY)
-
-out->surfaceFlags |= SURF_SKY;
-
-if(in->flags & Q2_SURF_NODRAW)
-
-out->surfaceFlags |= SURF_NODRAW;
-
-if (in->flags & MATERIAL_METAL)
-
-out->surfaceFlags |= SURF_METALSTEPS;
-
-if (in->flags & MATERIAL_SILENT)
-
-out->surfaceFlags |= SURF_NOSTEPS;
-
-*/
-
-}
-
-}
-
-
-
-
-
-/*
-
-=================
-
-R_LoadPlanes
-
-=================
-
-*/
-
-void R_LoadPlanes1( lump_t *l ) {
-
-int i, j;
-
-cplane_t *out;
-
-dBsp1Plane_t *in;
-
-int count;
-
-int bits;
-
-
-in = (void *)(fileBase + l->fileofs);
-
-if (l->filelen % sizeof(*in))
-
-ri.Error (ERR_DROP, "%s: funny lump size in %s", __func__, s_worldData.name);
-
-count = l->filelen / sizeof(*in);
-
-out = ri.Hunk_Alloc ( count*2*sizeof(*out), h_low);
-
-
-s_worldData.planes = out;
-
-s_worldData.numplanes = count;
-
-
-
-for ( i=0 ; i<count ; i++, in++, out++) {
-
-bits = 0;
-
-for (j=0 ; j<3 ; j++) {
-
-out->normal[j] = LittleFloat (in->normal[j]);
-
-if (out->normal[j] < 0) {
-
-bits |= 1<<j;
-
-}
-
-}
-
-
-
-out->dist = LittleFloat (in->dist);
-
-out->type = PlaneTypeForNormal( out->normal );
-
-out->signbits = bits;
-
-}
-
-}
-
-
-
-
-
-/*
-
-===============
-
-R_LoadSurfaces
-
-===============
-
-*/
-
-void R_LoadSurfaces1( lump_t *surfs, lump_t *verts, lump_t *edgesLump,
-
-lump_t *surfEdgesLump, lump_t *textures ) {
-
-
-
-dBsp1Face_t *in;
-
-dBsp1Texinfo_t *texinfo;
-
-msurface_t *out;
-
-vec3_t *dv;
-
-dedge_t *edges;
-
-int *surfEdges;
-
-int count;
-
-int numFaces;
-
-int i, j;
-
-float *hdrVertColors = NULL;
-
-drawVert_t pverts[MAX_POLYVERTS];
-
-int pindex[MAX_POLYVERTS];
-
-
-
-numFaces = 0;
-
-
-
-if (surfs->filelen % sizeof(*in))
-
-ri.Error (ERR_DROP, "%s: funny lump size in %s", __func__, s_worldData.name);
-
-count = surfs->filelen / sizeof(*in);
-
-
-
-dv = (void *)(fileBase + verts->fileofs);
-
-if (verts->filelen % sizeof(*dv))
-
-ri.Error (ERR_DROP, "%s: funny lump size in %s", __func__, s_worldData.name);
-
-
-
-surfEdges = (void *)(fileBase + surfEdgesLump->fileofs);
-
-if ( surfEdgesLump->filelen % sizeof(*surfEdges))
-
-ri.Error (ERR_DROP, "%s: funny lump size in %s", __func__, s_worldData.name);
-
-
-
-texinfo = (void *)(fileBase + textures->fileofs);
-
-if ( textures->filelen % sizeof(*texinfo))
-
-ri.Error (ERR_DROP, "%s: funny lump size in %s", __func__, s_worldData.name);
-
-
-
-edges = (void *)(fileBase + edgesLump->fileofs);
-
-if ( edgesLump->filelen % sizeof(*edges))
-
-ri.Error (ERR_DROP, "%s: funny lump size in %s", __func__, s_worldData.name);
-
-
-
-out = ri.Hunk_Alloc ( count * sizeof(*out), h_low );
-
-
-
-s_worldData.surfaces = out;
-
-s_worldData.numsurfaces = count;
-
-s_worldData.surfacesViewCount = ri.Hunk_Alloc ( count * sizeof(*s_worldData.surfacesViewCount), h_low );
-
-s_worldData.surfacesDlightBits = ri.Hunk_Alloc ( count * sizeof(*s_worldData.surfacesDlightBits), h_low );
-
-s_worldData.surfacesPshadowBits = ri.Hunk_Alloc ( count * sizeof(*s_worldData.surfacesPshadowBits), h_low );
-
-
-
-in = (void *)(fileBase + surfs->fileofs);
-
-out = s_worldData.surfaces;
-
-for ( i = 0 ; i < count ; i++, in++, out++ ) {
-
-out->data = ri.Hunk_Alloc( sizeof(srfBspSurface_t), h_low);
-
-}
-
-
-
-in = (void *)(fileBase + surfs->fileofs);
-
-out = s_worldData.surfaces;
-
-for ( i = 0 ; i < count ; i++, in++, out++ ) {
-
-dsurface_t ds;
-
-memset(&ds, 0, sizeof(ds));
-
-ds.shaderNum = texinfo[in->texinfo].miptex;
-
-ds.fogNum = -1;
-
-ds.surfaceType = MST_PLANAR;
-
-
-
-ds.firstVert = 0;
-
-ds.numVerts = in->numedges;
-
-
-ds.firstIndex = 0;
-
-ds.numIndexes = (ds.numVerts - 2) * 3;
-
-
-ds.lightmapNum = 0;
-
-ds.lightmapVecs[2][0] = s_worldData.planes[in->planenum].normal[0];
-
-ds.lightmapVecs[2][1] = s_worldData.planes[in->planenum].normal[1];
-
-ds.lightmapVecs[2][2] = s_worldData.planes[in->planenum].normal[2];
-
-
-
-int firstEdge = LittleLong(in->firstedge);
-
-for(j = 0; j < ds.numVerts; j++) {
-
-int edge = surfEdges[firstEdge + j];
-
-if (edge >= 0) {
-
-pverts[j].xyz[0] = dv[edges[edge].v[0]][0];
-
-pverts[j].xyz[1] = dv[edges[edge].v[0]][1];
-
-pverts[j].xyz[2] = dv[edges[edge].v[0]][2];
-
-} else {
-
-pverts[j].xyz[0] = dv[edges[-edge].v[1]][0];
-
-pverts[j].xyz[1] = dv[edges[-edge].v[1]][1];
-
-pverts[j].xyz[2] = dv[edges[-edge].v[1]][2];
-
-}
-
-pverts[j].st[0] = 1;
-
-pverts[j].st[1] = 1;
-
-/*
-
-printf("x: %f, y: %f, z: %f\n",
-
-pverts[j].xyz[0],
-
-pverts[j].xyz[1],
-
-pverts[j].xyz[2]);
-
-*/
-
-}
-
-
-
-for (j = 0; j < ds.numVerts - 2; j++)
-
-{
-
-pindex[j*3+0] = 0;
-
-pindex[j*3+1] = j+1;
-
-pindex[j*3+2] = j+2;
-
-}
-
-
-
-ParseFace( &ds, pverts, hdrVertColors, out, pindex );
-
-numFaces++;
-
-}
-
-
-
-if (hdrVertColors)
-
-{
-
-ri.FS_FreeFile(hdrVertColors);
-
-}
-
-
-
-R_FixSharedVertexLodError();
-
-
-
-ri.Printf( PRINT_ALL, "...loaded %d faces\n", numFaces );
-
-}
-
-
-
-
-
-/*
-
-=================
-
-R_LoadMarksurfaces
-
-=================
-
-*/
-
-void R_LoadMarksurfaces1 (lump_t *l)
-
-{
-
-int i, count;
-
-short *in;
-
-int *out;
-
-
-in = (void *)(fileBase + l->fileofs);
-
-if (l->filelen % sizeof(*in))
-
-ri.Error (ERR_DROP, "%s: funny lump size in %s", __func__, s_worldData.name);
-
-count = l->filelen / sizeof(*in);
-
-out = ri.Hunk_Alloc ( count*sizeof(*out), h_low);
-
-
-
-s_worldData.marksurfaces = out;
-
-s_worldData.nummarksurfaces = count;
-
-
-
-for ( i=0 ; i<count ; i++)
-
-{
-
-out[i] = in[i];
-
-}
-
-}
-
-
-
-
-
-/*
-
-=================
-
-R_LoadNodesAndLeafs
-
-=================
-
-*/
-
-void R_LoadNodesAndLeafs1 (lump_t *nodeLump, lump_t *leafLump) {
-
-int i, j;
-
-dBsp1Node_t *in;
-
-dBsp1Leaf_t *inLeaf;
-
-mnode_t *out;
-
-int numNodes, numLeafs;
-
-int numSolidLeafs;
-
-
-
-in = (void *)(fileBase + nodeLump->fileofs);
-
-if (nodeLump->filelen % sizeof(*in) ||
-
-leafLump->filelen % sizeof(*inLeaf) ) {
-
-ri.Error (ERR_DROP, "%s: funny lump size in %s", __func__, s_worldData.name);
-
-}
-
-numNodes = nodeLump->filelen / sizeof(dnode_t);
-
-numLeafs = leafLump->filelen / sizeof(dleaf_t);
-
-
-
-numSolidLeafs = 0;
-
-for ( i=0 ; i<numNodes; i++, in++)
-
-{
-
-if(in->children[0] == -1
-
-|| in->children[1] == -1) {
-
-numSolidLeafs++;
-
-}
-
-}
-
-
-
-out = ri.Hunk_Alloc ( (numNodes + numLeafs + numSolidLeafs) * sizeof(*out), h_low);
-
-
-
-s_worldData.nodes = out;
-
-s_worldData.numnodes = numNodes + numLeafs + numSolidLeafs;
-
-s_worldData.numDecisionNodes = numNodes;
-
-
-
-// load nodes
-
-in = (void *)(fileBase + nodeLump->fileofs);
-
-for ( i=0 ; i<numNodes; i++, in++, out++)
-
-{
-
-for (j=0 ; j<3 ; j++)
-
-{
-
-out->mins[j] = in->mins[j];
-
-out->maxs[j] = in->maxs[j];
-
-}
-
-
-out->plane = s_worldData.planes + in->planenum;
-
-
-
-out->contents = CONTENTS_NODE; // differentiate from leafs
-
-
-
-for (j=0 ; j<2 ; j++)
-
-{
-
-if (in->children[j] >= 0)
-
-out->children[j] = s_worldData.nodes + in->children[j];
-
-else {
-
-out->children[j] = s_worldData.nodes + numNodes + (-1 - in->children[j]);
-
-}
-
-}
-
-}
-
-
-// load leafs
-
-inLeaf = (void *)(fileBase + leafLump->fileofs);
-
-for ( i=0 ; i<numLeafs ; i++, inLeaf++, out++)
-
-{
-
-for (j=0 ; j<3 ; j++)
-
-{
-
-out->mins[j] = inLeaf->mins[j];
-
-out->maxs[j] = inLeaf->maxs[j];
-
-}
-
-
-
-out->contents = inLeaf->contents;
-
-out->cluster = inLeaf->contents == CONTENTS_Q1_SOLID ? -1 : (i-1); //LittleLong(inLeaf->contents);
-
-out->area = -1; //LittleLong(inLeaf->visofs);
-
-
-
-if ( out->cluster >= s_worldData.numClusters ) {
-
-s_worldData.numClusters = out->cluster + 1;
-
-}
-
-
-
-out->firstmarksurface = inLeaf->firstmarksurface;
-
-out->nummarksurfaces = inLeaf->nummarksurfaces;
-
-
-
-if (out->contents && out->contents != CONTENTS_Q1_SOLID)
-
-s_worldData.numDecisionNodes++;
-
-}
-
-
-
-in = (void *)(fileBase + nodeLump->fileofs);
-
-for ( i=0 ; i<numNodes; i++, in++)
-
-{
-
-if(in->children[0] == -1
-
-|| in->children[1] == -1) {
-
-out->cluster = -1;
-
-out->area = 0;
-
-out->firstmarksurface = in->firstface;
-
-out->nummarksurfaces = in->numfaces;
-
-out++;
-
-}
-
-}
-
-
-
-// chain descendants
-
-R_SetParent (s_worldData.nodes, NULL);
-
-}
-
-
-
-
-
-/*
-
-=================
-
-R_LoadSubmodels
-
-=================
-
-*/
-
-void R_LoadSubmodels1( lump_t *l ) {
-
-dBsp1Model_t *in;
-
-bmodel_t *out;
-
-int i, j, count;
-
-
-
-in = (void *)(fileBase + l->fileofs);
-
-if (l->filelen % sizeof(*in))
-
-ri.Error (ERR_DROP, "%s: funny lump size in %s", __func__, s_worldData.name);
-
-count = l->filelen / sizeof(*in);
-
-
-
-s_worldData.numBModels = count;
-
-s_worldData.bmodels = out = ri.Hunk_Alloc( count * sizeof(*out), h_low );
-
-
-
-for ( i=0 ; i<count ; i++, in++, out++ ) {
-
-model_t *model;
-
-
-
-model = R_AllocModel();
-
-
-
-assert( model != NULL ); // this should never happen
-
-if ( model == NULL ) {
-
-ri.Error(ERR_DROP, "R_LoadSubmodels: R_AllocModel() failed");
-
-}
-
-
-
-model->type = MOD_BRUSH;
-
-model->bmodel = out;
-
-Com_sprintf( model->name, sizeof( model->name ), "*%d", i );
-
-
-
-for (j=0 ; j<3 ; j++) {
-
-//out->bounds[0][j] = LittleFloat (in->origin[j]) + LittleFloat (in->mins[j]);
-
-//out->bounds[1][j] = LittleFloat (in->origin[j]) + LittleFloat (in->maxs[j]);
-
-out->bounds[0][j] = LittleFloat (in->mins[j]);
-
-out->bounds[1][j] = LittleFloat (in->maxs[j]);
-
-}
-
-
-
-out->firstSurface = LittleLong( in->firstface );
-
-out->numSurfaces = LittleLong( in->numfaces );
-
-
-
-if(i == 0)
-
-{
-
-// Add this for limiting VAO surface creation
-
-s_worldData.numWorldSurfaces = out->numSurfaces;
-
-}
-
-}
-
-}
-
-
-
-
-
-/*
-
-=================
-
-R_LoadVisibility
-
-=================
-
-*/
-
-
-
-static void DecompressVis(byte *dst, void *vis, int pos, int rowSize)
-
-{
-
-if (pos == -1)
-
-{
-
-memset(dst, 0xFF, rowSize); // all visible
-
-dst += rowSize;
-
-return;
-
-}
-
-
-
-byte *src = (byte*)vis + pos;
-
-// decompress vis
-
-for (int j = rowSize; j; /*empty*/)
-
-{
-
-byte c = *src++;
-
-if (c)
-
-{ // non-zero byte
-
-*dst++ = c;
-
-j--;
-
-}
-
-else
-
-{ // zero byte -- decompress RLE data (with filler 0)
-
-c = *src++; // count
-
-c = MIN(c, j); // should not be, but ...
-
-j -= c;
-
-while (c--)
-
-*dst++ = 0;
-
-}
-
-}
-
-}
-
-
-
-static void R_LoadVisibility1( lump_t *l, lump_t *leafLump ) {
-
-int len;
-
-byte *buf;
-
-dBsp1Leaf_t *in;
-
-
-
-len = l->filelen;
-
-if ( !len ) {
-
-return;
-
-}
-
-buf = fileBase + l->fileofs;
-
-in = (void *)(fileBase + leafLump->fileofs);
-
-
-
-if ( tr.externalVisData ) {
-
-s_worldData.vis = tr.externalVisData;
-
-} else {
-
-s_worldData.numClusters = s_worldData.numnodes - s_worldData.numDecisionNodes; // aka numLeafs
-
-s_worldData.clusterBytes = (s_worldData.numClusters + 7) >> 3; // rowSize
-
-s_worldData.vis = Hunk_Alloc( s_worldData.numClusters * s_worldData.clusterBytes, h_high );
-
-byte *dst = (void *)s_worldData.vis;
-
-for (int i = 1; i < s_worldData.numClusters; i++, dst += s_worldData.clusterBytes)
-
-DecompressVis(dst, buf, in[i].visofs, s_worldData.clusterBytes);
-
-}
-
-}
-
-
-
-
-
-void LoadBsp1(const char *name) {
-
-int i;
-
-dBsp1Hdr_t *header;
-
-header = (dBsp1Hdr_t *)fileBase;
-
-
-
-// swap all the lumps
-
-for (i=0; i < ARRAY_LEN(header->lumps); i++) {
-
-((int *)header)[i] = LittleLong ( ((int *)header)[i]);
-
-}
-
-/*
-
-CMod_LoadShaders2( &header.lumps[LUMP_Q2_TEXINFO] );
-
-CMod_LoadLeafs2 (&header.lumps[LUMP_Q2_LEAFS]);
-
-CMod_LoadLeafBrushes2 (&header.lumps[LUMP_Q2_LEAFBRUSHES]);
-
-CMod_LoadLeafSurfaces2 (&header.lumps[LUMP_Q2_LEAFFACES]);
-
-CMod_LoadPlanes2 (&header.lumps[LUMP_Q2_PLANES]);
-
-CMod_LoadBrushSides2 (&header.lumps[LUMP_Q2_BRUSHSIDES]);
-
-CMod_LoadBrushes2 (&header.lumps[LUMP_Q2_BRUSHES]);
-
-CMod_LoadSubmodels2 (&header.lumps[LUMP_Q2_MODELS]);
-
-CMod_LoadNodes2 (&header.lumps[LUMP_Q2_NODES]);
-
-CMod_LoadEntityString2 (&header.lumps[LUMP_Q2_ENTITIES], name);
-
-CMod_LoadVisibility2( &header.lumps[LUMP_Q2_VISIBILITY] );
-
-// TODO: area portals and area mask stuff
-
-CMod_LoadAreas( &header.lumps[LUMP_Q2_ZONES] );
-
-//CMod_LoadAreaPortals( &header.lumps[LUMP_Q2_ZONEPORTALS] );
-
-//
-
-//;
-
-CMod_LoadPatches2( &header.lumps[LUMP_Q2_FACES], &header.lumps[LUMP_Q2_VERTEXES] );
-
-*/
-
-
-// load into heap
-
-R_LoadEntities( &header->lumps[LUMP_Q1_ENTITIES] );
-
-R_LoadShaders1( &header->lumps[LUMP_Q1_TEXTURES] );
-
-R_LoadPlanes1( &header->lumps[LUMP_Q1_PLANES] );
-
-R_LoadSurfaces1( &header->lumps[LUMP_Q1_FACES],
-
-&header->lumps[LUMP_Q1_VERTEXES],
-
-&header->lumps[LUMP_Q1_EDGES],
-
-&header->lumps[LUMP_Q1_SURFEDGES],
-
-&header->lumps[LUMP_Q1_TEXINFO] );
-
-R_LoadMarksurfaces1 (&header->lumps[LUMP_Q1_MARKSURFACES]);
-
-R_LoadNodesAndLeafs1 (&header->lumps[LUMP_Q1_NODES],
-
-&header->lumps[LUMP_Q1_LEAFS]);
-
-R_LoadSubmodels1( &header->lumps[LUMP_Q1_MODELS] );
-
-R_LoadVisibility1( &header->lumps[LUMP_Q1_VISIBILITY], &header->lumps[LUMP_Q1_LEAFS] );
-
-}
-
-
-
-#endif
-
+PASTED ENTIRE SOURCE: [https://github.com/briancullinan2/Quake3e/blob/main/code/renderer2/tr_world.c]
 
 
 i think i did work to get shaders loading properly do i could basically extract the exact assets to the mod directory and the engine paired up the paths the same way. heres the quake 3 version also, that code is so much longer
 
 
-
-
-
-
-
+```c
 
 
 //==================================================================
 
-
-
 /*
-
 =================
-
 R_SetParent
-
 =================
-
 */
-
 void R_SetParent (mnode_t *node, mnode_t *parent)
-
 {
-
-node->parent = parent;
-
-if (node->contents != -1)
-
-return;
-
-R_SetParent (node->children[0], node);
-
-R_SetParent (node->children[1], node);
-
+	node->parent = parent;
+	if (node->contents != -1)
+		return;
+	R_SetParent (node->children[0], node);
+	R_SetParent (node->children[1], node);
 }
-
-
 
 /*
-
 =================
-
 R_LoadNodesAndLeafs
-
 =================
-
 */
-
 void R_LoadNodesAndLeafs (lump_t *nodeLump, lump_t *leafLump) {
+	int			i, j, p;
+	dnode_t		*in;
+	dleaf_t		*inLeaf;
+	mnode_t 	*out;
+	int			numNodes, numLeafs;
 
-int i, j, p;
+	in = (void *)(fileBase + nodeLump->fileofs);
+	if (nodeLump->filelen % sizeof(dnode_t) ||
+		leafLump->filelen % sizeof(dleaf_t) ) {
+		ri.Error (ERR_DROP, "%s: funny lump size in %s", __func__, s_worldData.name);
+	}
+	numNodes = nodeLump->filelen / sizeof(dnode_t);
+	numLeafs = leafLump->filelen / sizeof(dleaf_t);
 
-dnode_t *in;
+	out = ri.Hunk_Alloc ( (numNodes + numLeafs) * sizeof(*out), h_low);	
 
-dleaf_t *inLeaf;
+	s_worldData.nodes = out;
+	s_worldData.numnodes = numNodes + numLeafs;
+	s_worldData.numDecisionNodes = numNodes;
 
-mnode_t *out;
+	// load nodes
+	for ( i=0 ; i<numNodes; i++, in++, out++)
+	{
+		for (j=0 ; j<3 ; j++)
+		{
+			out->mins[j] = LittleLong (in->mins[j]);
+			out->maxs[j] = LittleLong (in->maxs[j]);
+		}
+	
+		p = LittleLong(in->planeNum);
+		out->plane = s_worldData.planes + p;
 
-int numNodes, numLeafs;
+		out->contents = CONTENTS_NODE;	// differentiate from leafs
 
+		for (j=0 ; j<2 ; j++)
+		{
+			p = LittleLong (in->children[j]);
+			if (p >= 0)
+				out->children[j] = s_worldData.nodes + p;
+			else
+				out->children[j] = s_worldData.nodes + numNodes + (-1 - p);
+		}
+	}
+	
+	// load leafs
+	inLeaf = (void *)(fileBase + leafLump->fileofs);
+	for ( i=0 ; i<numLeafs ; i++, inLeaf++, out++)
+	{
+		for (j=0 ; j<3 ; j++)
+		{
+			out->mins[j] = LittleLong (inLeaf->mins[j]);
+			out->maxs[j] = LittleLong (inLeaf->maxs[j]);
+		}
 
+		out->cluster = LittleLong(inLeaf->cluster);
+		out->area = LittleLong(inLeaf->area);
 
-in = (void *)(fileBase + nodeLump->fileofs);
+		if ( out->cluster >= s_worldData.numClusters ) {
+			s_worldData.numClusters = out->cluster + 1;
+		}
 
-if (nodeLump->filelen % sizeof(dnode_t) ||
+		out->firstmarksurface = LittleLong(inLeaf->firstLeafSurface);
+		out->nummarksurfaces = LittleLong(inLeaf->numLeafSurfaces);
+	}	
 
-leafLump->filelen % sizeof(dleaf_t) ) {
-
-ri.Error (ERR_DROP, "%s: funny lump size in %s", __func__, s_worldData.name);
-
+	// chain descendants
+	R_SetParent (s_worldData.nodes, NULL);
 }
-
-numNodes = nodeLump->filelen / sizeof(dnode_t);
-
-numLeafs = leafLump->filelen / sizeof(dleaf_t);
-
-
-
-out = ri.Hunk_Alloc ( (numNodes + numLeafs) * sizeof(*out), h_low);
-
-
-
-s_worldData.nodes = out;
-
-s_worldData.numnodes = numNodes + numLeafs;
-
-s_worldData.numDecisionNodes = numNodes;
-
-
-
-// load nodes
-
-for ( i=0 ; i<numNodes; i++, in++, out++)
-
-{
-
-for (j=0 ; j<3 ; j++)
-
-{
-
-out->mins[j] = LittleLong (in->mins[j]);
-
-out->maxs[j] = LittleLong (in->maxs[j]);
-
-}
-
-
-p = LittleLong(in->planeNum);
-
-out->plane = s_worldData.planes + p;
-
-
-
-out->contents = CONTENTS_NODE; // differentiate from leafs
-
-
-
-for (j=0 ; j<2 ; j++)
-
-{
-
-p = LittleLong (in->children[j]);
-
-if (p >= 0)
-
-out->children[j] = s_worldData.nodes + p;
-
-else
-
-out->children[j] = s_worldData.nodes + numNodes + (-1 - p);
-
-}
-
-}
-
-
-// load leafs
-
-inLeaf = (void *)(fileBase + leafLump->fileofs);
-
-for ( i=0 ; i<numLeafs ; i++, inLeaf++, out++)
-
-{
-
-for (j=0 ; j<3 ; j++)
-
-{
-
-out->mins[j] = LittleLong (inLeaf->mins[j]);
-
-out->maxs[j] = LittleLong (inLeaf->maxs[j]);
-
-}
-
-
-
-out->cluster = LittleLong(inLeaf->cluster);
-
-out->area = LittleLong(inLeaf->area);
-
-
-
-if ( out->cluster >= s_worldData.numClusters ) {
-
-s_worldData.numClusters = out->cluster + 1;
-
-}
-
-
-
-out->firstmarksurface = LittleLong(inLeaf->firstLeafSurface);
-
-out->nummarksurfaces = LittleLong(inLeaf->numLeafSurfaces);
-
-}
-
-
-
-// chain descendants
-
-R_SetParent (s_worldData.nodes, NULL);
-
-}
-
-
-
-//=============================================================================
-
+```
 
 
 i guess FTE fully acomadated with quake 2, this source code is nicer than i remember from a few years back
 
 
-
-
-
+```c
 /*
+==================
+CM_LoadMap
 
-=================
-
-CMod_LoadLeafBrushes
-
-=================
-
+Loads in the map and all submodels
+==================
 */
-
-static qboolean CModQ2_LoadLeafBrushes (model_t *mod, qbyte *mod_base, lump_t *l, qboolean isbig)
-
+static cmodel_t *CM_LoadMap (model_t *mod, qbyte *filein, size_t filelen, qboolean clientload)
 {
-
-cminfo_t *prv = (cminfo_t*)mod->meshinfo;
-
-int i;
-
-q2cbrush_t **out;
-
-unsigned short *ins;
-
-unsigned int *inl;
-
-int count;
-
-
-
-if (l->filelen % (isbig?sizeof(*inl):sizeof(*ins)))
-
-{
-
-Con_Printf (CON_ERROR "MOD_LoadBmodel: funny lump size\n");
-
-return false;
-
-}
-
-count = l->filelen / (isbig?sizeof(*inl):sizeof(*ins));
-
-
-
-if (count < 1)
-
-{
-
-Con_Printf (CON_ERROR "Map with no planes\n");
-
-return false;
-
-}
-
-// need to save space for box planes
-
-if (count > SANITY_MAX_MAP_LEAFBRUSHES)
-
-{
-
-Con_Printf (CON_ERROR "Map has too many leafbrushes\n");
-
-return false;
-
-}
-
-
-
-//prv->numbrushes is because of submodels being weird.
-
-out = prv->leafbrushes = ZG_Malloc(&mod->memgroup, sizeof(*out) * (count+prv->numbrushes));
-
-prv->numleafbrushes = count;
-
-
-
-if (isbig)
-
-{
-
-inl = (void *)(mod_base + l->fileofs);
-
-for ( i=0 ; i<count ; i++, inl++, out++)
-
-*out = prv->brushes + (unsigned int)LittleLong (*inl);
-
-}
-
-else
-
-{
-
-ins = (void *)(mod_base + l->fileofs);
-
-for ( i=0 ; i<count ; i++, ins++, out++)
-
-*out = prv->brushes + (unsigned short)(short)LittleShort (*ins);
-
-}
-
-
-
-return true;
-
-}
-
-
-
-/*
-
-
-
-gildors is the messy version,
-
-https://github.com/fte-team/fteqw/blob/3584377302cda4bd1b6950b126d147451895a1da/engine/common/gl_q2bsp.c#L2177
-
-
-
-maybe its more obvious to you where i went wrong with my short and quick quake 1 format
-
-
-
-it says this one does quake 1 maps but i don't know if this is the right code branch
-
-
-
-
-
-/*
-
-=================
-
-Mod_LoadBrushModel
-
-=================
-
-*/
-
-static qboolean QDECL Mod_LoadBrushModel (model_t *mod, void *buffer, size_t fsize)
-
-{
-
-struct vispatch_s vispatch;
-
-int i, j;
-
-dheader_t header;
-
-mmodel_t *bm;
-
-model_t *submod;
-
-unsigned int chksum;
-
-qboolean noerrors;
-
-char loadname[32];
-
-qbyte *mod_base = buffer;
-
-qboolean hexen2map = false;
-
-qboolean isnotmap;
-
-qboolean using_rbe = true;
-
-qboolean misaligned = false;
-
-bspx_header_t *bspx;
-
-subbsp_t subbsp = sb_none;
-
-
-
-COM_FileBase (mod->name, loadname, sizeof(loadname));
-
-mod->type = mod_brush;
-
-
-if (fsize < sizeof(header))
-
-return false;
-
-
-
-mod_base = (qbyte *)buffer;
-
-memcpy(&header, mod_base, sizeof(header));
-
-for (i=0 ; i<countof(header.lumps)/4 ; i++)
-
-{
-
-header.lumps[i].filelen = LittleLong(header.lumps[i].filelen);
-
-header.lumps[i].fileofs = LittleLong(header.lumps[i].fileofs);
-
-}
-
-
-
-#ifdef SERVERONLY
-
-isnotmap = !!sv.world.worldmodel;
-
+	unsigned		*buf;
+	int				i;
+	q2dheader_t		header;
+	int				length;
+	qboolean noerrors = true;
+	model_t			*wmod = mod;
+	char			loadname[32];
+	qbyte			*mod_base = (qbyte *)filein;
+	bspx_header_t	*bspx = NULL;
+	unsigned int	checksum1, checksum2;
+#ifdef Q3BSPS
+	extern cvar_t	gl_overbright;
+#endif
+
+#ifndef SERVERONLY
+	void (*buildmeshes)(model_t *mod, msurface_t *surf, builddata_t *cookie) = NULL;
+	qbyte *facedata = NULL;
+	unsigned int facesize = 0;
+#endif
+	cminfo_t	*prv;
+	qboolean isbig;
+
+	COM_FileBase (mod->name, loadname, sizeof(loadname));
+
+	// free old stuff
+	mod->meshinfo = prv = ZG_Malloc(&mod->memgroup, sizeof(*prv));
+	prv->numcmodels = 0;
+	prv->numvisibility = 0;
+
+	mod->type = mod_brush;
+
+	if (!mod->name[0])
+	{
+		prv->cmodels = ZG_Malloc(&mod->memgroup, 1 * sizeof(*prv->cmodels));
+		mod->leafs = ZG_Malloc(&mod->memgroup, 1 * sizeof(*mod->leafs));
+		mod->funcs.AreasConnected		= CM_AreasConnected;
+		prv->numcmodels = 1;
+		prv->numareas = 1;
+		mod->checksum = mod->checksum2 = 0;
+		prv->cmodels[0].headnode = (mnode_t*)mod->leafs;	//directly start with the empty leaf
+		return &prv->cmodels[0];			// cinematic servers won't have anything at all
+	}
+
+	//
+	// load the file
+	//
+	buf = (unsigned	*)filein;
+	length = filelen;
+	if (!buf)
+	{
+		Con_Printf (CON_ERROR "Couldn't load %s\n", mod->name);
+		return NULL;
+	}
+
+	checksum1 = LittleLong (CalcHashInt(&hash_md4, buf, length));
+#ifdef AVAIL_ZLIB
+	checksum2 = crc32(0, (void*)buf, length);	//q2rerelease uses crc32 instead... *sigh*
 #else
-
-if ((!cl.worldmodel && cls.state>=ca_connected)
-
-#ifndef CLIENTONLY
-
-|| (!sv.world.worldmodel && sv.state)
-
+	checksum2 = checksum1;	//we accept either, so wimp out.
 #endif
 
-)
+	header = *(q2dheader_t *)(buf);
+	header.ident = LittleLong(header.ident);
+	header.version = LittleLong(header.version);
 
-isnotmap = false;
+	ClearBounds(mod->mins, mod->maxs);
 
-else
+	switch(header.version)
+	{
+	default:
+		Con_Printf (CON_ERROR "Quake 2 or Quake 3 based BSP with unknown header (%s: %i should be %i or %i)\n"
+			, mod->name, header.version, BSPVERSION_Q2, BSPVERSION_Q3);
+		return NULL;
+		break;
+#ifdef Q3BSPS
+#ifdef RFBSPS
+	case BSPVERSION_RBSP: //rbsp/fbsp
+#endif
+	case BSPVERSION_RTCW:	//rtcw
+	case BSPVERSION_Q3:
+#ifdef RFBSPS
+		if (header.ident == (('F'<<0)+('B'<<8)+('S'<<16)+('P'<<24)))
+		{
+			mod->lightmaps.width = 512;
+			mod->lightmaps.height = 512;
+		}
+		else
+#endif
+		{
+			mod->lightmaps.width = 128;
+			mod->lightmaps.height = 128;
+		}
 
-isnotmap = true;
+		prv->mapisq3 = true;
+		mod->fromgame = fg_quake3;
+		for (i=0 ; i<Q3LUMPS_TOTAL ; i++)
+		{
+#ifdef RFBSPS
+			if (i == RBSPLUMP_LIGHTINDEXES && header.version != BSPVERSION_RBSP)
+			{
+				header.lumps[i].filelen = 0;
+				header.lumps[i].fileofs = 0;
+			}
+			else
+#endif
+			{
+				header.lumps[i].filelen = LittleLong (header.lumps[i].filelen);
+				header.lumps[i].fileofs = LittleLong (header.lumps[i].fileofs);
 
+				if (header.lumps[i].filelen && header.lumps[i].fileofs + header.lumps[i].filelen > filelen)
+				{
+					Con_Printf (CON_ERROR "WARNING: q3bsp %s truncated (lump %i, %i+%i > %u)\n", mod->name, i, header.lumps[i].fileofs, header.lumps[i].filelen, (unsigned int)filelen);
+					header.lumps[i].filelen = filelen - header.lumps[i].fileofs;
+					if (header.lumps[i].filelen < 0)
+						header.lumps[i].filelen = 0;
+				}
+			}
+		}
+		/*
+		#ifndef SERVERONLY
+			GLMod_LoadVertexes		(mod, cmod_base, &header.lumps[Q3LUMP_DRAWVERTS]);
+//			GLMod_LoadEdges			(mod, cmod_base, &header.lumps[Q3LUMP_EDGES]);
+//			GLMod_LoadSurfedges		(mod, cmod_base, &header.lumps[Q3LUMP_SURFEDGES]);
+			GLMod_LoadLighting		(mod, cmod_base, &header.lumps[Q3LUMP_LIGHTMAPS]);
+		#endif
+			CModQ3_LoadShaders		(mod, cmod_base, &header.lumps[Q3LUMP_SHADERS]);
+			CModQ3_LoadPlanes		(mod, cmod_base, &header.lumps[Q3LUMP_PLANES]);
+			CModQ3_LoadLeafBrushes	(mod, cmod_base, &header.lumps[Q3LUMP_LEAFBRUSHES]);
+			CModQ3_LoadBrushes		(mod, cmod_base, &header.lumps[Q3LUMP_BRUSHES]);
+			CModQ3_LoadBrushSides	(mod, cmod_base, &header.lumps[Q3LUMP_BRUSHSIDES]);
+		#ifndef SERVERONLY
+			CMod_LoadTexInfo		(mod, cmod_base, &header.lumps[Q3LUMP_SHADERS]);
+			CMod_LoadFaces			(mod, cmod_base, &header.lumps[Q3LUMP_SURFACES]);
+//			GLMod_LoadMarksurfaces	(mod, cmod_base, &header.lumps[Q3LUMP_LEAFFACES]);
+		#endif
+			CMod_LoadVisibility		(mod, cmod_base, &header.lumps[Q3LUMP_VISIBILITY]);
+			CModQ3_LoadSubmodels	(mod, cmod_base, &header.lumps[Q3LUMP_MODELS]);
+			CModQ3_LoadLeafs		(mod, cmod_base, &header.lumps[Q3LUMP_LEAFS]);
+			CModQ3_LoadNodes		(mod, cmod_base, &header.lumps[Q3LUMP_NODES]);
+//			CMod_LoadAreas			(mod, cmod_base, &header.lumps[Q3LUMP_AREAS]);
+//			CMod_LoadAreaPortals	(mod, cmod_base, &header.lumps[Q3LUMP_AREAPORTALS]);
+			CMod_LoadEntityString	(mod, cmod_base, &header.lumps[Q3LUMP_ENTITIES]);
+*/
+
+		prv->faces = NULL;
+
+		bspx = BSPX_Setup(mod, mod_base, filelen, header.lumps, Q3LUMPS_TOTAL);
+
+		//q3 maps have built in 4-fold overbright.
+		//if we're not rendering with that, we need to brighten the lightmaps in order to keep the darker parts the same brightness. we loose the 2 upper bits. those bright areas become uniform and indistinct.
+		//this is used for both the lightmap AND vertex lighting
+		//FIXME: when not using overbrights, we suffer a loss of precision.
+		gl_overbright.flags |= CVAR_RENDERERLATCH;
+		BuildLightMapGammaTable(1, (1<<(2-gl_overbright.ival)));
+
+		prv->mapisq3 = true;
+		noerrors = noerrors && CModQ3_LoadShaders				(mod, mod_base, &header.lumps[Q3LUMP_SHADERS]);
+		noerrors = noerrors && CModQ3_LoadPlanes				(mod, mod_base, &header.lumps[Q3LUMP_PLANES]);
+#ifdef RFBSPS
+		if (header.version == BSPVERSION_RBSP)
+		{
+			noerrors = noerrors && CModRBSP_LoadBrushSides		(mod, mod_base, &header.lumps[Q3LUMP_BRUSHSIDES]);
+			noerrors = noerrors && CModRBSP_LoadVertexes		(mod, mod_base, &header.lumps[Q3LUMP_DRAWVERTS]);
+		}
+		else
+#endif
+		{
+			noerrors = noerrors && CModQ3_LoadBrushSides		(mod, mod_base, &header.lumps[Q3LUMP_BRUSHSIDES]);
+			noerrors = noerrors && CModQ3_LoadVertexes			(mod, mod_base, &header.lumps[Q3LUMP_DRAWVERTS]);
+		}
+		noerrors = noerrors && CModQ3_LoadBrushes				(mod, mod_base, &header.lumps[Q3LUMP_BRUSHES]);
+		noerrors = noerrors && CModQ3_LoadLeafBrushes			(mod, mod_base, &header.lumps[Q3LUMP_LEAFBRUSHES]);
+#ifdef RFBSPS
+		if (header.version == BSPVERSION_RBSP)
+			noerrors = noerrors && CModRBSP_LoadFaces			(mod, mod_base, &header.lumps[Q3LUMP_SURFACES]);
+		else
+#endif
+			noerrors = noerrors && CModQ3_LoadFaces				(mod, mod_base, &header.lumps[Q3LUMP_SURFACES]);
+
+		if (noerrors)
+			Mod_LoadEntities								(mod, mod_base, &header.lumps[Q3LUMP_ENTITIES]);
+#ifndef SERVERONLY
+		if (qrenderer != QR_NONE)
+		{
+#ifdef RFBSPS
+			if (header.version == BSPVERSION_RBSP)
+				noerrors = noerrors && CModRBSP_LoadLightgrid	(mod, mod_base, &header.lumps[Q3LUMP_LIGHTGRID], &header.lumps[RBSPLUMP_LIGHTINDEXES]);
+			else
+#endif
+				noerrors = noerrors && CModQ3_LoadLightgrid		(mod, mod_base, &header.lumps[Q3LUMP_LIGHTGRID]);
+			noerrors = noerrors && CModQ3_LoadIndexes			(mod, mod_base, &header.lumps[Q3LUMP_DRAWINDEXES]);
+
+			if (header.version != BSPVERSION_RTCW)
+				noerrors = noerrors && CModQ3_LoadFogs			(mod, mod_base, &header.lumps[Q3LUMP_FOGS]);
+			else
+				mod->numfogs = 0;
+
+			facedata = (void *)(mod_base + header.lumps[Q3LUMP_SURFACES].fileofs);
+#ifdef RFBSPS
+			if (header.version == BSPVERSION_RBSP)
+			{
+				noerrors = noerrors && CModRBSP_LoadRFaces		(mod, mod_base, &header.lumps[Q3LUMP_SURFACES]);
+				buildmeshes = CModRBSP_BuildSurfMesh;
+				facesize = sizeof(rbspface_t);
+				mod->lightmaps.surfstyles = 4;
+			}
+			else
+#endif
+			{
+				noerrors = noerrors && CModQ3_LoadRFaces		(mod, mod_base, &header.lumps[Q3LUMP_SURFACES]);
+				buildmeshes = CModQ3_BuildSurfMesh;
+				facesize = sizeof(q3dface_t);
+				mod->lightmaps.surfstyles = 1;
+			}
+			if (noerrors)
+			{
+				i = header.lumps[Q3LUMP_LIGHTMAPS].filelen / (mod->lightmaps.width*mod->lightmaps.height*3);
+				mod->lightmaps.deluxemapping = !(i&1);
+				mod->lightmaps.count = max(mod->lightmaps.count, i);
+				mod->lightmaps.deluxemapping_modelspace = true;	//we assume true for q3bsp.
+
+				for (i = 0; i < mod->numsurfaces && mod->lightmaps.deluxemapping; i++)
+				{
+					if (mod->surfaces[i].lightmaptexturenums[0] >= 0 && (mod->surfaces[i].lightmaptexturenums[0] & 1))
+						mod->lightmaps.deluxemapping = false;
+				}
+
+				{
+					char deluxeMaps[64], *key;
+					key = (char*)Mod_ParseWorldspawnKey(mod, "deluxeMaps", deluxeMaps, sizeof(deluxeMaps));
+					if (*key)
+					{
+						switch(atoi(key))
+						{
+						case 0:
+							mod->lightmaps.deluxemapping = false;
+							break;
+						case 1:
+		//					mod->lightmaps.deluxemapping = true;
+							mod->lightmaps.deluxemapping_modelspace = true;
+							break;
+						case 2:
+		//					mod->lightmaps.deluxemapping = true;
+							mod->lightmaps.deluxemapping_modelspace = false;
+							break;
+						}
+					}
+				}
+			}
+
+			if (noerrors)
+				CModQ3_LoadLighting								(mod, mod_base, &header.lumps[Q3LUMP_LIGHTMAPS]);	//fixme: duplicated loading.
+		}
+#endif
+		noerrors = noerrors && CModQ3_LoadMarksurfaces			(mod, mod_base, &header.lumps[Q3LUMP_LEAFSURFACES]);
+		noerrors = noerrors && CModQ3_LoadLeafs					(mod, mod_base, &header.lumps[Q3LUMP_LEAFS]);
+		noerrors = noerrors && CModQ3_LoadNodes					(mod, mod_base, &header.lumps[Q3LUMP_NODES]);
+		noerrors = noerrors && CModQ3_LoadSubmodels				(mod, mod_base, &header.lumps[Q3LUMP_MODELS]);
+		noerrors = noerrors && CModQ3_LoadVisibility			(mod, mod_base, &header.lumps[Q3LUMP_VISIBILITY]);
+
+		if (!noerrors)
+		{
+			if (prv->faces)
+				BZ_Free(prv->faces);
+			return NULL;
+		}
+
+#ifdef HAVE_SERVER
+		mod->funcs.FatPVS				= Q23BSP_FatPVS;
+		mod->funcs.EdictInFatPVS		= Q23BSP_EdictInFatPVS;
+		mod->funcs.FindTouchedLeafs		= Q23BSP_FindTouchedLeafs;
+#endif
+		mod->funcs.ClusterPVS			= CM_ClusterPVS;
+		mod->funcs.ClusterPHS			= CM_ClusterPHS;
+		mod->funcs.ClusterForPoint		= CM_PointCluster;
+
+#ifdef HAVE_CLIENT
+		mod->funcs.LightPointValues		= GLQ3_LightGrid;
+		mod->funcs.StainNode			= GLR_Q2BSP_StainNode;
+		mod->funcs.MarkLights			= Q2BSP_MarkLights;
+		mod->funcs.PrepareFrame			= CM_PrepareFrame;
+#ifdef RTLIGHTS
+		mod->funcs.GenerateShadowMesh	= Q3BSP_GenerateShadowMesh;
+#endif
+#endif
+		mod->funcs.PointContents		= Q2BSP_PointContents;
+		mod->funcs.NativeTrace			= CM_NativeTrace;
+		mod->funcs.NativeContents		= CM_NativeContents;
+
+		mod->funcs.InfoForPoint			= CM_InfoForPoint;
+		mod->funcs.AreasConnected		= CM_AreasConnected;
+		mod->funcs.SetAreaPortalState	= CM_SetAreaPortalState;
+		mod->funcs.WriteAreaBits		= CM_WriteAreaBits;
+		mod->funcs.LoadAreaPortalBlob	= CM_LoadAreaPortalBlob;
+		mod->funcs.SaveAreaPortalBlob	= CM_SaveAreaPortalBlob;
+
+#ifdef HAVE_CLIENT
+		//light grid info
+		if (mod->lightgrid)
+		{
+			char gridsize[256], *key;
+			char val[64];
+			float maxs;
+			q3lightgridinfo_t *lg = mod->lightgrid;
+			key = (char*)Mod_ParseWorldspawnKey(mod, "gridsize", gridsize, sizeof(gridsize));
+
+			key = COM_ParseOut(key, val, sizeof(val));
+			lg->gridSize[0] = atof(val);
+			key = COM_ParseOut(key, val, sizeof(val));
+			lg->gridSize[1] = atof(val);
+			key = COM_ParseOut(key, val, sizeof(val));
+			lg->gridSize[2] = atof(val);
+
+			if ( lg->gridSize[0] < 1 || lg->gridSize[1] < 1 || lg->gridSize[2] < 1 )
+			{
+				lg->gridSize[0] = 64;
+				lg->gridSize[1] = 64;
+				lg->gridSize[2] = 128;
+			}
+
+			for ( i = 0; i < 3; i++ )
+			{
+				lg->gridMins[i] = lg->gridSize[i] * ceil( (prv->cmodels->mins[i] + 1) / lg->gridSize[i] );
+				maxs = lg->gridSize[i] * floor( (prv->cmodels->maxs[i] - 1) / lg->gridSize[i] );
+				lg->gridBounds[i] = (maxs - lg->gridMins[i])/lg->gridSize[i] + 1;
+			}
+
+			lg->gridBounds[3] = lg->gridBounds[1] * lg->gridBounds[0];
+		}
 #endif
 
-
-
-mod->fromgame = fg_quake;
-
-if (!memcmp(&header.version,  BSPVERSION))
-
-mod->engineflags |= MDLF_NEEDOVERBRIGHT;
-
-else if (!memcmp(&header.version,  BSPVERSIONQ64))
-
-mod->engineflags |= MDLF_NEEDOVERBRIGHT, subbsp = sb_quake64;
-
-else if (!memcmp(&header.version,  BSPVERSIONPREREL))
-
-mod->engineflags |= MDLF_NEEDOVERBRIGHT;
-
-else if (!memcmp(&header.version,  BSPVERSION_LONG1))
-
-mod->engineflags |= MDLF_NEEDOVERBRIGHT, subbsp = sb_long1;
-
-else if (!memcmp(&header.version,  BSPVERSION_LONG2))
-
-mod->engineflags |= MDLF_NEEDOVERBRIGHT, subbsp = sb_long2;
-
-else if (!memcmp(&header.version,  BSPVERSIONHL))
-
-{
-
-char tmp[64];
-
-mod->fromgame = fg_halflife;
-
-
-
-//special hack to work around blueshit bugs - we need to swap LUMP_ENTITIES and LUMP_PLANES over
-
-if (COM_ParseOut(mod_base + header.lumps[LUMP_PLANES].fileofs, tmp, sizeof(tmp)) && !strcmp(tmp, "{"))
-
-{
-
-COM_ParseOut(mod_base + header.lumps[LUMP_ENTITIES].fileofs, tmp, sizeof(tmp));
-
-if (strcmp(tmp, "{"))
-
-{
-
-int i;
-
-for (i = 0; i < header.lumps[LUMP_ENTITIES].filelen && i < sizeof(dplane_t); i++)
-
-if (mod_base[header.lumps[LUMP_ENTITIES].fileofs + i] == 0)
-
-{ //yeah, looks screwy in the way we expect. swap em over.
-
-lump_t tmp = header.lumps[LUMP_ENTITIES];
-
-header.lumps[LUMP_ENTITIES] = header.lumps[LUMP_PLANES];
-
-header.lumps[LUMP_PLANES] = tmp;
-
-break;
-
-}
-
-}
-
-}
-
-}
-
-else
-
-{
-
-Con_Printf (CON_ERROR "Mod_LoadBrushModel: %s has wrong version number (%i)\n", mod->name, i);
-
-return false;
-
-}
-
-header.version = LittleLong(header.version);
-
-
-
-mod->lightmaps.width = 128;//LMBLOCK_WIDTH;
-
-mod->lightmaps.height = 128;//LMBLOCK_HEIGHT; 
-
-
-
-// checksum all of the map, except for entities
-
-mod->checksum = 0;
-
-mod->checksum2 = 0;
-
-
-
-for (i = 0; i < HEADER_LUMPS; i++)
-
-{
-
-if ((header.lumps[i].fileofs & 3) && header.lumps[i].filelen)
-
-misaligned = true;
-
-
-
-if ((unsigned)header.lumps[i].fileofs + (unsigned)header.lumps[i].filelen > fsize)
-
-{
-
-Con_Printf (CON_ERROR "Mod_LoadBrushModel: %s appears truncated\n", mod->name);
-
-return false;
-
-}
-
-if (i == LUMP_ENTITIES)
-
-continue;
-
-chksum = CalcHashInt(&hash_md4, mod_base + header.lumps[i].fileofs, header.lumps[i].filelen);
-
-mod->checksum ^= chksum;
-
-
-
-if (i == LUMP_VISIBILITY || i == LUMP_LEAFS || i == LUMP_NODES)
-
-continue;
-
-mod->checksum2 ^= chksum;
-
-}
-
-
-
-if (misaligned)
-
-{ //pre-phong versions of tyrutils wrote misaligned lumps. These crash on arm/etc.
-
-char *tmp;
-
-unsigned int ofs = 0;
-
-Con_DPrintf(CON_WARNING"%s: Misaligned lumps detected\n", mod->name);
-
-tmp = BZ_Malloc(fsize);
-
-memcpy(tmp, mod_base, fsize);
-
-for (i = 0; i < HEADER_LUMPS; i++)
-
-{
-
-if (ofs + header.lumps[i].filelen > fsize)
-
-{ //can happen if two lumps overlap... otherwise impossible.
-
-Con_Printf(CON_ERROR"%s: Realignment failed\n", mod->name);
-
-BZ_Free(tmp);
-
-return false;
-
-}
-
-memcpy(mod_base + ofs, tmp+header.lumps[i].fileofs, header.lumps[i].filelen);
-
-header.lumps[i].fileofs = ofs;
-
-ofs += header.lumps[i].filelen;
-
-ofs = (ofs + 3) & ~3u;
-
-}
-
-BZ_Free(tmp);
-
-bspx = NULL;
-
-}
-
-else
-
-{
-
-bspx = BSPX_Setup(mod, mod_base, fsize, header.lumps, HEADER_LUMPS);
-
-
-
-/*if (1)//mod_ebfs.value)
-
-{
-
-char *id;
-
-id = (char *)mod_base + sizeof(dheader_t);
-
-if (id[0]=='P' && id[1]=='A' && id[2]=='C' && id[3]=='K')
-
-{ //EBFS detected.
-
-COM_LoadMapPackFile(mod->name, sizeof(dheader_t));
-
-}
-
-}*/
-
-}
-
-
-noerrors = true;
-
-
-
-Mod_FindVisPatch(&vispatch, mod, header.lumps[LUMP_LEAFS].filelen);
-
-
-
-// load into heap
-
-if (!isDedicated || using_rbe)
-
-{
-
-TRACE(("Loading verts\n"));
-
-noerrors = noerrors && Mod_LoadVertexes (mod, mod_base, &header.lumps[LUMP_VERTEXES]);
-
-TRACE(("Loading edges\n"));
-
-noerrors = noerrors && Mod_LoadEdges (mod, mod_base, &header.lumps[LUMP_EDGES], subbsp);
-
-TRACE(("Loading Surfedges\n"));
-
-noerrors = noerrors && Mod_LoadSurfedges (mod, mod_base, &header.lumps[LUMP_SURFEDGES]);
-
-}
-
-if (!isDedicated)
-
-{
-
-TRACE(("Loading Textures\n"));
-
-noerrors = noerrors && Mod_LoadTextures (mod, mod_base, &header.lumps[LUMP_TEXTURES], subbsp);
-
-}
-
-TRACE(("Loading Submodels\n"));
-
-noerrors = noerrors && Mod_LoadSubmodels (mod, mod_base, &header.lumps[LUMP_MODELS], &hexen2map);
-
-TRACE(("Loading Planes\n"));
-
-noerrors = noerrors && Mod_LoadPlanes (mod, mod_base, &header.lumps[LUMP_PLANES]);
-
-TRACE(("Loading Entities\n"));
-
-Mod_LoadEntities (mod, mod_base, &header.lumps[LUMP_ENTITIES]);
-
-if (!isDedicated || using_rbe)
-
-{
-
-TRACE(("Loading Texinfo\n"));
-
-noerrors = noerrors && Mod_LoadTexinfo (mod, mod_base, &header.lumps[LUMP_TEXINFO]);
-
-TRACE(("Loading Faces\n"));
-
-noerrors = noerrors && Mod_LoadFaces (mod, bspx, mod_base, &header.lumps[LUMP_FACES], &header.lumps[LUMP_LIGHTING], subbsp);
-
-}
-
-if (!isDedicated)
-
-{
-
-TRACE(("Loading MarkSurfaces\n"));
-
-noerrors = noerrors && Mod_LoadMarksurfaces (mod, mod_base, &header.lumps[LUMP_MARKSURFACES], subbsp);
-
-}
-
-if (noerrors)
-
-{
-
-TRACE(("Loading Vis\n"));
-
-Mod_LoadVisibility (mod, mod_base, &header.lumps[LUMP_VISIBILITY], vispatch.visptr, vispatch.vislen);
-
-}
-
-noerrors = noerrors && Mod_LoadLeafs (mod, mod_base, &header.lumps[LUMP_LEAFS], subbsp, isnotmap, vispatch.leafptr, vispatch.leaflen);
-
-TRACE(("Loading Nodes\n"));
-
-noerrors = noerrors && Mod_LoadNodes (mod, mod_base, &header.lumps[LUMP_NODES], subbsp);
-
-TRACE(("Loading Clipnodes\n"));
-
-noerrors = noerrors && Mod_LoadClipnodes (mod, mod_base, &header.lumps[LUMP_CLIPNODES], subbsp, hexen2map);
-
-if (noerrors)
-
-{
-
-TRACE(("Loading hull 0\n"));
-
-Mod_MakeHull0 (mod);
-
-}
-
-
-
-TRACE(("sorting shaders\n"));
-
-if (!isDedicated && noerrors)
-
-Mod_SortShaders(mod);
-
-
-
-BZ_Free(vispatch.fileptr);
-
-
-
-if (!noerrors)
-
-{
-
-return false;
-
-}
-
-
-
-TRACE(("LoadBrushModel %i\n", __LINE__));
-
-Q1BSP_LoadBrushes(mod, bspx, mod_base);
-
-TRACE(("LoadBrushModel %i\n", __LINE__));
-
-
-
-mod->numframes = 2; // regular and alternate animation
-
-
-
-
-//
-
-// set up the submodels (FIXME: this is confusing)
-
-//
-
-
-
-for (j=0 ; j<2 ; j++)
-
-Q1BSP_CheckHullNodes(&mod->hulls[j]);
-
-
-
-for (i=0, submod = mod; i<mod->numsubmodels ; i++)
-
-{
-
-bm = &mod->submodels[i];
-
-
-
-submod->rootnode = submod->nodes + bm->headnode[0];
-
-submod->hulls[0].firstclipnode = bm->headnode[0];
-
-submod->hulls[0].available = true;
-
-// Q1BSP_CheckHullNodes(&submod->hulls[0]);
-
-
-
-TRACE(("LoadBrushModel %i\n", __LINE__));
-
-for (j=1 ; j<MAX_MAP_HULLSM ; j++)
-
-{
-
-submod->hulls[j].firstclipnode = bm->headnode[j];
-
-submod->hulls[j].lastclipnode = submod->numclipnodes-1;
-
-
-
-submod->hulls[j].available &= bm->hullavailable[j];
-
-if (submod->hulls[j].firstclipnode > submod->hulls[j].lastclipnode)
-
-submod->hulls[j].available = false;
-
-
-
-// if (submod->hulls[j].available)
-
-// Q1BSP_CheckHullNodes(&submod->hulls[j]);
-
-}
-
-
-
-if (mod->fromgame == fg_halflife && i)
-
-{
-
-for (j=bm->firstface ; j<bm->firstface+bm->numfaces ; j++)
-
-{
-
-if (mod->surfaces[j].flags & SURF_DRAWTURB)
-
-{
-
-float mid = bm->mins[2] + (0.5 * (bm->maxs[2] - bm->mins[2]));
-
-if (mod->surfaces[j].plane->type == PLANE_Z && mod->surfaces[j].plane->dist >= mid) {
-
-continue;
-
-}
-
-mod->surfaces[j].flags |= SURF_NODRAW;
-
-}
-
-}
-
-}
-
-
-submod->firstmodelsurface = bm->firstface;
-
-submod->nummodelsurfaces = bm->numfaces;
-
-
-VectorCopy (bm->maxs, submod->maxs);
-
-VectorCopy (bm->mins, submod->mins);
-
-
-
-submod->radius = RadiusFromBounds (submod->mins, submod->maxs);
-
-
-
-submod->numclusters = (i==0)?bm->visleafs:0;
-
-submod->pvsbytes = ((submod->numclusters+31)>>3)&~3;
-
-
-
-if (i)
-
-{
-
-submod->entities_raw = NULL;
-
-submod->archive = NULL;
-
-}
-
-
-
-memset(&submod->batches, 0, sizeof(submod->batches));
-
-submod->vbos = NULL;
-
-TRACE(("LoadBrushModel %i\n", __LINE__));
-
-if (!isDedicated || using_rbe)
-
-{
-
-COM_AddWork(WG_MAIN, ModBrush_LoadGLStuff, submod, NULL, i, 0);
-
-}
-
-TRACE(("LoadBrushModel %i\n", __LINE__));
-
-
-
-submod->cnodes = NULL;
-
-Q1BSP_SetModelFuncs(submod);
-
+		if (!CM_CreatePatchesForLeafs (mod, prv))	//for clipping
+		{
+			BZ_Free(prv->faces);
+			return NULL;
+		}
+#ifdef HAVE_SERVER
+		CMQ3_CalcPHS(mod);
+#endif
+//			BZ_Free(map_verts);
+		BZ_Free(prv->faces);
+		break;
+#endif
 #ifdef Q2BSPS
+	case BSPVERSION_Q2:
+	case BSPVERSION_Q2W:
+		isbig = *mod_base == 'Q';	//'qbism'
 
-if (bm->brushes)
+		mod->lightmaps.width = LMBLOCK_SIZE_MAX;
+		mod->lightmaps.height = LMBLOCK_SIZE_MAX;
 
-{
+		prv->mapisq3 = false;
+		mod->engineflags |= MDLF_NEEDOVERBRIGHT;
+		for (i=0 ; i<Q2HEADER_LUMPS ; i++)
+		{
+			header.lumps[i].filelen = LittleLong (header.lumps[i].filelen);
+			header.lumps[i].fileofs = LittleLong (header.lumps[i].fileofs);
+		}
+		if (header.version == BSPVERSION_Q2W)
+		{
+			header.lumps[i].filelen = LittleLong (header.lumps[i].filelen);
+			header.lumps[i].fileofs = LittleLong (header.lumps[i].fileofs);
+			i++;
+		}
+		bspx = BSPX_Setup(mod, mod_base, filelen, header.lumps, i);
 
-struct bihleaf_s *leafs, *l;
-
-size_t i;
-
-leafs = l = BZ_Malloc(sizeof(*leafs)*bm->numbrushes);
-
-for (i = 0; i < bm->numbrushes; i++)
-
-{
-
-struct q2cbrush_s *b = &bm->brushes[i];
-
-l->type = BIH_BRUSH;
-
-l->data.brush = b;
-
-l->data.contents = b->contents;
-
-VectorCopy(b->absmins, l->mins);
-
-VectorCopy(b->absmaxs, l->maxs);
-
-l++;
-
-}
-
-BIH_Build(submod, leafs, l-leafs);
-
-BZ_Free(leafs);
-
-}
-
+#if defined(HAVE_CLIENT) && defined(IMAGEFMT_PCX)
+		if (CM_GetQ2Palette())
+			memcpy(q2_palette, host_basepal, 768);
 #endif
 
 
+#ifdef HAVE_SERVER
+		mod->funcs.FatPVS				= Q23BSP_FatPVS;
+		mod->funcs.EdictInFatPVS		= Q23BSP_EdictInFatPVS;
+		mod->funcs.FindTouchedLeafs		= Q23BSP_FindTouchedLeafs;
+#endif
+		mod->funcs.LightPointValues		= NULL;
+		mod->funcs.StainNode			= NULL;
+		mod->funcs.MarkLights			= NULL;
+		mod->funcs.ClusterPVS			= CM_ClusterPVS;
+		mod->funcs.ClusterPHS			= CM_ClusterPHS;
+		mod->funcs.ClusterForPoint		= CM_PointCluster;
+		mod->funcs.PointContents		= Q2BSP_PointContents;
+		mod->funcs.NativeTrace			= CM_NativeTrace;
+		mod->funcs.NativeContents		= CM_NativeContents;
 
-if (i)
+		mod->funcs.InfoForPoint			= CM_InfoForPoint;
+		mod->funcs.AreasConnected		= CM_AreasConnected;
+		mod->funcs.SetAreaPortalState	= CM_SetAreaPortalState;
+		mod->funcs.WriteAreaBits		= CM_WriteAreaBits;
+		mod->funcs.LoadAreaPortalBlob	= CM_LoadAreaPortalBlob;
+		mod->funcs.SaveAreaPortalBlob	= CM_SaveAreaPortalBlob;
+		mod->funcs.PrepareFrame			= NULL;
 
-COM_AddWork(WG_MAIN, Mod_ModelLoaded, submod, NULL, MLS_LOADED, 0);
+		switch(qrenderer)
+		{
+		case QR_NONE:	//dedicated only
+			noerrors = noerrors && CModQ2_LoadSurfaces		(mod, mod_base, &header.lumps[Q2LUMP_TEXINFO]);
+			noerrors = noerrors && CModQ2_LoadPlanes		(mod, mod_base, &header.lumps[Q2LUMP_PLANES]);
+			noerrors = noerrors && CModQ2_LoadVisibility	(mod, mod_base, &header.lumps[Q2LUMP_VISIBILITY]);
+			noerrors = noerrors && CModQ2_LoadBrushSides	(mod, mod_base, &header.lumps[Q2LUMP_BRUSHSIDES], isbig);
+			noerrors = noerrors && CModQ2_LoadBrushes		(mod, mod_base, &header.lumps[Q2LUMP_BRUSHES]);
+			noerrors = noerrors && CModQ2_LoadLeafBrushes	(mod, mod_base, &header.lumps[Q2LUMP_LEAFBRUSHES], isbig);
+			noerrors = noerrors && CModQ2_LoadLeafs			(mod, mod_base, &header.lumps[Q2LUMP_LEAFS], isbig);
+			noerrors = noerrors && CModQ2_LoadNodes			(mod, mod_base, &header.lumps[Q2LUMP_NODES], isbig);
+			noerrors = noerrors && CModQ2_LoadSubmodels		(mod, mod_base, &header.lumps[Q2LUMP_MODELS]);
+			noerrors = noerrors && CModQ2_LoadAreas			(mod, mod_base, &header.lumps[Q2LUMP_AREAS]);
+			noerrors = noerrors && CModQ2_LoadAreaPortals	(mod, mod_base, &header.lumps[Q2LUMP_AREAPORTALS]);
+			if (noerrors)
+				Mod_LoadEntities							(mod, mod_base, &header.lumps[Q2LUMP_ENTITIES]);
+			break;
+#ifdef HAVE_CLIENT
+		default:
+			// load into heap
+			noerrors = noerrors && Mod_LoadVertexes			(mod, mod_base, &header.lumps[Q2LUMP_VERTEXES]);
+			noerrors = noerrors && Mod_LoadEdges			(mod, mod_base, &header.lumps[Q2LUMP_EDGES], isbig?sb_long2:sb_none);
+			noerrors = noerrors && Mod_LoadSurfedges		(mod, mod_base, &header.lumps[Q2LUMP_SURFEDGES]);
+			noerrors = noerrors && CModQ2_LoadSurfaces		(mod, mod_base, &header.lumps[Q2LUMP_TEXINFO]);
+			noerrors = noerrors && CModQ2_LoadPlanes		(mod, mod_base, &header.lumps[Q2LUMP_PLANES]);
+			noerrors = noerrors && CModQ2_LoadTexInfo		(mod, mod_base, &header.lumps[Q2LUMP_TEXINFO], loadname);
+			if (noerrors)
+				Mod_LoadEntities							(mod, mod_base, &header.lumps[Q2LUMP_ENTITIES]);
+			noerrors = noerrors && CModQ2_LoadFaces			(mod, mod_base, &header.lumps[Q2LUMP_FACES], &header.lumps[Q2LUMP_LIGHTING], header.version == BSPVERSION_Q2W, bspx, isbig);
+								   Mod_LoadVertexNormals(mod, bspx, mod_base, (header.version == BSPVERSION_Q2W)?&header.lumps[19]:NULL);
+			noerrors = noerrors && Mod_LoadMarksurfaces		(mod, mod_base, &header.lumps[Q2LUMP_LEAFFACES], isbig?sb_long2:sb_none);
+			noerrors = noerrors && CModQ2_LoadVisibility	(mod, mod_base, &header.lumps[Q2LUMP_VISIBILITY]);
+			noerrors = noerrors && CModQ2_LoadBrushSides	(mod, mod_base, &header.lumps[Q2LUMP_BRUSHSIDES], isbig);
+			noerrors = noerrors && CModQ2_LoadBrushes		(mod, mod_base, &header.lumps[Q2LUMP_BRUSHES]);
+			noerrors = noerrors && CModQ2_LoadLeafBrushes	(mod, mod_base, &header.lumps[Q2LUMP_LEAFBRUSHES], isbig);
+			noerrors = noerrors && CModQ2_LoadLeafs			(mod, mod_base, &header.lumps[Q2LUMP_LEAFS], isbig);
+			noerrors = noerrors && CModQ2_LoadNodes			(mod, mod_base, &header.lumps[Q2LUMP_NODES], isbig);
+			noerrors = noerrors && CModQ2_LoadSubmodels		(mod, mod_base, &header.lumps[Q2LUMP_MODELS]);
+			noerrors = noerrors && CModQ2_LoadAreas			(mod, mod_base, &header.lumps[Q2LUMP_AREAS]);
+			noerrors = noerrors && CModQ2_LoadAreaPortals	(mod, mod_base, &header.lumps[Q2LUMP_AREAPORTALS]);
 
-if (i < submod->numsubmodels-1)
+			if (!noerrors)
+			{
+				return NULL;
+			}
+			mod->funcs.LightPointValues		= GLQ2BSP_LightPointValues;
+			mod->funcs.StainNode			= GLR_Q2BSP_StainNode;
+			mod->funcs.MarkLights			= Q2BSP_MarkLights;
+			mod->funcs.PrepareFrame			= CM_PrepareFrame;
+#ifdef RTLIGHTS
+			mod->funcs.GenerateShadowMesh	= Q2BSP_GenerateShadowMesh;
+#endif
+			break;
+#endif
+		}
+#endif
+	}
 
-{ // duplicate the basic information
+	BSPX_LoadEnvmaps(mod, bspx, mod_base);
 
-char name[MAX_QPATH];
+#ifdef Q3BSPS
+	{
+		int x, y;
+		for (x = 0; x < prv->numareas; x++)
+			for (y = 0; y < prv->numareas; y++)
+				prv->q3areas[x].numareaportals[y] = map_autoopenportals.ival;
+	}
+#endif
+#ifdef Q2BSPS
+	if (map_autoopenportals.value)
+		memset (prv->q2portalopen, 1, sizeof(prv->q2portalopen));	//open them all. Used for progs that havn't got a clue.
+	else
+		memset (prv->q2portalopen, 0, sizeof(prv->q2portalopen));	//make them start closed.
+#endif
+	FloodAreaConnections (prv);
 
-model_t *nextmod;
+	mod->checksum = checksum1;
+	mod->checksum2 = checksum2;
 
+	mod->nummodelsurfaces = mod->numsurfaces;
+	memset(&mod->batches, 0, sizeof(mod->batches));
+	mod->vbos = NULL;
 
+	mod->numsubmodels = CM_NumInlineModels(mod);
 
-Q_snprintfz (name, sizeof(name), "*%i:%s", i+1, mod->publicname);
+	mod->hulls[0].firstclipnode = prv->cmodels[0].headnode-mod->nodes;
+	mod->rootnode = prv->cmodels[0].headnode;
+	mod->nummodelsurfaces = prv->cmodels[0].numsurfaces;
 
-nextmod = Mod_FindName (name);
+#ifdef HAVE_CLIENT
+	prv->oldclusters[0] = prv->oldclusters[1] = -1;
+	if (qrenderer != QR_NONE)
+	{
+		builddata_t *bd = NULL;
+		if (buildmeshes)
+		{
+			bd = Z_Malloc(sizeof(*bd) + facesize*mod->nummodelsurfaces);
+			bd->buildfunc = buildmeshes;
+			memcpy(bd+1, facedata + mod->firstmodelsurface*facesize, facesize*mod->nummodelsurfaces);
+		}
+		COM_AddWork(WG_MAIN, ModBrush_LoadGLStuff, mod, bd, 0, 0);
+	}
+#endif
 
-*nextmod = *submod;
+	//FIXME: q2bsp apparently doesn't report which brushes are part of which submodels.
+	//FIXME: ALL patches? not just worldmodel?
+	CM_BuildBIH(mod, 0);
 
-nextmod->submodelof = mod;
+	for (i=1 ; i< mod->numsubmodels ; i++)
+	{
+		cmodel_t	*bm;
 
-Q_strncpyz(nextmod->publicname, name, sizeof(nextmod->publicname));
+		char	name[MAX_QPATH];
 
-Q_snprintfz (nextmod->name, sizeof(nextmod->publicname), "*%i:%s", i+1, mod->publicname);
+		Q_snprintfz (name, sizeof(name), "*%i:%s", i, wmod->publicname);
+		mod = Mod_FindName (name);
+		*mod = *wmod;
+		mod->archive = NULL;
+		mod->entities_raw = NULL;
+		mod->submodelof = wmod;
+		Q_strncpyz(mod->publicname, name, sizeof(mod->publicname));
+		Q_snprintfz (mod->name, sizeof(mod->name), "*%i:%s", i, wmod->name);
+		memset(&mod->memgroup, 0, sizeof(mod->memgroup));
 
-submod = nextmod;
+		bm = CM_InlineModel (wmod, name);
+		
+		mod->hulls[0].firstclipnode = -1;	//no nodes, 
+		if (bm->headleaf)
+		{
+			mod->leafs = bm->headleaf;
+			mod->nodes = NULL;
+			mod->hulls[0].firstclipnode = -1;	//make it refer directly to the first leaf, for things that still use numbers. 
+			mod->rootnode = (mnode_t*)bm->headleaf;
+		}
+		else
+		{
+			mod->leafs = wmod->leafs;
+			mod->nodes = wmod->nodes;
+			mod->hulls[0].firstclipnode = bm->headnode - mod->nodes;	//determine the correct node index
+			mod->rootnode = bm->headnode;
+		}
+		mod->nummodelsurfaces = bm->numsurfaces;
+		mod->firstmodelsurface = bm->firstsurface;
 
-memset(&submod->memgroup, 0, sizeof(submod->memgroup));
+		CM_BuildBIH(mod, i);
 
-}
+		memset(&mod->batches, 0, sizeof(mod->batches));
+		mod->vbos = NULL;
 
-TRACE(("LoadBrushModel %i\n", __LINE__));
+		VectorCopy (bm->maxs, mod->maxs);
+		VectorCopy (bm->mins, mod->mins);
+#ifndef SERVERONLY
+		mod->radius = RadiusFromBounds (mod->mins, mod->maxs);
 
-}
-
-TRACE(("LoadBrushModel %i\n", __LINE__));
-
-if (!isDedicated)
-
-Mod_FixupMinsMaxs(mod);
-
-TRACE(("LoadBrushModel %i\n", __LINE__));
-
-
+		if (qrenderer != QR_NONE)
+		{
+			builddata_t *bd = NULL;
+			if (buildmeshes)
+			{
+				bd = Z_Malloc(sizeof(*bd) + facesize*mod->nummodelsurfaces);
+				bd->buildfunc = buildmeshes;
+				memcpy(bd+1, facedata + mod->firstmodelsurface*facesize, facesize*mod->nummodelsurfaces);
+			}
+			COM_AddWork(WG_MAIN, ModBrush_LoadGLStuff, mod, bd, i, 0);
+		}
+#endif
+		COM_AddWork(WG_MAIN, Mod_ModelLoaded, mod, NULL, MLS_LOADED, 0);
+	}
 
 #ifdef TERRAIN
-
-mod->terrain = Mod_LoadTerrainInfo(mod, loadname, false);
-
+	wmod->terrain = Mod_LoadTerrainInfo(wmod, loadname, false);
 #endif
 
-return true;
-
+	return &prv->cmodels[0];
 }
-
-#endif
-
+```
 
 
 i also had no idea there's 2 different quake 1 versions, maybe i missed that in my code
@@ -2667,12 +1261,13 @@ In Quake 1 BSP files, to save disk space and network packet sizes in 1996, all s
 
 Look at your Node loader:
 
-C
+```c
 // YOUR CODE
 for (j=0 ; j<3 ; j++) {
     out->mins[j] = in->mins[j]; // <--- CRASH/CORRUPTION POTENTIAL HERE
     out->maxs[j] = in->maxs[j];
 }
+```
 If your dBsp1Node_t structure defines mins and maxs as standard float arrays, it will misread the binary lump data entirely, causing bizarre, fractional nonsense coordinate scales.
 
 The Coordinate System Shift
@@ -2685,7 +1280,7 @@ The historical magic scale coefficient to convert Quake 1 map space into standar
 
 Update your loop in R_LoadNodesAndLeafs1 to explicitly decode the short values:
 
-C
+```c
 // Fix for your Nodes loop
 for (j=0 ; j<3 ; j++)
 {
@@ -2706,6 +1301,7 @@ for (i=0 ; i<numLeafs ; i++, inLeaf++, out++)
     }
     ...
 }
+```
 (Double-check your dBsp1Node_t and dBsp1Leaf_t struct declarations in cm_load_bsp1.h to make sure mins and maxs are declared as short mins[3], not float mins[3]!)
 
 3. The Submodel Scaler (World Bounds Repair)
@@ -2713,24 +1309,26 @@ Because you are using the submodel pipeline, your engine checks s_worldData.bmod
 
 Update your R_LoadSubmodels1 loop:
 
-C
+```c
 for ( j=0 ; j<3 ; j++ ) {
     // Quake 1 submodel bounds are ALSO stored as 16-bit short integers or floats needing scaling
     out->bounds[0][j] = (float)(LittleFloat(in->mins[j])) * 0.125f;
     out->bounds[1][j] = (float)(LittleFloat(in->maxs[j])) * 0.125f;
 }
+```
 4. The Renderer2 Vector Sorting Dilemma (GL3 vs GL2)
 You mentioned this map loading is happening inside your Renderer2 (OpenGL 3 / modern core profile target) rather than Renderer1 (Strict legacy fixed-function OpenGL 2). This is a massive clue as to why your vertex model isn't rendering correctly.
 
 In Quake 1's surface loader (R_LoadSurfaces1), look at how you are generating indices for faces:
 
-C
+```c
 for (j = 0; j < ds.numVerts - 2; j++)
 {
     pindex[j*3+0] = 0;
     pindex[j*3+1] = j+1;
     pindex[j*3+2] = j+2;
 }
+```
 This is standard Triangle Fan generation math.
 
 Renderer1 (GL2) handles native triangle fans effortlessly via drawing commands.
