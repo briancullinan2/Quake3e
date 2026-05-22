@@ -132,11 +132,6 @@ typedef unsigned int   uInt;  /* 16 bits or more */
 typedef unsigned long  uLong; /* 32 bits or more */
 typedef Byte    *voidp;
 
-#ifndef SEEK_SET
-#  define SEEK_SET        0       /* Seek from beginning of file.  */
-#  define SEEK_CUR        1       /* Seek from current position.  */
-#  define SEEK_END        2       /* Set file pointer to EOF plus "offset" */
-#endif
 
 #endif /* _ZCONF_H */
 
@@ -849,7 +844,7 @@ long gzseek OF((gzFile file,
       Sets the starting position for the next gzread or gzwrite on the
    given compressed file. The offset represents a number of bytes in the
    uncompressed data stream. The whence parameter is defined as in lseek(2);
-   the value SEEK_END is not supported.
+   the value 2 is not supported.
      If the file is opened for reading, this function is emulated but can be
    extremely slow. If the file is opened for writing, only forward seeks are
    supported; gzseek then compresses a sequence of zeroes up to the new
@@ -865,7 +860,7 @@ int    gzrewind OF((gzFile file));
 /*
      Rewinds the given file. This function is supported only for reading.
 
-   gzrewind(file) is equivalent to (int)gzseek(file, 0L, SEEK_SET)
+   gzrewind(file) is equivalent to (int)gzseek(file, 0L, 0)
 */
 
 long    gztell OF((gzFile file));
@@ -874,7 +869,7 @@ long    gztell OF((gzFile file));
    given compressed file. This position represents a number of bytes in the
    uncompressed data stream.
 
-   gztell(file) is equivalent to gzseek(file, 0L, SEEK_CUR)
+   gztell(file) is equivalent to gzseek(file, 0L, 1)
 */
 
 int gzeof OF((gzFile file));
@@ -1266,12 +1261,16 @@ extern uLong unzlocal_SearchCentralDir(FILE *fin)
 	uLong uMaxBack=0xffff; /* maximum size of global comment */
 	uLong uPosFound=0;
 	
-	if (fseek(fin,0,SEEK_END) != 0)
+	if (fseek(fin,0,2) != 0)
 		return 0;
 
 
-	uSizeFile = ftell( fin );
-	
+#ifdef __WASM__
+  uSizeFile = Sys_FTell( fin );
+#else
+  uSizeFile = ftell( fin );
+#endif
+
 	if (uMaxBack>uSizeFile)
 		uMaxBack = uSizeFile;
 
@@ -1292,7 +1291,7 @@ extern uLong unzlocal_SearchCentralDir(FILE *fin)
 		
 		uReadSize = ((BUFREADCOMMENT+4) < (uSizeFile-uReadPos)) ? 
                      (BUFREADCOMMENT+4) : (uSizeFile-uReadPos);
-		if (fseek(fin,uReadPos,SEEK_SET)!=0)
+		if (fseek(fin,uReadPos,0)!=0)
 			break;
 
 		if (fread(buf,(uInt)uReadSize,1,fin)!=1)
@@ -1363,7 +1362,7 @@ extern unzFile unzOpen (const char* path)
 	if (central_pos==0)
 		err=UNZ_ERRNO;
 
-	if (fseek(fin,central_pos,SEEK_SET)!=0)
+	if (fseek(fin,central_pos,0)!=0)
 		err=UNZ_ERRNO;
 
 	/* the signature, already checked */
@@ -1504,7 +1503,7 @@ static int unzlocal_GetCurrentFileInfoInternal (unzFile file,
 	if (file==NULL)
 		return UNZ_PARAMERROR;
 	s=(unz_s*)file;
-	if (fseek(s->file,s->pos_in_central_dir+s->byte_before_the_zipfile,SEEK_SET)!=0)
+	if (fseek(s->file,s->pos_in_central_dir+s->byte_before_the_zipfile,0)!=0)
 		err=UNZ_ERRNO;
 
 #if 1 // try ro reduce fread() overhead
@@ -1617,7 +1616,7 @@ static int unzlocal_GetCurrentFileInfoInternal (unzFile file,
 			uSizeRead = extraFieldBufferSize;
 
 		if (lSeek!=0) {
-			if (fseek(s->file,lSeek,SEEK_CUR)==0)
+			if (fseek(s->file,lSeek,1)==0)
 				lSeek=0;
 			else
 				err=UNZ_ERRNO;
@@ -1644,7 +1643,7 @@ static int unzlocal_GetCurrentFileInfoInternal (unzFile file,
 			uSizeRead = commentBufferSize;
 
 		if (lSeek!=0) {
-			if (fseek(s->file,lSeek,SEEK_CUR)==0)
+			if (fseek(s->file,lSeek,1)==0)
 				;//	lSeek=0;
 			else
 				err=UNZ_ERRNO;
@@ -1843,7 +1842,7 @@ static int unzlocal_CheckCurrentFileCoherencyHeader (unz_s* s, uInt* piSizeVar,
 	*psize_local_extrafield = 0;
 
 	if (fseek(s->file,s->cur_file_info_internal.offset_curfile +
-								s->byte_before_the_zipfile,SEEK_SET)!=0)
+								s->byte_before_the_zipfile,0)!=0)
 		return UNZ_ERRNO;
 
 	if (unzlocal_getLong(s->file,&uMagic) != UNZ_OK)
@@ -2056,7 +2055,7 @@ extern int unzReadCurrentFile  (unzFile file, void *buf, unsigned len)
 			if (s->cur_file_info.compressed_size == pfile_in_zip_read_info->rest_read_compressed)
 				if (fseek(pfile_in_zip_read_info->file,
 						  pfile_in_zip_read_info->pos_in_zipfile + 
-							 pfile_in_zip_read_info->byte_before_the_zipfile,SEEK_SET)!=0)
+							 pfile_in_zip_read_info->byte_before_the_zipfile,0)!=0)
 					return UNZ_ERRNO;
 			if (fread(pfile_in_zip_read_info->read_buffer,uReadThis,1,
                          pfile_in_zip_read_info->file)!=1)
@@ -2222,7 +2221,7 @@ extern int unzGetLocalExtrafield (unzFile file,void *buf,unsigned len)
 	
 	if (fseek(pfile_in_zip_read_info->file,
               pfile_in_zip_read_info->offset_local_extrafield + 
-			  pfile_in_zip_read_info->pos_local_extrafield,SEEK_SET)!=0)
+			  pfile_in_zip_read_info->pos_local_extrafield,0)!=0)
 		return UNZ_ERRNO;
 
 	if (fread(buf,(uInt)size_to_read,1,pfile_in_zip_read_info->file)!=1)
@@ -2288,7 +2287,7 @@ extern int unzGetGlobalComment (unzFile file, char *szComment, uLong uSizeBuf)
 	if (uReadThis>s->gi.size_comment)
 		uReadThis = s->gi.size_comment;
 
-	if (fseek(s->file,s->central_pos+22,SEEK_SET)!=0)
+	if (fseek(s->file,s->central_pos+22,0)!=0)
 		return UNZ_ERRNO;
 
 	if (uReadThis>0)

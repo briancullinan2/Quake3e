@@ -245,11 +245,15 @@ void FORMAT_PRINTF(1, 2) QDECL Com_Printf( const char *fmt, ... ) {
 
 			if ( logfile != FS_INVALID_HANDLE ) {
 				struct tm *newtime;
+#ifdef __WASM__
+				int aclock;
+#else
 				time_t aclock;
+#endif
 				char timestr[32];
 
 				time( &aclock );
-				newtime = localtime( &aclock );
+				newtime = localtime( (const time_t *)&aclock );
 				strftime( timestr, sizeof( timestr ), "%a %b %d %X %Y", newtime );
 
 				Com_Printf( "logfile opened on %s\n", timestr );

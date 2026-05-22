@@ -1,6 +1,10 @@
 
 /* XXX Emscripten XXX */
 #if __EMSCRIPTEN__ || __WASM__
+static int hidden_errno;
+#define errno hidden_errno
+#undef MALLOC_FAILURE_ACTION
+#define MALLOC_FAILURE_ACTION hidden_errno = ENOMEM;
 // When building for wasm we export `malloc` and `emscripten_builtin_malloc` as
 // weak alias of the internal `dlmalloc` which is static to this file.
 #define DLMALLOC_EXPORT static
@@ -1520,6 +1524,11 @@ size_t bulk_free(void**, size_t n_elements) __attribute__((weak, alias("dlbulk_f
 #endif /* NO_MALLOC_STATS */
 #ifndef LACKS_ERRNO_H
 #include <errno.h>       /* for MALLOC_FAILURE_ACTION */
+#ifdef __WASM__
+#undef errno
+static int hidden_errno;
+#define errno hidden_errno
+#endif
 #endif /* LACKS_ERRNO_H */
 #ifdef DEBUG
 #if ABORT_ON_ASSERT_FAILURE

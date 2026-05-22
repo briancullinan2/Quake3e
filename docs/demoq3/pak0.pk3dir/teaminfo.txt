@@ -1,0 +1,122 @@
+//
+// Team definition is as follows
+// 
+// English name
+// asset name
+// 5 team member names ( can be character or aliases or if non-existant, assumed to be human
+// 
+// Three assets are loaded based on the above asset name
+// "asset name" - general branding logo used in the ui and to brand levels
+// "asset name_metal" - metal logo for ui
+// "asset name_name" - graphic represenation of the name
+//
+teams {
+  { "Crusaders" "ui/assets/crusaders"  "Darkangel" "Lionheart" "Bradamante" "Furioso" "Aria"  }
+  { "Intruders" "ui/assets/intruders" "Morgan" "Punisher" "Gaunt" "November" "Whyrlwnd" }
+  { "Pagans"  "ui/assets/pagans" "Khan" "Deadeye" "WarLokk" "Callisto" "Gargouille" }
+  { "Stroggs" "ui/assets/stroggs" "Grunt" "Enforcer" "Icarus" "Gammy" "Gladiator" "Paracyte" "Pi" "Fritzkrieg" "TankJr" "Berserker" "Black Widow" "Insane" "Hover" "Mutant" "Stomper" "Infantry" "Tank" }
+  { "The Fallen" "ui/assets/thefallen" "Neptune" "Stalker" "Ursula" "Abominator" "Sinister" }
+  { "Champions" "ui/assets/champions" "Sarge" "Crash" "Xaero" "Major" "Doom" "Ranger" "Mynx" }
+	{ "Undead" "ui/assets/undead" "Bones" "Slash" "Razor" "Orbb" "Biker" "Anarki" "Lucy" }
+	{ "Vadrigar" "ui/assets/vadrigar" "Visor" "Klesk" "Uriel" "Hunter" "Sorlag" }
+	{ "Splitgate" "ui/assets/splitgate" "Ranger" "Fiend" "Dog" "Shambler" "Vore" "Slipgate" "Ogre" "Zombie" "Scourge" "Enemy" "Knight" }
+	{ "Troopers" "ui/assets/troopers" "Human" "Battlesuit" "Builder" "Dretch" }
+	{ "Monsters" "ui/assets/monsters" "Metlar" "Enyo" "Sealord" "Wrath" }
+}
+
+
+// character name ( used for display and head derivation ), sex
+characters {
+  { "James"  "james"  "h" }
+  { "Janet"  "janet"  "h" }
+  { "Callisto"  "janet"  "h" }
+  { "Gammy"  "janet"  "h" }
+  { "Gaunt"  "james"  "h" }
+  { "Khan"  "james"  "h" }
+  { "Megan"  "janet"  "h" }
+  { "Morgan"  "james"  "h" }
+  { "Neptune"  "james"  "h" }
+  { "Ursula"  "janet"  "h" }
+  { "Flayer"  "james"  "h" }
+	{ "Pi"  "pi" }
+	{ "Fritzkrieg"  "fritzkrieg" }
+	{ "TankJr"  "tankjr" }
+  { "Sarge" "sarge" }
+	{ "Crash" "crash" }
+	{ "Xaero" "xaero" }
+	{ "Major" "major" }
+	{ "Doom" "doom" }
+	{ "Ranger" "ranger" }
+	{ "Mynx" "mynx" }
+	{ "Bones" "bones" }
+	{ "Slash" "slash" }
+	{ "Razor" "razor" }
+	{ "Grunt" "grunt" }
+	{ "Orbb" "orbb" }
+	{ "Biker" "biker" }
+	{ "Anarki" "anarki" }
+	{ "Lucy" "lucy" }
+	{ "Visor" "visor" }
+	{ "Klesk" "klesk" }
+	{ "Uriel" "uriel" }
+	{ "Hunter" "hunter" }
+	{ "Sorlag" "sorlag" }
+	{ "Demon" "demon" }
+	{ "Dog" "dog" }
+	{ "Shambler" "shambler" }
+	{ "Vore" "shalrath" }
+	{ "Slipgate" "slipgate" }
+	{ "Ogre" "ogre" }
+	{ "Zombie" "mummy" }
+	{ "Berserker" "berserker" }
+	{ "Black Widow" "widow" }
+	{ "Scourge" "dragon" }
+	{ "Enemy" "enforcer" }
+	{ "Insane" "insane" }
+	{ "Hover" "hover" }
+	{ "Mutant" "mutant" }
+	{ "Stomper" "gladiatr" }
+	{ "Infantry" "infantry" }
+	{ "Tank" "tank" }
+	{ "Human" "human" }
+	{ "Battlesuit" "battle" }
+	{ "Builder" "builder" }
+	{ "Dretch" "dretch" }
+	{ "Knight" "knight" }
+	{ "Metlar" "metlar" }
+	{ "Enyo" "enyo" }
+	{ "Sealord" "sealord" }
+	{ "Wrath" "wrath" }
+}
+
+aliases {
+	{ "Fiend"			"Demon"		"o"			}
+	{ "Darkangel"			"Janet"		"a"			}
+	{ "Bradamante"			"Megan"		"d"			}
+	{ "Lionheart"			"Morgan" 	"o"		  	}
+	{ "Furioso"			"Neptune"	"a"				}
+	{ "Aria"			"Ursula" 	"o"			  	}
+	{ "Callisto"			"Callisto"	"d"			}
+	{ "Deadeye"			"Gaunt"		"d"				}
+	{ "WarLokk"			"James"		"o"				}
+	{ "Khan"			"Khan"		"o"				}
+	{ "Gargouille"			"Gammy"		"a"			}
+	{ "Enforcer"			"Callisto"	"d"			}
+	{ "Icarus"			"Flayer"		"o"		}
+	{ "Gammy"			"Gammy"		"a"			}
+	{ "Gladiator"			"Megan"		"d"				}
+	{ "Paracyte"			"Neptune"	"a"			}
+	{ "Gaunt"			"Gaunt"		"d"				}
+	{ "Punisher"		"Khan"		"o"			}
+	{ "November"			"Janet"		"a"				}
+	{ "Morgan"			"Morgan" 	"o"				}
+	{ "Whyrlwynd"			"Ursla"		"o"				}
+	{ "Sinister"			"Callisto"	"d"	}
+	{ "Ursula"			"Ursula"		"o"				}
+	{ "Abominator"			"James"		"o"		}
+	{ "Stalker"		"Morgan" 	"o"			}
+	{ "Neptune"			"Neptune"	"a"				}
+}
+
+
+		   
