@@ -255,7 +255,7 @@ void FORMAT_PRINTF(1, 2) QDECL Com_Printf( const char *fmt, ... ) {
 				time( &aclock );
 #ifdef __WASM__
 				newtime = localtime( (const time_t *)&aclock );
-else
+#else
 				newtime = localtime( &aclock );
 #endif
 				strftime( timestr, sizeof( timestr ), "%a %b %d %X %Y", newtime );
