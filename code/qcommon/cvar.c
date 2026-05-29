@@ -2024,6 +2024,7 @@ void Cvar_Register( vmCvar_t *vmCvar, const char *varName, const char *defaultVa
 		return;
 
 	vmCvar->handle = cv - cvar_indexes;
+	Com_Printf("Setting CVar: %i", vmCvar->handle);
 	vmCvar->modificationCount = -1;
 
 	Cvar_Update( vmCvar, 0 );
