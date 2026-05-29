@@ -1692,6 +1692,10 @@ vm_t *VM_Restart( vm_t *vm ) {
 }
 
 
+#ifdef __WASM__
+extern void dllEntry( dllSyscall_t syscallptr );
+#endif
+
 /*
 =================
 Sys_LoadDll
@@ -1706,7 +1710,9 @@ static void * QDECL VM_LoadDll( const char *name, vmMainFunc_t *entryPoint, dllS
 	const char	*gamedir = FS_GetCurrentGameDir();
 	char		filename[ MAX_QPATH ];
 	void		*libHandle;
+#ifndef __WASM__
 	dllEntry_t	dllEntry;
+#endif
 
 	Com_sprintf( filename, sizeof( filename ), "%s%c%s" ARCH_STRING DLL_EXT, gamedir, PATH_SEP, name );
 
@@ -1719,12 +1725,20 @@ static void * QDECL VM_LoadDll( const char *name, vmMainFunc_t *entryPoint, dllS
 
 	Com_Printf( "VM_LoadDLL '%s' ok\n", filename );
 
+#ifdef __WASM__
+	*entryPoint = /* ( dllSyscall_t ) */ Sys_LoadFunction( libHandle, "vmMain" );
+	if ( !*entryPoint ) {
+		Sys_UnloadLibrary( libHandle );
+		return NULL;
+	}
+#else
 	dllEntry = /* ( dllEntry_t ) */ Sys_LoadFunction( libHandle, "dllEntry" );
 	*entryPoint = /* ( dllSyscall_t ) */ Sys_LoadFunction( libHandle, "vmMain" );
 	if ( !*entryPoint || !dllEntry ) {
 		Sys_UnloadLibrary( libHandle );
 		return NULL;
 	}
+#endif
 
 	Com_Printf( "VM_LoadDll(%s) found **vmMain** at %p\n", name, *entryPoint );
 	dllEntry( systemcalls );
