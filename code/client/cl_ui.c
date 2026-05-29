@@ -1249,6 +1249,44 @@ static intptr_t CL_UISystemCalls( intptr_t *args ) {
 UI_DllSyscall
 ====================
 */
+#if __WASM__
+static intptr_t QDECL UI_DllSyscall( intptr_t arg, ... ) {
+    intptr_t args[10];
+    args[0] = arg;
+
+    // Treat the va_list variable as a raw pointer address array
+    // pointer to the stack structure passed across the boundary
+    intptr_t *rawWasmStackArgs = (intptr_t *)NULL;
+
+    va_list ap;
+    va_start( ap, arg );
+    
+    // Force cast the va_list internal pointer variable straight to an address array.
+    // In WebAssembly Clang, ap itself holds the pointer to the packed argument frame.
+    rawWasmStackArgs = *(intptr_t **)(&ap);
+
+    va_end( ap );
+
+    // If the pointer extraction succeeded, read the slots sequentially
+    if ( rawWasmStackArgs != NULL ) {
+        args[1] = rawWasmStackArgs[0];
+        args[2] = rawWasmStackArgs[1];
+        args[3] = rawWasmStackArgs[2];
+        args[4] = rawWasmStackArgs[3];
+        args[5] = rawWasmStackArgs[4];
+    } else {
+        // Fallback safety if the pointer reference evaluates to zero
+        args[1] = 0;
+        args[2] = 0;
+        args[3] = 0;
+        args[4] = 0;
+        args[5] = 0;
+    }
+
+    // Pass the clean absolute array straight to the engine subsystems
+    return CL_UISystemCalls( args );
+}
+#else
 static intptr_t QDECL UI_DllSyscall( intptr_t arg, ... ) {
 #if !id386 || defined __clang__
 	intptr_t	args[10]; // max.count for UI
@@ -1266,6 +1304,7 @@ static intptr_t QDECL UI_DllSyscall( intptr_t arg, ... ) {
 	return CL_UISystemCalls( &arg );
 #endif
 }
+#endif
 
 
 /*
