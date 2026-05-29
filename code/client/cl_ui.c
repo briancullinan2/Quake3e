@@ -1251,39 +1251,26 @@ UI_DllSyscall
 */
 #if __WASM__
 static intptr_t QDECL UI_DllSyscall( intptr_t arg, ... ) {
-    intptr_t args[10];
+    intptr_t args[16]; // Give it plenty of stride headroom
     args[0] = arg;
 
-    // Treat the va_list variable as a raw pointer address array
-    // pointer to the stack structure passed across the boundary
-    intptr_t *rawWasmStackArgs = (intptr_t *)NULL;
-
+    // Grab the raw WebAssembly stack frame pointer variable directly
     va_list ap;
     va_start( ap, arg );
-    
-    // Force cast the va_list internal pointer variable straight to an address array.
-    // In WebAssembly Clang, ap itself holds the pointer to the packed argument frame.
-    rawWasmStackArgs = *(intptr_t **)(&ap);
-
+    intptr_t *rawWasmStack = *(intptr_t **)(&ap);
     va_end( ap );
 
-    // If the pointer extraction succeeded, read the slots sequentially
-    if ( rawWasmStackArgs != NULL ) {
-        args[1] = rawWasmStackArgs[0];
-        args[2] = rawWasmStackArgs[1];
-        args[3] = rawWasmStackArgs[2];
-        args[4] = rawWasmStackArgs[3];
-        args[5] = rawWasmStackArgs[4];
+    if ( rawWasmStack != NULL ) {
+        // Natively copy the raw memory sequence bytes directly over the bridge.
+        // This preserves the exact structural alignment emitted by the UI module compiler.
+        for ( int i = 1; i < 12; i++ ) {
+            args[i] = rawWasmStack[i - 1];
+        }
     } else {
-        // Fallback safety if the pointer reference evaluates to zero
-        args[1] = 0;
-        args[2] = 0;
-        args[3] = 0;
-        args[4] = 0;
-        args[5] = 0;
+        memset( &args[1], 0, sizeof(intptr_t) * 11 );
     }
 
-    // Pass the clean absolute array straight to the engine subsystems
+    // Forward the aligned array directly to your engine system routers
     return CL_UISystemCalls( args );
 }
 #else
