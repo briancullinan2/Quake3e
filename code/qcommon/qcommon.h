@@ -1379,7 +1379,11 @@ qboolean Sys_LowPhysicalMemory( void );
 
 int Sys_MonkeyShouldBeSpanked( void );
 
+#if __WASM__
+void *Sys_LoadLibrary( const char *name, vm_t *vm );
+#else
 void *Sys_LoadLibrary( const char *name );
+#endif
 void *Sys_LoadFunction( void *handle, const char *name );
 int   Sys_LoadFunctionErrors( void );
 void  Sys_UnloadLibrary( void *handle );

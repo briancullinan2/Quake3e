@@ -6276,7 +6276,11 @@ FS_LoadLibrary
 Tries to load libraries within known searchpaths
 =================
 */
+#ifdef __WASM__
+void *FS_LoadLibrary( const char *name, vm_t *vm )
+#else
 void *FS_LoadLibrary( const char *name )
+#endif
 {
 	const searchpath_t *sp = fs_searchpaths;
 	void *libHandle = NULL;
@@ -6284,7 +6288,11 @@ void *FS_LoadLibrary( const char *name )
 
 #ifdef DEBUG
 	fn = FS_BuildOSPath( Sys_Pwd(), name, NULL );
+#ifdef __WASM__
+	libHandle = Sys_LoadLibrary( fn, vm );
+#else
 	libHandle = Sys_LoadLibrary( fn );
+#endif
 #endif
 
 	while ( !libHandle && sp ) {
@@ -6293,7 +6301,11 @@ void *FS_LoadLibrary( const char *name )
 		}
 		if ( sp ) {
 			fn = FS_BuildOSPath( sp->dir->path, name, NULL );
+#ifdef __WASM__
+			libHandle = Sys_LoadLibrary( fn, vm );
+#else
 			libHandle = Sys_LoadLibrary( fn );
+#endif
 			sp = sp->next;
 		}
 	}

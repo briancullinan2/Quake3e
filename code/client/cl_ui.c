@@ -763,7 +763,11 @@ static void *VM_ArgPtr( intptr_t intValue ) {
 	  return NULL;
 
 	if ( uivm->entryPoint )
+#if __WASM__
+		return (void *)(uivm->dataBase + intValue);
+#else
 		return (void *)(intValue);
+#endif
 	else
 		return (void *)(uivm->dataBase + (intValue & uivm->dataMask));
 }
@@ -1250,9 +1254,6 @@ UI_DllSyscall
 ====================
 */
 static intptr_t QDECL UI_DllSyscall( intptr_t arg, ... ) {
-#if __WASM__
-	return CL_UISystemCalls( &arg );
-#else
 #if !id386 || defined __clang__
 	intptr_t	args[10]; // max.count for UI
 	va_list	ap;
@@ -1267,7 +1268,6 @@ static intptr_t QDECL UI_DllSyscall( intptr_t arg, ... ) {
 	return CL_UISystemCalls( args );
 #else
 	return CL_UISystemCalls( &arg );
-#endif
 #endif
 }
 
