@@ -1701,27 +1701,8 @@ Used to load a development dll instead of a virtual machine
 TTimo: added some verbosity in debug
 =================
 */
-#ifdef __WASM__
-Q_EXPORT
-intptr_t Get_VM_Offset( const char *fieldName ) {
-    if ( !strcmp(fieldName, "systemCall") )    return offsetof(struct vm_s, systemCall);
-    if ( !strcmp(fieldName, "dataBase") )      return offsetof(struct vm_s, dataBase);
-    if ( !strcmp(fieldName, "dllHandle") )     return offsetof(struct vm_s, dllHandle);
-    if ( !strcmp(fieldName, "entryPoint") )    return offsetof(struct vm_s, entryPoint);
-    
-    // Boundary masks and allocations added for the native dynamic WASM split
-    if ( !strcmp(fieldName, "dataMask") )      return offsetof(struct vm_s, dataMask);
-    if ( !strcmp(fieldName, "dataLength") )    return offsetof(struct vm_s, dataLength);
-    if ( !strcmp(fieldName, "dataAlloc") )     return offsetof(struct vm_s, dataAlloc);
-    
-    return -1;
-}
+static void * QDECL VM_LoadDll( const char *name, vmMainFunc_t *entryPoint, dllSyscall_t systemcalls ) {
 
-static void * QDECL VM_LoadDll( const char *name, vmMainFunc_t *entryPoint, dllSyscall_t systemcalls, vm_t *vm )
-#else
-static void * QDECL VM_LoadDll( const char *name, vmMainFunc_t *entryPoint, dllSyscall_t systemcalls )
-#endif
-{
 	const char	*gamedir = FS_GetCurrentGameDir();
 	char		filename[ MAX_QPATH ];
 	void		*libHandle;
@@ -1729,11 +1710,7 @@ static void * QDECL VM_LoadDll( const char *name, vmMainFunc_t *entryPoint, dllS
 
 	Com_sprintf( filename, sizeof( filename ), "%s%c%s" ARCH_STRING DLL_EXT, gamedir, PATH_SEP, name );
 
-#ifdef __WASM__
-	libHandle = FS_LoadLibrary( filename, vm );
-#else
 	libHandle = FS_LoadLibrary( filename );
-#endif
 
 	if ( !libHandle ) {
 		Com_Printf( "VM_LoadDLL '%s' failed\n", filename );
@@ -1820,9 +1797,6 @@ vm_t *VM_Create( vmIndex_t index, syscall_t systemCalls, dllSyscall_t dllSyscall
 	if ( interpret == VMI_NATIVE ) {
 		// try to load as a system dll
 		Com_Printf( "Loading dll file %s.\n", name );
-#ifdef __WASM__
-		vm->dllHandle = VM_LoadDll( name, &vm->entryPoint, dllSyscalls, vm );
-#else
 		vm->dllHandle = VM_LoadDll( name, &vm->entryPoint, dllSyscalls );
 		if ( vm->dllHandle ) {
 			vm->privateFlag = 0; // allow reading private cvars
@@ -1831,7 +1805,6 @@ vm_t *VM_Create( vmIndex_t index, syscall_t systemCalls, dllSyscall_t dllSyscall
 			vm->dataBase = 0;
 			return vm;
 		}
-#endif
 
 		Com_Printf( "Failed to load dll, looking for qvm.\n" );
 		interpret = VMI_COMPILED;

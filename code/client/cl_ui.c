@@ -763,11 +763,7 @@ static void *VM_ArgPtr( intptr_t intValue ) {
 	  return NULL;
 
 	if ( uivm->entryPoint )
-#if __WASM__
-		return (void *)(uivm->dataBase + intValue);
-#else
 		return (void *)(intValue);
-#endif
 	else
 		return (void *)(uivm->dataBase + (intValue & uivm->dataMask));
 }

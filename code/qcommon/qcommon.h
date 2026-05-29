@@ -896,11 +896,7 @@ const char *FS_GetHomePath( void );
 qboolean FS_StripExt( char *filename, const char *ext );
 qboolean FS_AllowedExtension( const char *fileName, qboolean allowPk3s, const char **ext );
 
-#ifdef __WASM__
-void *FS_LoadLibrary( const char *name, vm_t *vm );
-#else
 void *FS_LoadLibrary( const char *name );
-#endif
 
 typedef qboolean ( *fnamecallback_f )( const char *filename, int length );
 
@@ -1383,11 +1379,7 @@ qboolean Sys_LowPhysicalMemory( void );
 
 int Sys_MonkeyShouldBeSpanked( void );
 
-#if __WASM__
-void *Sys_LoadLibrary( const char *name, vm_t *vm );
-#else
 void *Sys_LoadLibrary( const char *name );
-#endif
 void *Sys_LoadFunction( void *handle, const char *name );
 int   Sys_LoadFunctionErrors( void );
 void  Sys_UnloadLibrary( void *handle );
