@@ -116,6 +116,7 @@ FS_FOpenFileWriteAsync
 Sys_GetClipboardData
 Sys_DefaultInstallPath
 NET_Restart_f
+dllEntry
 
 
 SDL_OpenAudioDevice
