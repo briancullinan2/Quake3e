@@ -2043,7 +2043,7 @@ void Cvar_Update( vmCvar_t *vmCvar, int privateFlag ) {
 	assert(vmCvar);
 
 	if ( (unsigned)vmCvar->handle >= cvar_numIndexes ) {
-		Com_Error( ERR_DROP, "Cvar_Update: handle out of range" );
+		Com_Error( ERR_DROP, "Cvar_Update: handle out of range %i >= %i", (unsigned)vmCvar->handle, cvar_numIndexes );
 	}
 
 	cv = cvar_indexes + vmCvar->handle;
