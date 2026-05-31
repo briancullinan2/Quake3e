@@ -575,9 +575,9 @@ static int FS_FileLength( FILE* h )
 	int		end;
 
 	pos = ftell( h );
-	fseek( h, 0, SEEK_END );
+	fseek( h, 0, 2 );
 	end = ftell( h );
-	fseek( h, pos, SEEK_SET );
+	fseek( h, pos, 0 );
 
 	return end;
 }
@@ -2065,13 +2065,13 @@ int FS_Seek( fileHandle_t f, long offset, fsOrigin_t origin ) {
 		file = FS_FileForHandle( f );
 		switch( origin ) {
 		case FS_SEEK_CUR:
-			_origin = SEEK_CUR;
+			_origin = 1;
 			break;
 		case FS_SEEK_END:
-			_origin = SEEK_END;
+			_origin = 2;
 			break;
 		case FS_SEEK_SET:
-			_origin = SEEK_SET;
+			_origin = 0;
 			break;
 		default:
 			Com_Error( ERR_FATAL, "Bad origin in FS_Seek" );
