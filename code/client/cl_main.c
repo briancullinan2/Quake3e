@@ -4784,7 +4784,7 @@ void CL_Init( void ) {
 	//extern void CL_MenuModified(char *oldValue, char *newValue, cvar_t *cv);
 	//Cvar_SetModifiedFunc(Cvar_Get("ui_breadCrumb", "", CVAR_TEMP), CL_MenuModified);
 	cl_returnURL = Cvar_Get("cl_returnURL", "", CVAR_TEMP);
-	cl_dlURL = Cvar_Get( "cl_dlURL", "/maps/repacked/%1", CVAR_ARCHIVE_ND );
+	cl_dlURL = Cvar_Get( "cl_dlURL", "https://quake.games/maps/repacked/%1", CVAR_ARCHIVE_ND );
 #else
 	cl_dlURL = Cvar_Get( "cl_dlURL", "http://ws.q3df.org/maps/download/%1", CVAR_ARCHIVE_ND );
 #endif
