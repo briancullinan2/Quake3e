@@ -5145,42 +5145,48 @@ int levenshtein(const char *s, const char *t)
 {
   int n = strlen(s);
   int m = strlen(t);
-  int **d;
-	d = malloc((n + 1) * (m + 1));
- 
-  if (n == 0) {
-    return m;
-  }
+  
+  if (n == 0) return m;
+  if (m == 0) return n;
 
-  if (m == 0) {
-    return n;
-  }
+  int width = m + 1;
+  int height = n + 1;
 
+  // Allocate a single flat block of integers
+  int *d = (int *)malloc(width * height * sizeof(int));
+  if (!d) return -1; // Out of memory guard
+
+  // Initialize bounds
   for (int i = 0; i <= n; i++)
-    d[i][0] = i;
+    d[i * width] = i;              // Simulates d[i][0]
   for (int j = 0; j <= m; j++)
-    d[0][j] = j;
+    d[j] = j;                      // Simulates d[0][j]
 
-  for (int j = 1; j <= m; j++)
-    for (int i = 1; i <= n; i++)
-      if (s[i - 1] == t[j - 1])
-        d[i][j] = d[i - 1][j - 1];  //no operation
-      else {
-        int min;
-        if(d[i - 1][j] + 1 < d[i][j - 1] + 1) {
-          min = d[i - 1][j] + 1; //a deletion
-        } else {
-          min = d[i - 1][j] + 1; //an insertion
-        }
-        if(min < d[i - 1][j - 1] + 1) {
-          d[i][j] = min;
-        } else {
-          d[i][j] = d[i - 1][j - 1] + 1; //a substitution
-        }
+  // Compute distance matrix
+  for (int j = 1; j <= m; j++) {
+    for (int i = 1; i <= n; i++) {
+      if (s[i - 1] == t[j - 1]) {
+        d[i * width + j] = d[(i - 1) * width + (j - 1)]; // Simulates d[i-1][j-1]
+      } else {
+        int deletion     = d[(i - 1) * width + j] + 1;     // Simulates d[i-1][j] + 1
+        int insertion    = d[i * width + (j - 1)] + 1;     // Simulates d[i][j-1] + 1
+        int substitution = d[(i - 1) * width + (j - 1)] + 1; // Simulates d[i-1][j-1] + 1
+
+        // Find minimum of the three operations
+        int min = deletion;
+        if (insertion < min) min = insertion;
+        if (substitution < min) min = substitution;
+
+        d[i * width + j] = min;
       }
+    }
+  }
 
-	free(d);
-  return d[n][m];
+  // Grab the answer BEFORE freeing the memory buffer!
+  int result = d[n * width + m]; 
+  
+  free(d);
+  return result;
 }
 #endif
 
