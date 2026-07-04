@@ -1,4 +1,5 @@
 const DB_STORE_NAME = 'FILE_DATA';
+if(typeof window.preFS == 'undefined') window.preFS={};
 
 function openDatabase(noWait) {
   if(FS.database) {
